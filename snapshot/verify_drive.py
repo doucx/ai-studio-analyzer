@@ -4,8 +4,9 @@ import os
 
 # 常见代理端口：Clash/Verge 一般是 7890，v2ray 一般是 10809，依你自己的代理软件为准
 PROXY_PORT = 7890  
-os.environ['HTTP_PROXY'] = f'http://127.0.0.1:{PROXY_PORT}'
-os.environ['HTTPS_PROXY'] = f'http://127.0.0.1:{PROXY_PORT}'
+for proto in ('http', 'https', 'all'):
+    os.environ[f'{proto}_proxy'] = f'http://127.0.0.1:{PROXY_PORT}'
+    os.environ[f'{proto.upper()}_PROXY'] = f'http://127.0.0.1:{PROXY_PORT}'
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -36,8 +37,8 @@ def get_drive_service():
             token.write(creds.to_json())
             
     print("🔌 正在连接 Google Drive API...")
-    # 注意：加上 static_discovery=False，防止它卡在远端下载 discovery document
-    service = build('drive', 'v3', credentials=creds, static_discovery=False)
+    # 使用本地静态 Discovery 文档，避免在初始化时向远端拉取 schema 导致网络挂起
+    service = build('drive', 'v3', credentials=creds, static_discovery=True)
     print("✅ Google Drive API 初始化成功！")
     return service
 
