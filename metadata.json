@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 添加网络连通性与代理配置诊断脚本", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790173407.0191653, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复诊断脚本中的 API 构建参数并排查 httplib2 代理根因", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790173472.6612182, "duration_ms": 0}}
