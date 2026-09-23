@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 修复 Drive API 客户端卡死与代理配置问题", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790173253.1325843, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 添加网络连通性与代理配置诊断脚本", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790173407.0191653, "duration_ms": 0}}

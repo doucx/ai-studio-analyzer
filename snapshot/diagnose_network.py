@@ -1,44 +1,3 @@
-我将为您创建一个带超时的独立诊断脚本 `diagnose_network.py`，逐步检测本地代理监听、标准网络栈代理连通性、`httplib2` 的代理识别机制以及 Google Drive API 的实际调用表现。
-
-## [WIP] feat: 添加网络连通性与代理配置诊断脚本
-
-### 用户需求
-
-新建一个专门的诊断工具脚本，逐项检查并定位 `verify_drive.py` 在执行 API 请求时挂起的具体网络或代理瓶颈，避免程序无超时无限卡死。
-
-### 评论
-
-`googleapiclient` 底层依赖的 `httplib2` 与常规基于 `urllib3` / `requests` 的库在代理处理机制上有很大差异（`httplib2` 默认在很多场景下不会自动绑定系统环境变量的代理，或者需要显式的 `ProxyInfo` / socks 依赖）。通过带有显式超时限制的逐级排查脚本，可以快速定位问题究竟是出在代理端口未开启、环境变量未生效，还是 `httplib2` 缺乏显式代理注入。
-
-### 目标
-
-1. 创建 `diagnose_network.py`。
-2. 设定 3~5 秒严格超时，彻底杜绝无响应挂起。
-3. 依次对本地代理端口连通性、urllib/socket 代理、`httplib2` 默认行为、`httplib2` 显式代理配置以及 Drive API 请求进行全面诊断并输出清晰结论。
-
-### 基本原理
-
-通过分层隔离排查法（Layered Isolation）：
-- **第 1 层（端口检测）**：检查 `127.0.0.1:7890` 是否有监听进程。
-- **第 2 层（通用代理连通）**：使用 Python 内置库验证该代理是否能够顺畅访问 `www.googleapis.com`。
-- **第 3 层（`httplib2` 环境变量识别）**：验证原生 `httplib2.Http()` 是否能够自动读取并应用代理。
-- **第 4 层（`httplib2` 显式 Proxy 验证）**：验证通过显式 `proxy_info` 注入时 `httplib2` 是否能成功通信。
-
-### 标签
-
-#intent/tooling #flow/ready #priority/high #comp/runtime #concept/config #scope/dx #ai/instruct #task/domain/testing #task/object/network-diagnostics #task/action/implementation #task/state/continue #task/status/active
-
----
-
-### Script
-
-#### Acts 1: 创建 `diagnose_network.py` 诊断脚本
-
-~~~~~act
-write_file
-diagnose_network.py
-~~~~~
-~~~~~python
 import os
 import socket
 import sys
@@ -144,12 +103,3 @@ else:
 print("\n" + "=" * 60)
 print("🏁 诊断结束")
 print("=" * 60)
-~~~~~
-
-### 下一步建议
-
-1. 运行诊断脚本：
-   ```bash
-   uv run python diagnose_network.py
-   ```
-2. 查看控制台输出中每一步的结果。如果第 4 步和第 5 步成功通过，说明根因是 `httplib2` 需要显式传入 `proxy_info`。届时我们将该配置直接更新进 `verify_drive.py` 和 `main.py`。
