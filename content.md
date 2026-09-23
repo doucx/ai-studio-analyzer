@@ -4,6 +4,6 @@
 
 ### 📝 变更文件摘要:
 ```
-.gitignore | 232 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 232 insertions(+)
+.gitignore | 1 +
+ 1 file changed, 1 insertion(+)
 ```
