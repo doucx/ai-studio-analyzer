@@ -1,127 +1,84 @@
-import json
-import os
-import requests
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
-
-PROXY_PORT = 7890
-PROXY_URL = f"http://127.0.0.1:{PROXY_PORT}"
-
-# 仅申请只读权限，安全最小化
-SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
-
-
-class DriveClient:
-    """基于 requests 的 Google Drive API 客户端"""
-
-    def __init__(self, proxy_url=PROXY_URL):
-        self.proxy_url = proxy_url
-        self.session = requests.Session()
-        if self.proxy_url:
-            self.session.proxies = {
-                'http': self.proxy_url,
-                'https': self.proxy_url
-            }
-        self.creds = self._authenticate()
-
-    def _authenticate(self):
-        """处理 OAuth 认证，首次运行弹出浏览器授权，后续自动复用并刷新 token.json"""
-        creds = None
-        if os.path.exists('token.json'):
-            creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-
-        if not creds or not creds.valid:
-            transport = Request(session=self.session)
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(transport)
-            else:
-                flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
-                creds = flow.run_local_server(port=0)
-
-            with open('token.json', 'w') as token:
-                token.write(creds.to_json())
-
-        return creds
-
-    def _request(self, method, url, **kwargs):
-        """发送经过 OAuth 授权的 HTTP 请求"""
-        headers = kwargs.pop('headers', {})
-        if self.creds.expired and self.creds.refresh_token:
-            self.creds.refresh(Request(session=self.session))
-        headers['Authorization'] = f"Bearer {self.creds.token}"
-        kwargs['headers'] = headers
-        kwargs.setdefault('timeout', 15)
-        resp = self.session.request(method, url, **kwargs)
-        resp.raise_for_status()
-        return resp
-
-    def find_ai_studio_folder(self):
-        """查找 Google AI Studio 或 MakerSuite 所在的文件夹 ID"""
-        query = "mimeType = 'application/vnd.google-apps.folder' and (name = 'Google AI Studio' or name = 'MakerSuite') and trashed = false"
-        url = "https://www.googleapis.com/drive/v3/files"
-        resp = self._request("GET", url, params={"q": query, "fields": "files(id, name)"})
-        folders = resp.json().get('files', [])
-        if not folders:
-            print("未找到默认文件夹，可能保存在根目录或其他位置。")
-            return None
-        folder = folders[0]
-        print(f"找到目录: {folder['name']} (ID: {folder['id']})")
-        return folder['id']
-
-    def list_all_prompt_files(self, folder_id=None):
-        """列出所有 prompt 文件（支持分页完整拉取）"""
-        files = []
-        page_token = None
-        url = "https://www.googleapis.com/drive/v3/files"
-
-        if folder_id:
-            query = f"'{folder_id}' in parents and trashed = false"
-        else:
-            query = "trashed = false and mimeType = 'application/json'"
-
-        while True:
-            params = {
-                "q": query,
-                "pageSize": 100,
-                "fields": "nextPageToken, files(id, name, createdTime, modifiedTime)",
-            }
-            if page_token:
-                params["pageToken"] = page_token
-
-            resp = self._request("GET", url, params=params)
-            data = resp.json()
-            files.extend(data.get('files', []))
-
-            page_token = data.get('nextPageToken')
-            if not page_token:
-                break
-
-        print(f"共发现 {len(files)} 个文件。")
-        return files
-
-    def read_json_from_drive(self, file_id):
-        """直接将云端文件下载到内存中并解析为 JSON"""
-        url = f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media"
-        try:
-            resp = self._request("GET", url)
-            return resp.json()
-        except Exception as e:
-            print(f"下载/解析文件 ID {file_id} 失败: {e}")
-            return None
+"""
+AI Studio Analyzer 统一调度入口
+"""
+import sys
+from src.analyzer.drive import DriveClient, PROXY_URL
+from src.analyzer.cache import LocalCache
+from src.analyzer.parser import is_valid_prompt_file, parse_prompt_json
+from src.analyzer.metrics import calculate_session_metrics
+from src.analyzer.exporter import export_first_prompts_to_jsonl, export_prompts_summary_csv
 
 
 def main():
-    print("⏳ 初始化 Google Drive 客户端...")
+    print("=" * 60)
+    print("🚀 启动 Google AI Studio 历史提问分析器")
+    print("=" * 60)
+
+    # 1. 初始化客户端与本地缓存
     client = DriveClient(proxy_url=PROXY_URL)
+    cache = LocalCache(cache_dir=".cache")
 
-    print("🔍 查找 AI Studio 文件夹...")
+    # 2. 定位 AI Studio 目录
     folder_id = client.find_ai_studio_folder()
+    if not folder_id:
+        print("❌ 未能找到 Google AI Studio 目录，请检查云盘授权。")
+        sys.exit(1)
 
-    print("📄 正在拉取文件列表...")
-    files = client.list_all_prompt_files(folder_id=folder_id)
-    print(f"✅ 文件统计完成，当前目录共计包含 {len(files)} 个文件。")
+    # 3. 拉取文件元数据列表
+    print("📥 正在扫描云盘中的对话文件元数据...")
+    files = client.list_files(folder_id)
+    print(f"📊 云盘总计包含 {len(files)} 个文件。")
+
+    # 4. 增量拉取与解析
+    sessions = []
+    download_count = 0
+    cache_hit_count = 0
+
+    print("⚡ 正在解析对话内容（支持本地增量缓存）...")
+    for idx, fmeta in enumerate(files, 1):
+        fid = fmeta["id"]
+        fname = fmeta.get("name", "")
+        mtime = fmeta.get("modifiedTime", "")
+
+        if not is_valid_prompt_file(fname):
+            continue
+
+        # 缓存命中检测
+        if cache.is_cached(fid, mtime):
+            raw_data = cache.get(fid)
+            cache_hit_count += 1
+        else:
+            raw_data = client.download_json(fid)
+            if raw_data:
+                cache.put(fid, mtime, raw_data)
+                download_count += 1
+
+        session = parse_prompt_json(fmeta, raw_data)
+        if session:
+            sessions.append(session)
+
+    print(f"\n✅ 数据载入完成：有效会话 {len(sessions)} 个 (本地缓存命中: {cache_hit_count}, 新拉取: {download_count})")
+
+    # 5. 指标概览
+    metrics = calculate_session_metrics(sessions)
+    print("\n" + "=" * 30 + " 📊 核心指标概览 " + "=" * 30)
+    print(f"  - 总有效会话数:       {metrics['total_sessions']}")
+    print(f"  - 总对话轮次 (Turns): {metrics['total_turns']} (平均每会话: {metrics['avg_turns_per_session']} 轮)")
+    print(f"  - 深度攻坚会话 (≥5轮): {metrics['deep_session_count']} 场 (占比 {metrics['deep_session_ratio']})")
+    print(f"  - 用户提问总字数:     {metrics['total_user_chars']} 字符")
+    print(f"  - 模型使用分布:       {metrics['model_distribution']}")
+    print("=" * 76)
+
+    # 6. 导出产物
+    jsonl_output = "first_prompts_for_clustering.jsonl"
+    csv_output = "prompts_summary.csv"
+    export_first_prompts_to_jsonl(sessions, jsonl_output)
+    export_prompts_summary_csv(sessions, csv_output)
+
+    print(f"\n📁 分析产物已生成：")
+    print(f"  1. 首轮提问清洗集 (可直接供 LLM 聚类分类): ./{jsonl_output}")
+    print(f"  2. 对话概览指标明细 (CSV 报表):             ./{csv_output}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
