@@ -231,3 +231,6 @@ __marimo__/
 # 防止密钥泄漏
 credentials.json
 token.json
+
+# 防止误上传
+test*.json
