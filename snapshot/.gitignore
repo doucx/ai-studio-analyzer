@@ -234,3 +234,5 @@ token.json
 
 # 防止误上传
 test*.json
+first_prompts_for_clustering.jsonl
+prompts_summary.csv
