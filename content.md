@@ -4,6 +4,7 @@
 
 ### 📝 变更文件摘要:
 ```
-.gitignore | 1 +
- 1 file changed, 1 insertion(+)
+main.py         |  79 +++++++++++++++++++++++++++++
+ verify_drive.py | 154 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 233 insertions(+)
 ```
