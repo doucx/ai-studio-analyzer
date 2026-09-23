@@ -56,26 +56,48 @@ class DriveClient:
         folders = resp.json().get('files', [])
         return folders[0]['id'] if folders else None
 
-    def list_files(self, folder_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """分页拉取文件夹内所有文件元数据"""
+    def list_files(
+        self,
+        folder_id: Optional[str] = None,
+        max_results: Optional[int] = None,
+        order_by: str = "modifiedTime desc"
+    ) -> List[Dict[str, Any]]:
+        """
+        分页拉取文件夹内文件元数据。
+        支持 order_by（默认按修改时间降序，优先拉取最新对话）和 max_results（达到上限提前退出）。
+        """
         files = []
         page_token = None
         url = "https://www.googleapis.com/drive/v3/files"
         query = f"'{folder_id}' in parents and trashed = false" if folder_id else "trashed = false and mimeType = 'application/json'"
 
         while True:
+            # 动态调整本页抓取量，避免拉取超过 max_results
+            if max_results is not None:
+                remaining = max_results - len(files)
+                if remaining <= 0:
+                    break
+                page_size = min(100, remaining)
+            else:
+                page_size = 100
+
             params = {
                 "q": query,
-                "pageSize": 100,
+                "pageSize": page_size,
+                "orderBy": order_by,
                 "fields": "nextPageToken, files(id, name, createdTime, modifiedTime)",
             }
             if page_token:
                 params["pageToken"] = page_token
+
             data = self._request("GET", url, params=params).json()
-            files.extend(data.get('files', []))
+            batch = data.get('files', [])
+            files.extend(batch)
+
             page_token = data.get('nextPageToken')
-            if not page_token:
+            if not page_token or (max_results is not None and len(files) >= max_results):
                 break
+
         return files
 
     def download_json(self, file_id: str) -> Optional[Dict[str, Any]]:
