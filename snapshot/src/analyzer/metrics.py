@@ -19,8 +19,11 @@ def calculate_session_metrics(sessions: List[PromptSession]) -> Dict[str, Any]:
     # 1. 构造结构化 DataFrame
     records = []
     for s in sessions:
+        st = s.start_time or s.modified_time
+        date_str = st.strftime("%Y-%m-%d") if st else None
         records.append({
             "file_id": s.file_id,
+            "date": date_str,
             "turn_count": s.turn_count,
             "duration_seconds": s.duration_seconds,
             "duration_minutes": round(s.duration_seconds / 60, 2),
@@ -112,6 +115,26 @@ def calculate_session_metrics(sessions: List[PromptSession]) -> Dict[str, Any]:
     # 6. 模型偏好分布
     model_dist = df["model"].value_counts().to_dict()
 
+    # 7. 每日 Token 消耗与活跃趋势聚合 (按日期升序)
+    daily_trends = []
+    valid_dates_df = df[df["date"].notna()]
+    if not valid_dates_df.empty:
+        grouped = valid_dates_df.groupby("date").agg(
+            total_tokens=("total_tokens", "sum"),
+            thought_tokens=("thought_tokens", "sum"),
+            sessions=("file_id", "count"),
+            turns=("turn_count", "sum")
+        ).reset_index().sort_values("date")
+
+        for _, row in grouped.iterrows():
+            daily_trends.append({
+                "date": str(row["date"]),
+                "total_tokens": int(row["total_tokens"]),
+                "thought_tokens": int(row["thought_tokens"]),
+                "sessions": int(row["sessions"]),
+                "turns": int(row["turns"])
+            })
+
     return {
         "total_sessions": total_sessions,
         "total_turns": int(turn_s.sum()),
@@ -124,4 +147,5 @@ def calculate_session_metrics(sessions: List[PromptSession]) -> Dict[str, Any]:
         "friction_stats": friction_stats,
         "sys_instruction_count": int(df["has_sys_instruction"].sum()),
         "model_distribution": model_dist,
+        "daily_trends": daily_trends,
     }

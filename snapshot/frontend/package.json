@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@preact/signals": "^2.0.1",
+    "chart.js": "^4.4.7",
     "clsx": "^2.1.1",
     "lucide-preact": "^0.460.0",
     "preact": "^10.25.4",

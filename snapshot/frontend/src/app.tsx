@@ -1,6 +1,9 @@
 import { signal } from '@preact/signals';
 import { useEffect } from 'preact/hooks';
 import type { MetricsSummary, SessionItem } from './types/metrics';
+import { TokenTrendChart } from './components/charts/TokenTrendChart';
+import { DurationTiersChart } from './components/charts/DurationTiersChart';
+import { ModelDistributionChart } from './components/charts/ModelDistributionChart';
 
 const metricsSignal = signal<MetricsSummary | null>(null);
 const sessionsSignal = signal<SessionItem[]>([]);
@@ -140,50 +143,54 @@ export function App() {
             </div>
           </section>
 
-          {/* 心智时长梯队分布 */}
-          {m.duration_tiers && (
+          {/* 每日 Token 消耗趋势时序图 */}
+          {m.daily_trends && m.daily_trends.length > 0 && (
             <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5">
-              <h2 className="text-sm font-semibold text-zinc-200 mb-4">⏱️ 心智时长梯队切片</h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="p-3 bg-zinc-900 border border-zinc-800/80 rounded">
-                  <div className="text-xs text-zinc-400">⚡ 即时快问 (&lt;10m)</div>
-                  <div className="text-lg font-bold text-zinc-100 mt-1">
-                    {m.duration_tiers.flash[0]} 场{' '}
-                    <span className="text-xs font-normal text-zinc-500">
-                      ({m.duration_tiers.flash[1]})
-                    </span>
-                  </div>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-sm font-semibold text-zinc-200">
+                    📈 每日 Token 能耗趋势 (按时间序列)
+                  </h2>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    展示全部交互周期的总 Token 与模型思考链 (Thinking) 能耗走势
+                  </p>
                 </div>
-                <div className="p-3 bg-zinc-900 border border-zinc-800/80 rounded">
-                  <div className="text-xs text-zinc-400">🎯 聚焦推进 (10~60m)</div>
-                  <div className="text-lg font-bold text-zinc-100 mt-1">
-                    {m.duration_tiers.focus[0]} 场{' '}
-                    <span className="text-xs font-normal text-zinc-500">
-                      ({m.duration_tiers.focus[1]})
-                    </span>
-                  </div>
-                </div>
-                <div className="p-3 bg-zinc-900 border border-zinc-800/80 rounded">
-                  <div className="text-xs text-zinc-400">🔨 深度攻坚 (1~6h)</div>
-                  <div className="text-lg font-bold text-zinc-100 mt-1">
-                    {m.duration_tiers.deep[0]} 场{' '}
-                    <span className="text-xs font-normal text-zinc-500">
-                      ({m.duration_tiers.deep[1]})
-                    </span>
-                  </div>
-                </div>
-                <div className="p-3 bg-zinc-900 border border-zinc-800/80 rounded">
-                  <div className="text-xs text-zinc-400">🏔️ 跨日长线 (&gt;6h)</div>
-                  <div className="text-lg font-bold text-zinc-100 mt-1">
-                    {m.duration_tiers.epic[0]} 场{' '}
-                    <span className="text-xs font-normal text-zinc-500">
-                      ({m.duration_tiers.epic[1]})
-                    </span>
-                  </div>
-                </div>
+                <span className="text-xs font-mono text-zinc-400 bg-zinc-800/60 px-2 py-1 rounded">
+                  {m.daily_trends.length} 个活跃天
+                </span>
               </div>
+              <TokenTrendChart data={m.daily_trends} />
             </section>
           )}
+
+          {/* 时长梯队与模型分布双图并排 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* 心智时长梯队环形图 */}
+            {m.duration_tiers && (
+              <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5">
+                <h2 className="text-sm font-semibold text-zinc-200 mb-1">
+                  ⏱️ 心智时长梯队切片
+                </h2>
+                <p className="text-xs text-zinc-500 mb-4">
+                  单次任务从首轮交互到最后收尾的时间窗口跨度
+                </p>
+                <DurationTiersChart tiers={m.duration_tiers} />
+              </section>
+            )}
+
+            {/* 模型使用偏好条形图 */}
+            {m.model_distribution && (
+              <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5">
+                <h2 className="text-sm font-semibold text-zinc-200 mb-1">
+                  🤖 模型偏好与实验分布
+                </h2>
+                <p className="text-xs text-zinc-500 mb-4">
+                  各 Gemini 模型在所有历史会话中的调用总场次
+                </p>
+                <ModelDistributionChart distribution={m.model_distribution} />
+              </section>
+            )}
+          </div>
 
           {/* 最近会话列表预览 */}
           <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5">

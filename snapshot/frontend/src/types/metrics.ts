@@ -32,6 +32,14 @@ export interface FrictionStats {
   total_retries: number;
 }
 
+export interface DailyTrendItem {
+  date: string;
+  total_tokens: number;
+  thought_tokens: number;
+  sessions: number;
+  turns: number;
+}
+
 export interface MetricsSummary {
   total_sessions: number;
   total_turns: number;
@@ -54,6 +62,7 @@ export interface MetricsSummary {
   friction_stats: FrictionStats;
   sys_instruction_count: number;
   model_distribution: Record<string, number>;
+  daily_trends?: DailyTrendItem[];
   message?: string;
 }
 
