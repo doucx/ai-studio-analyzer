@@ -1,10 +1,10 @@
 """
-AI Studio Analyzer - 统一调度入口 (Git 风格分布式架构)
+AI Studio Analyzer - 统一调度入口 (Git 风格分布式体系)
 
 常用命令:
-  1. python main.py fetch [-n 50]       # 增量拉取云端最近 50 个修改的文件写入 SQLite
-  2. python main.py analyze [--all]     # 纯离线全量分析本地 SQLite 缓存的所有会话
-  3. python main.py pull [-n 50]        # 组合操作：快速拉取最新 50 个文件，随后全量分析本地数据
+  1. python main.py fetch [-n 50]         # 增量拉取云端最近 50 个修改的文件写入 SQLite
+  2. python main.py analyze [--export]   # 纯离线全量分析本地 SQLite 缓存 (加 --export 导出 CSV/JSONL)
+  3. python main.py pull [-n 50]          # 组合操作：快速拉取最新 50 个文件，随后全量分析本地数据
 """
 import argparse
 import sys
@@ -16,7 +16,7 @@ from src.analyzer.metrics import calculate_session_metrics
 from src.analyzer.exporter import export_first_prompts_to_jsonl, export_prompts_summary_csv
 
 
-def run_analyze(cache: SQLiteCache, limit: int = 0, export: bool = True):
+def run_analyze(cache: SQLiteCache, limit: int = 0, export: bool = False):
     """纯离线本地计算与报表分析"""
     print("\n" + "=" * 60)
     print("📊 启动本地离线认知与交互审计 (Analyzer)")
@@ -37,7 +37,7 @@ def run_analyze(cache: SQLiteCache, limit: int = 0, export: bool = True):
     print(f"  - 分析会话总数:           {metrics['total_sessions']}")
     print(f"  - 总对话轮次 (Turns):     {metrics['total_turns']} (平均每会话: {metrics['avg_turns_per_session']} 轮)")
     print(f"  - 深度攻坚会话 (≥5轮):     {metrics['deep_session_count']} 场 (占比 {metrics['deep_session_ratio']})")
-    print(f"  - 平均持续时长 (Duration): {metrics['avg_duration_minutes']} 分钟")
+    print(f"  - 平均交互时长 (有效跨度): {metrics['avg_duration_minutes']} 分钟 (多轮深入会话平均: {metrics['avg_multi_turn_duration_minutes']} 分钟)")
     print(f"  - 计算能耗 (Total Tokens): {metrics['total_tokens']:,} (平均每会话: {int(metrics['avg_tokens_per_session']):,} Tokens)")
     print(f"  - 思考链消耗 (Thinking):   {metrics['total_thought_tokens']:,} Tokens (占总能耗: {metrics['thought_token_ratio']})")
     print(f"  - 思维摩擦力 (重试/分支):   {metrics['friction_sessions_count']} 场 (占比: {metrics['friction_session_ratio']}, 累计分支重试: {metrics['total_branch_retries']} 次)")
@@ -46,7 +46,7 @@ def run_analyze(cache: SQLiteCache, limit: int = 0, export: bool = True):
     print(f"  - 模型偏好分布:           {metrics['model_distribution']}")
     print("=" * 76)
 
-    # 导出报表产物
+    # 导出报表产物（仅在显式指定 --export 时生成）
     if export:
         jsonl_output = "first_prompts_for_clustering.jsonl"
         csv_output = "prompts_summary.csv"
@@ -78,14 +78,14 @@ def cmd_fetch(args):
 def cmd_analyze(args):
     """仅本地离线分析"""
     cache = SQLiteCache(cache_dir=".cache")
-    run_analyze(cache, limit=args.limit, export=not args.no_export)
+    run_analyze(cache, limit=args.limit, export=args.export)
 
 
 def cmd_pull(args):
-    """先拉取增量，再全量分析 (类似 git pull)"""
+    """先拉取增量，再全量分析"""
     cmd_fetch(args)
     cache = SQLiteCache(cache_dir=".cache")
-    run_analyze(cache, limit=0, export=not args.no_export)
+    run_analyze(cache, limit=0, export=args.export)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -103,13 +103,13 @@ def build_parser() -> argparse.ArgumentParser:
     # 2. analyze 子命令
     parser_analyze = subparsers.add_parser("analyze", help="[离线] 纯离线分析本地 SQLite 缓存的历史会话")
     parser_analyze.add_argument("-n", "--limit", type=int, default=0, help="分析会话上限 (默认 0 表示全量分析)")
-    parser_analyze.add_argument("--no-export", action="store_true", help="仅打印控制台指标，不导出 CSV/JSONL 文件")
+    parser_analyze.add_argument("--export", action="store_true", help="显式导出 CSV 与 JSONL 分析文件 (默认不导出)")
 
     # 3. pull 子命令
     parser_pull = subparsers.add_parser("pull", help="[组合] 增量拉取最近文件更新本地库，随后执行全量分析")
     parser_pull.add_argument("-n", "--limit", type=int, default=50, help="增量拉取数量限制 (默认: 50)")
     parser_pull.add_argument("--all", action="store_true", help="全量扫描云盘并分析")
-    parser_pull.add_argument("--no-export", action="store_true", help="分析完成后不导出 CSV/JSONL 文件")
+    parser_pull.add_argument("--export", action="store_true", help="分析完成后显式导出 CSV 与 JSONL 文件 (默认不导出)")
 
     return parser
 
@@ -125,15 +125,13 @@ def main():
     elif args.command == "pull":
         cmd_pull(args)
     else:
-        # 无子命令时，默认行为相当于 pull -n 50，同时打印引导提示
-        print("💡 未指定子命令，默认执行 `pull` 流程 (先增量同步最近 50 个文件，再全量分析本地数据)。")
+        print("💡 未指定子命令，默认执行 `analyze` 查看本地指标看板。")
         print("   可用子命令: `fetch` (仅同步), `analyze` (仅本地分析), `pull` (同步并分析)")
         print("   运行 `python main.py -h` 可查看完整指令选项。\n")
         class DefaultArgs:
-            limit = 50
-            all = False
-            no_export = False
-        cmd_pull(DefaultArgs())
+            limit = 0
+            export = False
+        cmd_analyze(DefaultArgs())
 
 
 if __name__ == "__main__":

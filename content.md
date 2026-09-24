@@ -1,43 +1,41 @@
-好的，接下来我们执行 **Step 2**：在数据模型、解析器及指标引擎中，完整补齐生命周期（`duration`）、精确 Token 统计（包含思考链 Token）以及分支分叉（`branching`）标记。
+这两个问题切中要害。持续时长为 0 是因为 Google Drive 的 `createdTime` 属于云端文件元数据，未保存在 AI Studio 内部 JSON 中，导致纯离线加载时由于缺少起点时间戳退化为 0；同时将导出报表改为显式 `--export` 触发，避免反复产生冗余文件。
 
-## [WIP] feat(models,parser): 补齐生命周期 duration、精确 token 统计与分支标记
+## [WIP] fix(metrics,cli): 修复会话生命周期时长为零的问题并默认关闭产物导出
+
+### 错误分析
+1. **持续时长归零的原因**：
+   - AI Studio 导出的原始 JSON 的顶层只有 `chunkedPrompt`、`runSettings` 和 `systemInstruction`，并没有顶层的 `createdTime` 字段。
+   - 离线从 SQLite 加载时，`loader.py` 只能从 `file_cache` 恢复 `file_id`、`modified_time` 和内部 JSON，由于缺乏 `created_time`，旧逻辑 `if self.created_time and self.modified_time:` 判定失败，直接返回 `None` / `0.0`。
+   - **修复方案**：虽然顶层没有 `createdTime`，但 `chunkedPrompt.chunks` 中的**每个交互块均带有精确到毫秒的 `createTime`**。会话的真正开始时间是首个 chunk 的时间戳，结束时间是末个 chunk 时间戳与 `modified_time` 的最大值。通过时序插值推导，即可在离线状态下精确恢复每场对话的真实交互跨度。
+2. **产物默认输出问题**：
+   - 之前的 CLI 默认直接写入 `first_prompts_for_clustering.jsonl` 和 `prompts_summary.csv`，容易在频繁调试和查看指标时污染工作区根目录。
+   - **修复方案**：将 `--no-export` 逻辑反转为 `--export` 开关，默认仅在终端打印分析看板，只有显式传入 `--export` 时才写入磁盘文件。
 
 ### 用户需求
-1. 在 `models.py` 的 `PromptSession` 中新增会话生命周期属性（`duration = modified_time - created_time` 及秒数换算）。
-2. 在 `ConversationTurn` 和 `PromptSession` 中补齐每轮交互的精确 Token 消耗（`token_count`）、思考链标记（`is_thought`）、载荷类型（`payload_type`）以及分支编辑标记（`branch_parent`, `branch_children`, `is_edited`）。
-3. 升级 `parser.py`，完整解析 `chunkedPrompt` 中的多模态载荷与元数据，并提取系统指令（`systemInstruction`）。
-4. 在 `metrics.py` 与 `exporter.py` 中输出新增的 Token 能耗与心智摩擦力指标。
+1. 默认执行 `analyze` 或 `pull` 时**不再生成导出文件**，仅打印终端指标，需支持通过 `--export` 参数显式开启导出。
+2. 修复生命周期持续时长（Duration）始终显示为 0.0 分钟的问题，准确统计各会话的时长分布。
 
 ### 评论
-从粗粒度的“用户提问字符数”升维到“生命周期时长”、“Token 真实能耗”和“分支重试率”，是实现你设想的“思维摩擦力测量”与“心智负荷分型”的关键前提。通过精确捕获 `isThought` 与 `branching`，系统能直接量化哪些会话引发了模型的深度思考、哪些会话发生了反复修改重试。
+依赖云端外部元数据的计算模型是不稳健的；依靠会话内部的天然交互时序（Chunks的时序序列）推导生命周期，不仅解决了离线元数据丢失的问题，而且比云端单纯的文件创建时间更加准确地反映了用户在当前会话中从第一句到最后一句的“实际心智驻留时间”。默认关闭文件导出则符合标准 Unix 命令行工具的优雅准则。
 
 ### 目标
-1. **升级 `src/analyzer/models.py`**：
-   - 扩充 `ConversationTurn` 字段：`token_count`, `is_thought`, `payload_type`, `branch_parent`, `branch_children`, `is_edited`。
-   - 在 `PromptSession` 增加 `duration`, `duration_seconds`, `total_tokens`, `thought_tokens`, `has_branching`, `branch_count`, `system_instruction` 等属性与字段。
-2. **升级 `src/analyzer/parser.py`**：
-   - 在遍历 `chunks` 时，无损提取 `tokenCount`、`isThought`、`branchParent`、`branchChildren`、`isEdited` 及创建时间。
-   - 解析 Base64 附件和 Drive 引用文档作为独立载荷类型。
-   - 提取 `systemInstruction.text`。
-3. **升级 `src/analyzer/metrics.py`**：
-   - 计算并打印：全局 Token 消耗量、思考链 Token 占比、平均会话持续时长、产生分支/重试的困境会话占比。
-4. **升级 `src/analyzer/exporter.py`**：
-   - 在导出的 CSV 与 JSONL 中补充持续时长、Token 总量与分支标记。
+1. 升级 `src/analyzer/models.py`：新增 `start_time` 与 `end_time` 推导属性，结合 Chunks 时间戳与修改时间计算真实跨度。
+2. 升级 `src/analyzer/metrics.py`：细化生命周期指标，分别展示全量会话与多轮深度会话的平均驻留时长。
+3. 调整 `main.py`：将导出选项改为 `--export`，默认不输出文件。
 
 ### 基本原理
-1. **非侵入式派生计算**：生命周期与 Token 统计通过 `@property` 动态计算，保持类结构的轻量与响应性。
-2. **多模态与思维链分流**：将常规问答与 `isThought` 思考块清晰拆分，使后续分析既能评估真实答案，又能单独评估模型的后台思考能耗。
+每个有效会话都至少包含一个用户提问 chunk。首个提问块的创建时间点即为会话思维流启动的原点；末尾交互块（或云端保存修改点）为会话终止点。两者相减即可得到该思维流的真实生命周期。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/runtime #concept/state #concept/parser #scope/core #scope/api #ai/instruct #task/domain/analytics #task/object/session-metrics-and-tokens #task/action/implementation #task/state/begin
+#intent/fix #flow/ready #priority/high #comp/runtime #comp/cli #concept/state #scope/core #scope/ux #ai/instruct #task/domain/analytics #task/object/duration-and-cli-flags #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 升级 `src/analyzer/models.py`，扩展多维元数据与计算属性
+#### Acts 1: 升级 `src/analyzer/models.py`，基于 Chunks 时间序列推导生命周期
 
-扩充 `ConversationTurn` 与 `PromptSession`，定义时长、Token 聚合与分支判断逻辑。
+为 `PromptSession` 增加自适应时间序列边界推导（`start_time` 与 `end_time`），彻底解决离线时缺少 `createdTime` 的问题。
 
 ~~~~~act
 write_file
@@ -51,7 +49,7 @@ from typing import List, Optional, Dict, Any
 
 @dataclass
 class ConversationTurn:
-    """单轮对话数据 (增强版：支持 Token、思考链与分支追踪)"""
+    """单轮对话数据 (支持 Token、思考链与分支追踪)"""
     role: str                       # 'user' | 'model' | 'system'
     text: str                       # 文本内容
     token_count: int = 0            # 该轮消耗的精确 Token 数量
@@ -76,10 +74,29 @@ class PromptSession:
     system_instruction: str = ""    # 系统指令 / 前置协议
 
     @property
+    def start_time(self) -> Optional[datetime]:
+        """推导会话起始时间：优先采用 created_time，其次推导自首个有效 Chunk 的时间戳"""
+        if self.created_time:
+            return self.created_time
+        turn_times = [t.timestamp for t in self.turns if t.timestamp]
+        return min(turn_times) if turn_times else None
+
+    @property
+    def end_time(self) -> Optional[datetime]:
+        """推导会话结束时间：结合末轮 Chunk 时间与 modified_time 的最新值"""
+        turn_times = [t.timestamp for t in self.turns if t.timestamp]
+        max_turn_time = max(turn_times) if turn_times else None
+        if self.modified_time and max_turn_time:
+            return max(self.modified_time, max_turn_time)
+        return self.modified_time or max_turn_time
+
+    @property
     def duration(self) -> Optional[timedelta]:
-        """会话生命周期持续时间 (modified_time - created_time)"""
-        if self.created_time and self.modified_time:
-            delta = self.modified_time - self.created_time
+        """会话生命周期持续时间 (从首轮交互到最后修改/回复)"""
+        start = self.start_time
+        end = self.end_time
+        if start and end:
+            delta = end - start
             return delta if delta.total_seconds() >= 0 else timedelta(0)
         return None
 
@@ -95,6 +112,8 @@ class PromptSession:
         if not self.duration:
             return "0s"
         total_sec = int(self.duration.total_seconds())
+        if total_sec < 60:
+            return f"{total_sec}s"
         hours, remainder = divmod(total_sec, 3600)
         minutes, seconds = divmod(remainder, 60)
         parts = []
@@ -102,13 +121,13 @@ class PromptSession:
             parts.append(f"{hours}h")
         if minutes > 0:
             parts.append(f"{minutes}m")
-        if seconds > 0 or not parts:
+        if not parts:
             parts.append(f"{seconds}s")
         return " ".join(parts)
 
     @property
     def user_prompts(self) -> List[str]:
-        """提取所有属于用户的有效发言文本 (排除非纯文本挂载标记)"""
+        """提取所有属于用户的有效发言文本"""
         return [turn.text for turn in self.turns if turn.role == 'user']
 
     @property
@@ -118,7 +137,7 @@ class PromptSession:
 
     @property
     def total_tokens(self) -> int:
-        """该会话消耗的 Token 总量 (含上下文输入、生成与思考)"""
+        """该会话消耗的 Token 总量"""
         return sum(t.token_count for t in self.turns)
 
     @property
@@ -143,7 +162,7 @@ class PromptSession:
 
     @property
     def branch_count(self) -> int:
-        """分支/重试派生次数 (衡量沟通阻抗与思维摩擦力)"""
+        """分支/重试派生次数"""
         return sum(1 for t in self.turns if t.branch_parent is not None or len(t.branch_children) > 0 or t.is_edited)
 
     @property
@@ -152,157 +171,9 @@ class PromptSession:
         return self.branch_count > 0
 ~~~~~
 
-#### Acts 2: 升级 `src/analyzer/parser.py`，完整捕获 Token 与分支结构
+#### Acts 2: 细化 `src/analyzer/metrics.py` 的时长统计
 
-解析 `chunks` 中的 `tokenCount`、`isThought`、Base64 附件、Drive 大文档及分支信息。
-
-~~~~~act
-write_file
-src/analyzer/parser.py
-~~~~~
-~~~~~python
-import base64
-from datetime import datetime
-from typing import Optional, Dict, Any
-from .models import PromptSession, ConversationTurn
-
-
-def is_valid_prompt_file(name: str) -> bool:
-    """过滤粘贴板缓存与纯图片临时文件"""
-    if name.startswith("Paste "):
-        return False
-    lower = name.lower()
-    if lower.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
-        return False
-    return True
-
-
-def parse_prompt_json(file_meta: Optional[Dict[str, Any]], raw_data: Dict[str, Any]) -> Optional[PromptSession]:
-    """
-    将 Google AI Studio 原始 JSON 转化为结构化的 PromptSession 对象。
-    兼容 chunkedPrompt 结构以及新版 Gemini contents 结构，
-    完整提取 Token 统计、思考链 (Thinking)、分支树 (Branching) 与系统指令。
-    """
-    if not raw_data or not isinstance(raw_data, dict):
-        return None
-
-    file_meta = file_meta or {}
-    model = raw_data.get("runSettings", {}).get("model", "unknown")
-    sys_instruction = raw_data.get("systemInstruction", {}).get("text", "")
-    turns = []
-
-    # 1. 核心 chunkedPrompt 结构
-    if "chunkedPrompt" in raw_data:
-        chunks = raw_data.get("chunkedPrompt", {}).get("chunks", [])
-        for c in chunks:
-            role = c.get("role", "user")
-            token_count = c.get("tokenCount", 0)
-            is_thought = bool(c.get("isThought", False))
-            branch_parent = c.get("branchParent")
-            branch_children = c.get("branchChildren", [])
-            is_edited = bool(c.get("isEdited", False))
-
-            # 解析 chunk 产生的时间戳
-            chunk_time = None
-            if "createTime" in c:
-                try:
-                    chunk_time = datetime.fromisoformat(c["createTime"].replace("Z", "+00:00"))
-                except Exception:
-                    pass
-
-            text = ""
-            payload_type = "text"
-
-            # 分支 A: 纯文本交互
-            if "text" in c:
-                text = c.get("text", "")
-                payload_type = "text"
-            # 分支 B: 内联 Base64 编码文件
-            elif "inlineFile" in c:
-                file_info = c["inlineFile"]
-                mime = file_info.get("mimeType", "")
-                payload_type = "inlineFile"
-                if "text" in mime or "json" in mime or "xml" in mime:
-                    try:
-                        raw_bytes = base64.b64decode(file_info.get("data", ""))
-                        text = raw_bytes.decode("utf-8", errors="ignore")[:300] + "... [内联文本附件]"
-                    except Exception:
-                        text = "[无法解码的文本附件]"
-                else:
-                    text = f"[{mime} 媒体附件]"
-            # 分支 C: 外部云盘大文档引用 (Insert from Drive)
-            elif "driveDocument" in c:
-                doc_id = c["driveDocument"].get("id", "unknown")
-                payload_type = "driveDocument"
-                text = f"[挂载云盘大文档 ID: {doc_id}]"
-
-            if text or is_thought or token_count > 0:
-                turns.append(ConversationTurn(
-                    role=role,
-                    text=text,
-                    token_count=token_count,
-                    is_thought=is_thought,
-                    payload_type=payload_type,
-                    timestamp=chunk_time,
-                    branch_parent=branch_parent,
-                    branch_children=branch_children,
-                    is_edited=is_edited
-                ))
-
-    # 2. 兼容标准 Gemini contents 结构
-    elif "contents" in raw_data:
-        contents = raw_data.get("contents", [])
-        for item in contents:
-            role = item.get("role", "user")
-            parts = item.get("parts", [])
-            text_blocks = [p.get("text", "") for p in parts if "text" in p]
-            combined_text = "\n".join(text_blocks)
-            if combined_text:
-                turns.append(ConversationTurn(
-                    role=role,
-                    text=combined_text,
-                    token_count=0,
-                    payload_type="text"
-                ))
-
-    if not turns:
-        return None
-
-    # 解析会话层时间戳
-    created_time = None
-    modified_time = None
-
-    raw_created = file_meta.get("createdTime") or raw_data.get("createTime") or raw_data.get("createdTime")
-    if raw_created:
-        try:
-            created_time = datetime.fromisoformat(str(raw_created).replace("Z", "+00:00"))
-        except Exception:
-            pass
-
-    raw_modified = file_meta.get("modifiedTime") or raw_data.get("modifiedTime")
-    if raw_modified:
-        try:
-            modified_time = datetime.fromisoformat(str(raw_modified).replace("Z", "+00:00"))
-        except Exception:
-            pass
-
-    # 解析名称
-    name = file_meta.get("name") or raw_data.get("name") or raw_data.get("title") or "Untitled"
-
-    return PromptSession(
-        file_id=file_meta.get("id", ""),
-        name=name,
-        model=model,
-        created_time=created_time,
-        modified_time=modified_time,
-        turns=turns,
-        system_instruction=sys_instruction
-    )
-~~~~~
-
-#### Acts 3: 升级 `src/analyzer/metrics.py` 计算 Token 能耗与认知摩擦力
-
-将新增的 Token 消耗、思考链占比、持续时长与分支阻抗指标纳入全局统计。
+区分“全量平均时长”与“持续攻坚多轮会话的平均交互时长”，更具洞察价值。
 
 ~~~~~act
 write_file
@@ -318,7 +189,7 @@ def calculate_session_metrics(sessions: List[PromptSession]) -> Dict[str, Any]:
     计算关键认知与交互消耗指标：
     1. 基础吞吐：会话总数、对话轮次
     2. 计算能耗：Token 消耗总量、思考链 (Thinking) Token 比例
-    3. 任务耐受与深度：深度会话占比 (≥5轮)、会话平均持续时长
+    3. 任务耐受与生命周期：全量平均时长、多轮深度会话平均交互时长
     4. 思维摩擦力：重试与分支会话比例、分支总次数
     5. 模型偏好与系统指令部署概况
     """
@@ -339,12 +210,21 @@ def calculate_session_metrics(sessions: List[PromptSession]) -> Dict[str, Any]:
 
     # 2. 任务耐受度与生命周期 (Duration 维度)
     deep_sessions = [s for s in sessions if s.turn_count >= 5]
-    valid_durations = [s.duration_seconds for s in sessions if s.duration_seconds > 0]
-    avg_duration_sec = (
-        round(sum(valid_durations) / len(valid_durations), 1)
-        if valid_durations else 0.0
+    multi_turn_sessions = [s for s in sessions if s.turn_count >= 2]
+
+    # 有效持续时长（大于 10 秒的会话）
+    meaningful_durations = [s.duration_seconds for s in sessions if s.duration_seconds >= 10]
+    avg_duration_min = (
+        round(sum(meaningful_durations) / len(meaningful_durations) / 60, 1)
+        if meaningful_durations else 0.0
     )
-    avg_duration_min = round(avg_duration_sec / 60, 1)
+
+    # 专门计算多轮会话（≥2轮）的平均驻留时长
+    multi_turn_durations = [s.duration_seconds for s in multi_turn_sessions if s.duration_seconds > 0]
+    avg_multi_turn_duration_min = (
+        round(sum(multi_turn_durations) / len(multi_turn_durations) / 60, 1)
+        if multi_turn_durations else 0.0
+    )
 
     # 3. 思维摩擦力与沟通阻抗 (Branching 维度)
     branching_sessions = [s for s in sessions if s.has_branching]
@@ -366,6 +246,7 @@ def calculate_session_metrics(sessions: List[PromptSession]) -> Dict[str, Any]:
         "deep_session_count": len(deep_sessions),
         "deep_session_ratio": f"{round(len(deep_sessions) / total_sessions * 100, 1)}%",
         "avg_duration_minutes": avg_duration_min,
+        "avg_multi_turn_duration_minutes": avg_multi_turn_duration_min,
         "total_tokens": total_tokens,
         "avg_tokens_per_session": round(total_tokens / total_sessions, 0) if total_sessions else 0,
         "total_thought_tokens": total_thought_tokens,
@@ -378,108 +259,55 @@ def calculate_session_metrics(sessions: List[PromptSession]) -> Dict[str, Any]:
     }
 ~~~~~
 
-#### Acts 4: 升级 `src/analyzer/exporter.py`，输出扩展字段
+#### Acts 3: 调整 `main.py` 默认关闭导出产物，并优化看板指标展示
 
-在报表中增加时长、Token 与分支字段。
+将参数由 `--no-export` 调整为显式 `--export`，默认不写入文件；并在看板中打印多轮交互的平均时长。
 
 ~~~~~act
 write_file
-src/analyzer/exporter.py
-~~~~~
-~~~~~python
-import csv
-import json
-from typing import List
-from .models import PromptSession
-
-
-def export_first_prompts_to_jsonl(sessions: List[PromptSession], output_path: str):
-    """
-    将所有会话的「首轮提问」导出为 JSONL 文件，
-    包含生命周期与 Token 能耗标签，便于 LLM 进行意图与阻抗聚类。
-    """
-    with open(output_path, "w", encoding="utf-8") as f:
-        for s in sessions:
-            if s.user_prompts:
-                record = {
-                    "file_id": s.file_id,
-                    "title": s.name,
-                    "first_prompt": s.user_prompts[0],
-                    "total_turns": s.turn_count,
-                    "total_tokens": s.total_tokens,
-                    "duration_seconds": s.duration_seconds,
-                    "has_branching": s.has_branching,
-                    "model": s.model,
-                    "created_time": s.created_time.isoformat() if s.created_time else None
-                }
-                f.write(json.dumps(record, ensure_ascii=False) + "\n")
-
-
-def export_prompts_summary_csv(sessions: List[PromptSession], output_path: str):
-    """导出所有会话的概览统计报表 CSV (包含生命周期、Token 及摩擦力指标)"""
-    fieldnames = [
-        "file_id",
-        "title",
-        "model",
-        "turn_count",
-        "duration_human",
-        "duration_seconds",
-        "total_tokens",
-        "thought_tokens",
-        "has_branching",
-        "branch_count",
-        "user_char_count",
-        "first_prompt_preview"
-    ]
-    with open(output_path, "w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        for s in sessions:
-            first_prompt = s.user_prompts[0] if s.user_prompts else ""
-            preview = first_prompt[:80].replace("\n", " ") + ("..." if len(first_prompt) > 80 else "")
-            writer.writerow({
-                "file_id": s.file_id,
-                "title": s.name,
-                "model": s.model,
-                "turn_count": s.turn_count,
-                "duration_human": s.duration_human,
-                "duration_seconds": s.duration_seconds,
-                "total_tokens": s.total_tokens,
-                "thought_tokens": s.thought_tokens,
-                "has_branching": s.has_branching,
-                "branch_count": s.branch_count,
-                "user_char_count": s.total_user_chars,
-                "first_prompt_preview": preview
-            })
-~~~~~
-
-#### Acts 5: 更新 `main.py` 控制台指标输出，直观展现多维洞察
-
-更新打印函数，直接展示 Token 总能耗、思考链消耗、平均生命周期和分支摩擦力指标。
-
-~~~~~act
-patch_file
 main.py
 ~~~~~
-~~~~~python.old
-    # 指标计算
-    metrics = calculate_session_metrics(sessions)
-    print("\n" + "=" * 30 + " 📊 核心指标概览 " + "=" * 30)
-    print(f"  - 分析会话总数:       {metrics['total_sessions']}")
-    print(f"  - 总对话轮次 (Turns): {metrics['total_turns']} (平均每会话: {metrics['avg_turns_per_session']} 轮)")
-    print(f"  - 深度攻坚会话 (≥5轮): {metrics['deep_session_count']} 场 (占比 {metrics['deep_session_ratio']})")
-    print(f"  - 用户提问总字数:     {metrics['total_user_chars']} 字符")
-    print(f"  - 模型使用分布:       {metrics['model_distribution']}")
-    print("=" * 76)
-~~~~~
-~~~~~python.new
+~~~~~python
+"""
+AI Studio Analyzer - 统一调度入口 (Git 风格分布式体系)
+
+常用命令:
+  1. python main.py fetch [-n 50]         # 增量拉取云端最近 50 个修改的文件写入 SQLite
+  2. python main.py analyze [--export]   # 纯离线全量分析本地 SQLite 缓存 (加 --export 导出 CSV/JSONL)
+  3. python main.py pull [-n 50]          # 组合操作：快速拉取最新 50 个文件，随后全量分析本地数据
+"""
+import argparse
+import sys
+from src.analyzer.drive import DriveClient, PROXY_URL
+from src.analyzer.cache import SQLiteCache
+from src.analyzer.sync import fetch_remote_files
+from src.analyzer.loader import load_cached_sessions
+from src.analyzer.metrics import calculate_session_metrics
+from src.analyzer.exporter import export_first_prompts_to_jsonl, export_prompts_summary_csv
+
+
+def run_analyze(cache: SQLiteCache, limit: int = 0, export: bool = False):
+    """纯离线本地计算与报表分析"""
+    print("\n" + "=" * 60)
+    print("📊 启动本地离线认知与交互审计 (Analyzer)")
+    if limit > 0:
+        print(f"📌 分析模式: 采样分析本地前 {limit} 个会话")
+    else:
+        print("📌 分析模式: [全量分析] 正在读取本地 SQLite 全部会话资产...")
+    print("=" * 60)
+
+    sessions = load_cached_sessions(cache, limit=limit, show_progress=True)
+    if not sessions:
+        print("⚠️ 未加载到有效会话。请先运行 `python main.py fetch` 同步数据。")
+        return
+
     # 指标计算
     metrics = calculate_session_metrics(sessions)
     print("\n" + "=" * 30 + " 📊 认知与能耗全景概览 " + "=" * 30)
     print(f"  - 分析会话总数:           {metrics['total_sessions']}")
     print(f"  - 总对话轮次 (Turns):     {metrics['total_turns']} (平均每会话: {metrics['avg_turns_per_session']} 轮)")
     print(f"  - 深度攻坚会话 (≥5轮):     {metrics['deep_session_count']} 场 (占比 {metrics['deep_session_ratio']})")
-    print(f"  - 平均持续时长 (Duration): {metrics['avg_duration_minutes']} 分钟")
+    print(f"  - 平均交互时长 (有效跨度): {metrics['avg_duration_minutes']} 分钟 (多轮深入会话平均: {metrics['avg_multi_turn_duration_minutes']} 分钟)")
     print(f"  - 计算能耗 (Total Tokens): {metrics['total_tokens']:,} (平均每会话: {int(metrics['avg_tokens_per_session']):,} Tokens)")
     print(f"  - 思考链消耗 (Thinking):   {metrics['total_thought_tokens']:,} Tokens (占总能耗: {metrics['thought_token_ratio']})")
     print(f"  - 思维摩擦力 (重试/分支):   {metrics['friction_sessions_count']} 场 (占比: {metrics['friction_session_ratio']}, 累计分支重试: {metrics['total_branch_retries']} 次)")
@@ -487,13 +315,102 @@ main.py
     print(f"  - 用户提问总字数:         {metrics['total_user_chars']:,} 字符")
     print(f"  - 模型偏好分布:           {metrics['model_distribution']}")
     print("=" * 76)
+
+    # 导出报表产物（仅在显式指定 --export 时生成）
+    if export:
+        jsonl_output = "first_prompts_for_clustering.jsonl"
+        csv_output = "prompts_summary.csv"
+        export_first_prompts_to_jsonl(sessions, jsonl_output)
+        export_prompts_summary_csv(sessions, csv_output)
+        print(f"\n📁 分析产物已生成 (基于全量 {len(sessions)} 条资产):")
+        print(f"  1. 首轮提问清洗集 (用于聚类与反思): ./{jsonl_output}")
+        print(f"  2. 对话概览指标明细 (CSV 报表):        ./{csv_output}")
+
+
+def cmd_fetch(args):
+    """仅网络同步"""
+    print("=" * 60)
+    print("🔄 正在执行云端增量同步 (Fetch)")
+    print("=" * 60)
+    client = DriveClient(proxy_url=PROXY_URL)
+    cache = SQLiteCache(cache_dir=".cache")
+
+    total_valid, hits, downloaded = fetch_remote_files(
+        client=client,
+        cache=cache,
+        limit=args.limit,
+        all_files=args.all
+    )
+    print(f"\n✅ 同步完成: 扫描有效项 {total_valid} | 命中缓存 {hits} | 增量下载 {downloaded}")
+    print(f"📦 本地 SQLite 现有总会话数: {cache.count()}")
+
+
+def cmd_analyze(args):
+    """仅本地离线分析"""
+    cache = SQLiteCache(cache_dir=".cache")
+    run_analyze(cache, limit=args.limit, export=args.export)
+
+
+def cmd_pull(args):
+    """先拉取增量，再全量分析"""
+    cmd_fetch(args)
+    cache = SQLiteCache(cache_dir=".cache")
+    run_analyze(cache, limit=0, export=args.export)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Google AI Studio 历史对话分析器 (Git 风格分布式体系)",
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+    subparsers = parser.add_subparsers(dest="command", help="子命令 (输入 -h 查看详情)")
+
+    # 1. fetch 子命令
+    parser_fetch = subparsers.add_parser("fetch", help="[网络] 增量拉取云端最近修改的文件写入本地 SQLite")
+    parser_fetch.add_argument("-n", "--limit", type=int, default=50, help="远程扫描拉取数量限制 (默认: 50)")
+    parser_fetch.add_argument("--all", action="store_true", help="全量扫描云盘 (忽略 -n)")
+
+    # 2. analyze 子命令
+    parser_analyze = subparsers.add_parser("analyze", help="[离线] 纯离线分析本地 SQLite 缓存的历史会话")
+    parser_analyze.add_argument("-n", "--limit", type=int, default=0, help="分析会话上限 (默认 0 表示全量分析)")
+    parser_analyze.add_argument("--export", action="store_true", help="显式导出 CSV 与 JSONL 分析文件 (默认不导出)")
+
+    # 3. pull 子命令
+    parser_pull = subparsers.add_parser("pull", help="[组合] 增量拉取最近文件更新本地库，随后执行全量分析")
+    parser_pull.add_argument("-n", "--limit", type=int, default=50, help="增量拉取数量限制 (默认: 50)")
+    parser_pull.add_argument("--all", action="store_true", help="全量扫描云盘并分析")
+    parser_pull.add_argument("--export", action="store_true", help="分析完成后显式导出 CSV 与 JSONL 文件 (默认不导出)")
+
+    return parser
+
+
+def main():
+    parser = build_parser()
+    args = parser.parse_args()
+
+    if args.command == "fetch":
+        cmd_fetch(args)
+    elif args.command == "analyze":
+        cmd_analyze(args)
+    elif args.command == "pull":
+        cmd_pull(args)
+    else:
+        print("💡 未指定子命令，默认执行 `analyze` 查看本地指标看板。")
+        print("   可用子命令: `fetch` (仅同步), `analyze` (仅本地分析), `pull` (同步并分析)")
+        print("   运行 `python main.py -h` 可查看完整指令选项。\n")
+        class DefaultArgs:
+            limit = 0
+            export = False
+        cmd_analyze(DefaultArgs())
+
+
+if __name__ == "__main__":
+    main()
 ~~~~~
 
 ### 下一步建议
 
-1. **运行离线分析验证**：
-   运行 `python main.py analyze`，观察输出的 Token 能耗、思考链占比与平均时长指标。
-2. **查看生成的报表**：
-   打开 `prompts_summary.csv`，可以按 `duration_seconds`、`total_tokens` 或 `branch_count` 排序，快速找出你历史上耗费心力最大、推敲最深的会话。
-3. **推进至 Step 3 / 领域切片**：
-   引入时间衰减与领域切片（代码、DPDR/情绪、心象、认知审计），为后续 Web UI 提供多维度聚合 API。
+1. **测试离线时长统计**：
+   运行 `python main.py analyze`，验证控制台输出中的“平均交互时长”与“多轮深入会话平均时长”是否已正常显示出真实分钟数，且工作区没有多余的 CSV/JSONL 生成。
+2. **测试显式导出**：
+   运行 `python main.py analyze --export`，验证在显式指定参数时才导出两个分析文件。

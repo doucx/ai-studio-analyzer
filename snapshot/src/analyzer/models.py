@@ -5,7 +5,7 @@ from typing import List, Optional, Dict, Any
 
 @dataclass
 class ConversationTurn:
-    """单轮对话数据 (增强版：支持 Token、思考链与分支追踪)"""
+    """单轮对话数据 (支持 Token、思考链与分支追踪)"""
     role: str                       # 'user' | 'model' | 'system'
     text: str                       # 文本内容
     token_count: int = 0            # 该轮消耗的精确 Token 数量
@@ -30,10 +30,29 @@ class PromptSession:
     system_instruction: str = ""    # 系统指令 / 前置协议
 
     @property
+    def start_time(self) -> Optional[datetime]:
+        """推导会话起始时间：优先采用 created_time，其次推导自首个有效 Chunk 的时间戳"""
+        if self.created_time:
+            return self.created_time
+        turn_times = [t.timestamp for t in self.turns if t.timestamp]
+        return min(turn_times) if turn_times else None
+
+    @property
+    def end_time(self) -> Optional[datetime]:
+        """推导会话结束时间：结合末轮 Chunk 时间与 modified_time 的最新值"""
+        turn_times = [t.timestamp for t in self.turns if t.timestamp]
+        max_turn_time = max(turn_times) if turn_times else None
+        if self.modified_time and max_turn_time:
+            return max(self.modified_time, max_turn_time)
+        return self.modified_time or max_turn_time
+
+    @property
     def duration(self) -> Optional[timedelta]:
-        """会话生命周期持续时间 (modified_time - created_time)"""
-        if self.created_time and self.modified_time:
-            delta = self.modified_time - self.created_time
+        """会话生命周期持续时间 (从首轮交互到最后修改/回复)"""
+        start = self.start_time
+        end = self.end_time
+        if start and end:
+            delta = end - start
             return delta if delta.total_seconds() >= 0 else timedelta(0)
         return None
 
@@ -49,6 +68,8 @@ class PromptSession:
         if not self.duration:
             return "0s"
         total_sec = int(self.duration.total_seconds())
+        if total_sec < 60:
+            return f"{total_sec}s"
         hours, remainder = divmod(total_sec, 3600)
         minutes, seconds = divmod(remainder, 60)
         parts = []
@@ -56,13 +77,13 @@ class PromptSession:
             parts.append(f"{hours}h")
         if minutes > 0:
             parts.append(f"{minutes}m")
-        if seconds > 0 or not parts:
+        if not parts:
             parts.append(f"{seconds}s")
         return " ".join(parts)
 
     @property
     def user_prompts(self) -> List[str]:
-        """提取所有属于用户的有效发言文本 (排除非纯文本挂载标记)"""
+        """提取所有属于用户的有效发言文本"""
         return [turn.text for turn in self.turns if turn.role == 'user']
 
     @property
@@ -72,7 +93,7 @@ class PromptSession:
 
     @property
     def total_tokens(self) -> int:
-        """该会话消耗的 Token 总量 (含上下文输入、生成与思考)"""
+        """该会话消耗的 Token 总量"""
         return sum(t.token_count for t in self.turns)
 
     @property
@@ -97,7 +118,7 @@ class PromptSession:
 
     @property
     def branch_count(self) -> int:
-        """分支/重试派生次数 (衡量沟通阻抗与思维摩擦力)"""
+        """分支/重试派生次数"""
         return sum(1 for t in self.turns if t.branch_parent is not None or len(t.branch_children) > 0 or t.is_edited)
 
     @property

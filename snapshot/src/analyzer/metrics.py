@@ -7,7 +7,7 @@ def calculate_session_metrics(sessions: List[PromptSession]) -> Dict[str, Any]:
     计算关键认知与交互消耗指标：
     1. 基础吞吐：会话总数、对话轮次
     2. 计算能耗：Token 消耗总量、思考链 (Thinking) Token 比例
-    3. 任务耐受与深度：深度会话占比 (≥5轮)、会话平均持续时长
+    3. 任务耐受与生命周期：全量平均时长、多轮深度会话平均交互时长
     4. 思维摩擦力：重试与分支会话比例、分支总次数
     5. 模型偏好与系统指令部署概况
     """
@@ -28,12 +28,21 @@ def calculate_session_metrics(sessions: List[PromptSession]) -> Dict[str, Any]:
 
     # 2. 任务耐受度与生命周期 (Duration 维度)
     deep_sessions = [s for s in sessions if s.turn_count >= 5]
-    valid_durations = [s.duration_seconds for s in sessions if s.duration_seconds > 0]
-    avg_duration_sec = (
-        round(sum(valid_durations) / len(valid_durations), 1)
-        if valid_durations else 0.0
+    multi_turn_sessions = [s for s in sessions if s.turn_count >= 2]
+
+    # 有效持续时长（大于 10 秒的会话）
+    meaningful_durations = [s.duration_seconds for s in sessions if s.duration_seconds >= 10]
+    avg_duration_min = (
+        round(sum(meaningful_durations) / len(meaningful_durations) / 60, 1)
+        if meaningful_durations else 0.0
     )
-    avg_duration_min = round(avg_duration_sec / 60, 1)
+
+    # 专门计算多轮会话（≥2轮）的平均驻留时长
+    multi_turn_durations = [s.duration_seconds for s in multi_turn_sessions if s.duration_seconds > 0]
+    avg_multi_turn_duration_min = (
+        round(sum(multi_turn_durations) / len(multi_turn_durations) / 60, 1)
+        if multi_turn_durations else 0.0
+    )
 
     # 3. 思维摩擦力与沟通阻抗 (Branching 维度)
     branching_sessions = [s for s in sessions if s.has_branching]
@@ -55,6 +64,7 @@ def calculate_session_metrics(sessions: List[PromptSession]) -> Dict[str, Any]:
         "deep_session_count": len(deep_sessions),
         "deep_session_ratio": f"{round(len(deep_sessions) / total_sessions * 100, 1)}%",
         "avg_duration_minutes": avg_duration_min,
+        "avg_multi_turn_duration_minutes": avg_multi_turn_duration_min,
         "total_tokens": total_tokens,
         "avg_tokens_per_session": round(total_tokens / total_sessions, 0) if total_sessions else 0,
         "total_thought_tokens": total_thought_tokens,

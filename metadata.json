@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(models,parser): 补齐生命周期 duration、精确 token 统计与分支标记", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790250658.9369226, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(metrics,cli): 修复会话生命周期时长为零的问题并默认关闭产物导出", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790251313.6500945, "duration_ms": 0}}
