@@ -1,7 +1,13 @@
 import { useEffect, useRef } from 'preact/hooks';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import {
+  Chart as ChartJS,
+  ArcElement,
+  Tooltip,
+  Legend,
+  DoughnutController,
+} from 'chart.js';
 
-ChartJS.register(ArcElement, Tooltip, Legend);
+ChartJS.register(ArcElement, Tooltip, Legend, DoughnutController);
 
 interface Props {
   tiers: {
@@ -93,7 +99,7 @@ export function DurationTiersChart({ tiers }: Props) {
   }, [tiers]);
 
   return (
-    <div className="w-full h-64">
+    <div className="relative w-full h-64">
       <canvas ref={canvasRef} />
     </div>
   );

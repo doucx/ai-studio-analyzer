@@ -5,6 +5,7 @@ import {
   LinearScale,
   PointElement,
   LineElement,
+  LineController,
   Title,
   Tooltip,
   Legend,
@@ -17,6 +18,7 @@ ChartJS.register(
   LinearScale,
   PointElement,
   LineElement,
+  LineController,
   Title,
   Tooltip,
   Legend,
@@ -140,7 +142,7 @@ export function TokenTrendChart({ data }: Props) {
   }, [data]);
 
   return (
-    <div className="w-full h-72">
+    <div className="relative w-full h-72">
       <canvas ref={canvasRef} />
     </div>
   );

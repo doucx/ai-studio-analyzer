@@ -4,11 +4,12 @@ import {
   CategoryScale,
   LinearScale,
   BarElement,
+  BarController,
   Tooltip,
   Legend,
 } from 'chart.js';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, BarController, Tooltip, Legend);
 
 interface Props {
   distribution: Record<string, number>;
@@ -93,7 +94,7 @@ export function ModelDistributionChart({ distribution }: Props) {
   }, [distribution]);
 
   return (
-    <div className="w-full h-64">
+    <div className="relative w-full h-64">
       <canvas ref={canvasRef} />
     </div>
   );
