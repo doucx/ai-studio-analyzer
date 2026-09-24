@@ -1,6 +1,7 @@
 """
 AI Studio 远程增量同步模块 (类 git fetch/pull 网络层)
 """
+
 from typing import Optional, Tuple
 from tqdm import tqdm
 from .drive import DriveClient
@@ -12,11 +13,11 @@ def fetch_remote_files(
     client: DriveClient,
     cache: SQLiteCache,
     limit: Optional[int] = 50,
-    all_files: bool = False
+    all_files: bool = False,
 ) -> Tuple[int, int, int]:
     """
     增量拉取云盘最近修改的文件并写入 SQLite 缓存。
-    
+
     :param client: Google Drive 客户端
     :param cache: 本地 SQLite 缓存
     :param limit: 拉取文件上限（若 all_files=True 则忽略）
@@ -29,8 +30,12 @@ def fetch_remote_files(
     if not folder_id:
         raise RuntimeError("未能找到 Google AI Studio 目录，请检查云盘权限。")
 
-    print(f"📥 正在扫描云端文件元数据 (按最近修改降序, 目标拉取: {max_results if max_results else '全量'})...")
-    files = client.list_files(folder_id=folder_id, max_results=max_results, order_by="modifiedTime desc")
+    print(
+        f"📥 正在扫描云端文件元数据 (按最近修改降序, 目标拉取: {max_results if max_results else '全量'})..."
+    )
+    files = client.list_files(
+        folder_id=folder_id, max_results=max_results, order_by="modifiedTime desc"
+    )
     valid_files = [f for f in files if is_valid_prompt_file(f.get("name", ""))]
 
     download_count = 0
@@ -55,9 +60,8 @@ def fetch_remote_files(
                     cache.put(fid, mtime, raw_data)
                     download_count += 1
 
-            pbar.set_postfix({
-                "命中(跳过)": cache_hit_count,
-                "云端拉取": download_count
-            })
+            pbar.set_postfix(
+                {"命中(跳过)": cache_hit_count, "云端拉取": download_count}
+            )
 
     return len(valid_files), cache_hit_count, download_count

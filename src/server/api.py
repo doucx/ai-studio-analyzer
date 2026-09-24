@@ -10,11 +10,7 @@ router = APIRouter(prefix="/api")
 cache = SQLiteCache(cache_dir=".cache")
 
 # 全局后台增量同步状态
-sync_status = {
-    "is_syncing": False,
-    "last_result": None,
-    "error": None
-}
+sync_status = {"is_syncing": False, "last_result": None, "error": None}
 
 
 def _run_sync_task(limit: Optional[int], all_files: bool):
@@ -23,16 +19,13 @@ def _run_sync_task(limit: Optional[int], all_files: bool):
     try:
         client = DriveClient(proxy_url=PROXY_URL)
         total, hits, downloaded = fetch_remote_files(
-            client=client,
-            cache=cache,
-            limit=limit,
-            all_files=all_files
+            client=client, cache=cache, limit=limit, all_files=all_files
         )
         sync_status["last_result"] = {
             "total_scanned": total,
             "cache_hits": hits,
             "downloaded": downloaded,
-            "cache_total": cache.count()
+            "cache_total": cache.count(),
         }
     except Exception as exc:
         sync_status["error"] = str(exc)
@@ -74,7 +67,9 @@ def list_sessions(limit: int = 50):
 
 
 @router.post("/sync")
-def trigger_sync(background_tasks: BackgroundTasks, limit: int = 50, all_files: bool = False):
+def trigger_sync(
+    background_tasks: BackgroundTasks, limit: int = 50, all_files: bool = False
+):
     """异步触发云端增量同步任务"""
     if sync_status["is_syncing"]:
         return {"status": "busy", "message": "增量同步正在进行中，请勿重复触发"}

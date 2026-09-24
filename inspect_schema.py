@@ -1,8 +1,8 @@
 """
 AI Studio 缓存数据 Schema 探针脚本 (直接基于 SQLite WAL 数据库，支持长文本与 Base64 压缩展示)
 """
+
 import json
-import os
 from collections import Counter, defaultdict
 from typing import Any
 from src.analyzer.cache import SQLiteCache
@@ -46,7 +46,9 @@ def inspect_cache_database(cache_dir: str = ".cache", str_truncate_limit: int = 
         print(f"❌ 在 {cache.db_path} 中未发现任何已缓存的会话记录。")
         return
 
-    print(f"🔍 正在从 SQLite 数据库 ({cache.db_path}) 分析 {total_records} 条缓存记录...\n")
+    print(
+        f"🔍 正在从 SQLite 数据库 ({cache.db_path}) 分析 {total_records} 条缓存记录...\n"
+    )
 
     top_level_keys_counter = Counter()
     schema_signatures = defaultdict(list)
@@ -63,11 +65,15 @@ def inspect_cache_database(cache_dir: str = ".cache", str_truncate_limit: int = 
         # 2. 统计 chunks 内部载荷形态 (text, driveDocument, inlineFile 等)
         chunks = data.get("chunkedPrompt", {}).get("chunks", [])
         for chunk in chunks:
-            payload_types = [k for k in chunk.keys() if k not in ("role", "tokenCount", "createTime")]
+            payload_types = [
+                k for k in chunk.keys() if k not in ("role", "tokenCount", "createTime")
+            ]
             chunk_types_counter[", ".join(sorted(payload_types))] += 1
 
         # 3. 记录不同结构签名的代表样本
-        sig_str = json.dumps(get_shape_summary(data, max_depth=2), ensure_ascii=False, sort_keys=True)
+        sig_str = json.dumps(
+            get_shape_summary(data, max_depth=2), ensure_ascii=False, sort_keys=True
+        )
         if len(schema_signatures[sig_str]) < 2:
             schema_signatures[sig_str].append((file_id, data))
 
@@ -94,13 +100,17 @@ def inspect_cache_database(cache_dir: str = ".cache", str_truncate_limit: int = 
         chunks = raw_sample.get("chunkedPrompt", {}).get("chunks", [])
         if chunks:
             sample_chunk = chunks[0]
-            compressed_chunk = truncate_large_content(sample_chunk, max_str_len=str_truncate_limit)
-            print(f"    - Chunk 结构示例:")
+            compressed_chunk = truncate_large_content(
+                sample_chunk, max_str_len=str_truncate_limit
+            )
+            print("    - Chunk 结构示例:")
             print("      " + json.dumps(compressed_chunk, ensure_ascii=False))
 
         sys_inst = raw_sample.get("systemInstruction", {})
         if sys_inst:
-            compressed_sys = truncate_large_content(sys_inst, max_str_len=str_truncate_limit)
+            compressed_sys = truncate_large_content(
+                sys_inst, max_str_len=str_truncate_limit
+            )
             print(f"    - 系统指令: {json.dumps(compressed_sys, ensure_ascii=False)}")
 
 

@@ -52,7 +52,7 @@ class SQLiteCache:
             cursor = conn.cursor()
             cursor.execute(
                 "SELECT 1 FROM file_cache WHERE file_id = ? AND modified_time = ? LIMIT 1;",
-                (file_id, modified_time)
+                (file_id, modified_time),
             )
             return cursor.fetchone() is not None
 
@@ -60,7 +60,9 @@ class SQLiteCache:
         """从 SQLite 读取缓存内容并反序列化"""
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT data FROM file_cache WHERE file_id = ? LIMIT 1;", (file_id,))
+            cursor.execute(
+                "SELECT data FROM file_cache WHERE file_id = ? LIMIT 1;", (file_id,)
+            )
             row = cursor.fetchone()
             if row:
                 try:
@@ -74,14 +76,17 @@ class SQLiteCache:
         payload_str = json.dumps(data, ensure_ascii=False)
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO file_cache (file_id, modified_time, data, updated_at)
                 VALUES (?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(file_id) DO UPDATE SET
                     modified_time = excluded.modified_time,
                     data = excluded.data,
                     updated_at = CURRENT_TIMESTAMP;
-            """, (file_id, modified_time, payload_str))
+            """,
+                (file_id, modified_time, payload_str),
+            )
             conn.commit()
 
     def count(self) -> int:

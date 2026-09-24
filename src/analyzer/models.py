@@ -6,28 +6,30 @@ from typing import List, Optional, Dict, Any
 @dataclass
 class ConversationTurn:
     """单轮对话数据 (支持 Token、思考链与分支追踪)"""
-    role: str                       # 'user' | 'model' | 'system'
-    text: str                       # 文本内容
-    token_count: int = 0            # 该轮消耗的精确 Token 数量
-    is_thought: bool = False        # 是否为 Gemini 2.0 Thinking 思考过程
-    payload_type: str = "text"      # 'text' | 'inlineFile' | 'driveDocument' | 'other'
+
+    role: str  # 'user' | 'model' | 'system'
+    text: str  # 文本内容
+    token_count: int = 0  # 该轮消耗的精确 Token 数量
+    is_thought: bool = False  # 是否为 Gemini 2.0 Thinking 思考过程
+    payload_type: str = "text"  # 'text' | 'inlineFile' | 'driveDocument' | 'other'
     timestamp: Optional[datetime] = None
-    branch_parent: Optional[Any] = None       # 分支父节点引用
-    branch_children: List[Any] = field(default_factory=list) # 派生出的分支列表
-    is_edited: bool = False         # 是否为用户手动编辑过的历史节点
+    branch_parent: Optional[Any] = None  # 分支父节点引用
+    branch_children: List[Any] = field(default_factory=list)  # 派生出的分支列表
+    is_edited: bool = False  # 是否为用户手动编辑过的历史节点
     extra_metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class PromptSession:
     """单个 AI Studio 对话会话 (支持生命周期与认知消耗审计)"""
-    file_id: str                    # Google Drive 文件 ID
-    name: str                       # 对话/文件名称
-    model: str                      # 绑定的模型标识 (如 gemini-1.5-pro)
-    created_time: Optional[datetime] # 云端创建时间
-    modified_time: Optional[datetime]# 最后修改时间
-    turns: List[ConversationTurn]   # 会话的所有轮次
-    system_instruction: str = ""    # 系统指令 / 前置协议
+
+    file_id: str  # Google Drive 文件 ID
+    name: str  # 对话/文件名称
+    model: str  # 绑定的模型标识 (如 gemini-1.5-pro)
+    created_time: Optional[datetime]  # 云端创建时间
+    modified_time: Optional[datetime]  # 最后修改时间
+    turns: List[ConversationTurn]  # 会话的所有轮次
+    system_instruction: str = ""  # 系统指令 / 前置协议
 
     @property
     def start_time(self) -> Optional[datetime]:
@@ -84,7 +86,7 @@ class PromptSession:
     @property
     def user_prompts(self) -> List[str]:
         """提取所有属于用户的有效发言文本"""
-        return [turn.text for turn in self.turns if turn.role == 'user']
+        return [turn.text for turn in self.turns if turn.role == "user"]
 
     @property
     def turn_count(self) -> int:
@@ -99,12 +101,12 @@ class PromptSession:
     @property
     def user_tokens(self) -> int:
         """用户端输入消耗的 Token 数"""
-        return sum(t.token_count for t in self.turns if t.role == 'user')
+        return sum(t.token_count for t in self.turns if t.role == "user")
 
     @property
     def model_tokens(self) -> int:
         """模型端生成消耗的 Token 数 (含思考)"""
-        return sum(t.token_count for t in self.turns if t.role == 'model')
+        return sum(t.token_count for t in self.turns if t.role == "model")
 
     @property
     def thought_tokens(self) -> int:
@@ -119,7 +121,11 @@ class PromptSession:
     @property
     def branch_count(self) -> int:
         """分支/重试派生次数"""
-        return sum(1 for t in self.turns if t.branch_parent is not None or len(t.branch_children) > 0 or t.is_edited)
+        return sum(
+            1
+            for t in self.turns
+            if t.branch_parent is not None or len(t.branch_children) > 0 or t.is_edited
+        )
 
     @property
     def has_branching(self) -> bool:
