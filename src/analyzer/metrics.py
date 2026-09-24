@@ -12,7 +12,57 @@ def calculate_session_metrics(sessions: List[PromptSession]) -> Dict[str, Any]:
     4. 沟通阻抗与模型分布
     """
     if not sessions:
-        return {"total_sessions": 0}
+        return {
+            "total_sessions": 0,
+            "total_turns": 0,
+            "total_user_chars": 0,
+            "turn_stats": {
+                "mean": 0.0,
+                "median": 0.0,
+                "p75": 0.0,
+                "p90": 0.0,
+                "deep_count": 0,
+                "deep_ratio": "0.0%",
+            },
+            "dur_stats": {
+                "mean": 0.0,
+                "median": 0.0,
+                "p75": 0.0,
+                "p90": 0.0,
+                "max": 0.0,
+                "valid_count": 0,
+            },
+            "multi_dur_stats": {
+                "mean": 0.0,
+                "median": 0.0,
+                "p75": 0.0,
+                "p90": 0.0,
+            },
+            "duration_tiers": {
+                "flash": (0, "0.0%"),
+                "focus": (0, "0.0%"),
+                "deep": (0, "0.0%"),
+                "epic": (0, "0.0%"),
+            },
+            "tok_stats": {
+                "total": 0,
+                "mean": 0.0,
+                "median": 0.0,
+                "p75": 0.0,
+                "p90": 0.0,
+                "total_thought": 0,
+                "thought_ratio": "0%",
+            },
+            "friction_stats": {
+                "branch_sessions": 0,
+                "branch_ratio": "0.0%",
+                "total_retries": 0,
+            },
+            "sys_instruction_count": 0,
+            "model_distribution": {},
+            "daily_trends": [],
+            "message": "当前时间范围内无会话记录",
+        }
 
     total_sessions = len(sessions)
 
