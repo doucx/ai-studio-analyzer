@@ -9,12 +9,14 @@ def is_valid_prompt_file(name: str) -> bool:
     if name.startswith("Paste "):
         return False
     lower = name.lower()
-    if lower.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
+    if lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")):
         return False
     return True
 
 
-def parse_prompt_json(file_meta: Optional[Dict[str, Any]], raw_data: Dict[str, Any]) -> Optional[PromptSession]:
+def parse_prompt_json(
+    file_meta: Optional[Dict[str, Any]], raw_data: Dict[str, Any]
+) -> Optional[PromptSession]:
     """
     将 Google AI Studio 原始 JSON 转化为结构化的 PromptSession 对象。
     兼容 chunkedPrompt 结构以及新版 Gemini contents 结构，
@@ -43,7 +45,9 @@ def parse_prompt_json(file_meta: Optional[Dict[str, Any]], raw_data: Dict[str, A
             chunk_time = None
             if "createTime" in c:
                 try:
-                    chunk_time = datetime.fromisoformat(c["createTime"].replace("Z", "+00:00"))
+                    chunk_time = datetime.fromisoformat(
+                        c["createTime"].replace("Z", "+00:00")
+                    )
                 except Exception:
                     pass
 
@@ -62,7 +66,10 @@ def parse_prompt_json(file_meta: Optional[Dict[str, Any]], raw_data: Dict[str, A
                 if "text" in mime or "json" in mime or "xml" in mime:
                     try:
                         raw_bytes = base64.b64decode(file_info.get("data", ""))
-                        text = raw_bytes.decode("utf-8", errors="ignore")[:300] + "... [内联文本附件]"
+                        text = (
+                            raw_bytes.decode("utf-8", errors="ignore")[:300]
+                            + "... [内联文本附件]"
+                        )
                     except Exception:
                         text = "[无法解码的文本附件]"
                 else:
@@ -74,17 +81,19 @@ def parse_prompt_json(file_meta: Optional[Dict[str, Any]], raw_data: Dict[str, A
                 text = f"[挂载云盘大文档 ID: {doc_id}]"
 
             if text or is_thought or token_count > 0:
-                turns.append(ConversationTurn(
-                    role=role,
-                    text=text,
-                    token_count=token_count,
-                    is_thought=is_thought,
-                    payload_type=payload_type,
-                    timestamp=chunk_time,
-                    branch_parent=branch_parent,
-                    branch_children=branch_children,
-                    is_edited=is_edited
-                ))
+                turns.append(
+                    ConversationTurn(
+                        role=role,
+                        text=text,
+                        token_count=token_count,
+                        is_thought=is_thought,
+                        payload_type=payload_type,
+                        timestamp=chunk_time,
+                        branch_parent=branch_parent,
+                        branch_children=branch_children,
+                        is_edited=is_edited,
+                    )
+                )
 
     # 2. 兼容标准 Gemini contents 结构
     elif "contents" in raw_data:
@@ -95,12 +104,14 @@ def parse_prompt_json(file_meta: Optional[Dict[str, Any]], raw_data: Dict[str, A
             text_blocks = [p.get("text", "") for p in parts if "text" in p]
             combined_text = "\n".join(text_blocks)
             if combined_text:
-                turns.append(ConversationTurn(
-                    role=role,
-                    text=combined_text,
-                    token_count=0,
-                    payload_type="text"
-                ))
+                turns.append(
+                    ConversationTurn(
+                        role=role,
+                        text=combined_text,
+                        token_count=0,
+                        payload_type="text",
+                    )
+                )
 
     if not turns:
         return None
@@ -109,22 +120,35 @@ def parse_prompt_json(file_meta: Optional[Dict[str, Any]], raw_data: Dict[str, A
     created_time = None
     modified_time = None
 
-    raw_created = file_meta.get("createdTime") or raw_data.get("createTime") or raw_data.get("createdTime")
+    raw_created = (
+        file_meta.get("createdTime")
+        or raw_data.get("createTime")
+        or raw_data.get("createdTime")
+    )
     if raw_created:
         try:
-            created_time = datetime.fromisoformat(str(raw_created).replace("Z", "+00:00"))
+            created_time = datetime.fromisoformat(
+                str(raw_created).replace("Z", "+00:00")
+            )
         except Exception:
             pass
 
     raw_modified = file_meta.get("modifiedTime") or raw_data.get("modifiedTime")
     if raw_modified:
         try:
-            modified_time = datetime.fromisoformat(str(raw_modified).replace("Z", "+00:00"))
+            modified_time = datetime.fromisoformat(
+                str(raw_modified).replace("Z", "+00:00")
+            )
         except Exception:
             pass
 
     # 解析名称
-    name = file_meta.get("name") or raw_data.get("name") or raw_data.get("title") or "Untitled"
+    name = (
+        file_meta.get("name")
+        or raw_data.get("name")
+        or raw_data.get("title")
+        or "Untitled"
+    )
 
     return PromptSession(
         file_id=file_meta.get("id", ""),
@@ -133,5 +157,5 @@ def parse_prompt_json(file_meta: Optional[Dict[str, Any]], raw_data: Dict[str, A
         created_time=created_time,
         modified_time=modified_time,
         turns=turns,
-        system_instruction=sys_instruction
+        system_instruction=sys_instruction,
     )

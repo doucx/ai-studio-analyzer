@@ -5,7 +5,7 @@ from src.server.api import router
 app = FastAPI(
     title="AI Studio Analyzer API",
     version="0.1.0",
-    description="个人认知与交互审计系统 - 后端数据与计算引擎"
+    description="个人认知与交互审计系统 - 后端数据与计算引擎",
 )
 
 app.add_middleware(
@@ -24,5 +24,5 @@ def root():
     return {
         "status": "online",
         "service": "AI Studio Analyzer API",
-        "docs_url": "/docs"
+        "docs_url": "/docs",
     }

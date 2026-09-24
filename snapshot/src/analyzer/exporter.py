@@ -21,7 +21,9 @@ def export_first_prompts_to_jsonl(sessions: List[PromptSession], output_path: st
                     "duration_seconds": s.duration_seconds,
                     "has_branching": s.has_branching,
                     "model": s.model,
-                    "created_time": s.created_time.isoformat() if s.created_time else None
+                    "created_time": s.created_time.isoformat()
+                    if s.created_time
+                    else None,
                 }
                 f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
@@ -40,25 +42,29 @@ def export_prompts_summary_csv(sessions: List[PromptSession], output_path: str):
         "has_branching",
         "branch_count",
         "user_char_count",
-        "first_prompt_preview"
+        "first_prompt_preview",
     ]
     with open(output_path, "w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for s in sessions:
             first_prompt = s.user_prompts[0] if s.user_prompts else ""
-            preview = first_prompt[:80].replace("\n", " ") + ("..." if len(first_prompt) > 80 else "")
-            writer.writerow({
-                "file_id": s.file_id,
-                "title": s.name,
-                "model": s.model,
-                "turn_count": s.turn_count,
-                "duration_human": s.duration_human,
-                "duration_seconds": s.duration_seconds,
-                "total_tokens": s.total_tokens,
-                "thought_tokens": s.thought_tokens,
-                "has_branching": s.has_branching,
-                "branch_count": s.branch_count,
-                "user_char_count": s.total_user_chars,
-                "first_prompt_preview": preview
-            })
+            preview = first_prompt[:80].replace("\n", " ") + (
+                "..." if len(first_prompt) > 80 else ""
+            )
+            writer.writerow(
+                {
+                    "file_id": s.file_id,
+                    "title": s.name,
+                    "model": s.model,
+                    "turn_count": s.turn_count,
+                    "duration_human": s.duration_human,
+                    "duration_seconds": s.duration_seconds,
+                    "total_tokens": s.total_tokens,
+                    "thought_tokens": s.thought_tokens,
+                    "has_branching": s.has_branching,
+                    "branch_count": s.branch_count,
+                    "user_char_count": s.total_user_chars,
+                    "first_prompt_preview": preview,
+                }
+            )
