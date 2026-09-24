@@ -1,118 +1,134 @@
 """
-AI Studio Analyzer 统一调度入口
+AI Studio Analyzer - 统一调度入口 (Git 风格分布式架构)
+
+常用命令:
+  1. python main.py fetch [-n 50]       # 增量拉取云端最近 50 个修改的文件写入 SQLite
+  2. python main.py analyze [--all]     # 纯离线全量分析本地 SQLite 缓存的所有会话
+  3. python main.py pull [-n 50]        # 组合操作：快速拉取最新 50 个文件，随后全量分析本地数据
 """
 import argparse
 import sys
-from tqdm import tqdm
 from src.analyzer.drive import DriveClient, PROXY_URL
-from src.analyzer.cache import LocalCache
-from src.analyzer.parser import is_valid_prompt_file, parse_prompt_json
+from src.analyzer.cache import SQLiteCache
+from src.analyzer.sync import fetch_remote_files
+from src.analyzer.loader import load_cached_sessions
 from src.analyzer.metrics import calculate_session_metrics
 from src.analyzer.exporter import export_first_prompts_to_jsonl, export_prompts_summary_csv
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Google AI Studio 历史对话分析器")
-    parser.add_argument(
-        "-n", "--limit",
-        type=int,
-        default=100,
-        help="拉取文件的最大数量限制（默认拉取最新的 100 个；设为 0 或使用 --all 则全量拉取）"
-    )
-    parser.add_argument(
-        "--all",
-        action="store_true",
-        help="全量拉取云盘中所有文件（会忽略 --limit）"
-    )
-    return parser.parse_args()
-
-
-def main():
-    args = parse_args()
-    limit = None if (args.all or args.limit <= 0) else args.limit
-
-    print("=" * 60)
-    print("🚀 启动 Google AI Studio 历史提问分析器")
-    if limit:
-        print(f"📌 当前运行模式: [最新优先抽样] 最多拉取最近的 {limit} 个文件 (使用 --all 可全量拉取)")
+def run_analyze(cache: SQLiteCache, limit: int = 0, export: bool = True):
+    """纯离线本地计算与报表分析"""
+    print("\n" + "=" * 60)
+    print("📊 启动本地离线认知与交互审计 (Analyzer)")
+    if limit > 0:
+        print(f"📌 分析模式: 采样分析本地前 {limit} 个会话")
     else:
-        print("📌 当前运行模式: [全量同步] 正在扫描全量文件...")
+        print("📌 分析模式: [全量分析] 正在读取本地 SQLite 全部会话资产...")
     print("=" * 60)
 
-    # 1. 初始化客户端与本地缓存
-    client = DriveClient(proxy_url=PROXY_URL)
-    cache = LocalCache(cache_dir=".cache")
-
-    # 2. 定位 AI Studio 目录
-    folder_id = client.find_ai_studio_folder()
-    if not folder_id:
-        print("❌ 未能找到 Google AI Studio 目录，请检查云盘授权。")
-        sys.exit(1)
-
-    # 3. 按时间降序拉取文件元数据列表
-    print("\n📥 正在获取云盘文件列表 (按最后修改时间降序)...")
-    files = client.list_files(folder_id=folder_id, max_results=limit, order_by="modifiedTime desc")
-    print(f"📊 成功检索到 {len(files)} 个待匹配文件。")
-
-    # 4. 过滤有效文件名
-    valid_file_metas = [f for f in files if is_valid_prompt_file(f.get("name", ""))]
-    print(f"🔍 剔除图片/粘贴板临时项后，共 {len(valid_file_metas)} 个待解析对话。")
-
-    # 5. 带 tqdm 进度条的增量同步与解析
-    sessions = []
-    download_count = 0
-    cache_hit_count = 0
-
-    print("\n⚡ 开始同步与解析对话内容：")
-    with tqdm(valid_file_metas, desc="处理进度", unit="file") as pbar:
-        for fmeta in pbar:
-            fid = fmeta["id"]
-            mtime = fmeta.get("modifiedTime", "")
-
-            # 缓存检测
-            if cache.is_cached(fid, mtime):
-                raw_data = cache.get(fid)
-                cache_hit_count += 1
-            else:
-                raw_data = client.download_json(fid)
-                if raw_data:
-                    cache.put(fid, mtime, raw_data)
-                    download_count += 1
-
-            pbar.set_postfix({
-                "缓存命中": cache_hit_count,
-                "云端拉取": download_count
-            })
-
-            session = parse_prompt_json(fmeta, raw_data)
-            if session:
-                sessions.append(session)
-
-    print(f"\n✅ 数据载入完成：成功解析有效会话 {len(sessions)} 个 (本地缓存命中: {cache_hit_count}, 云端拉取: {download_count})")
-
+    sessions = load_cached_sessions(cache, limit=limit, show_progress=True)
     if not sessions:
-        print("⚠️ 未解析到有效对话内容。")
+        print("⚠️ 未加载到有效会话。请先运行 `python main.py fetch` 同步数据。")
         return
 
-    # 6. 指标概览
+    # 指标计算
     metrics = calculate_session_metrics(sessions)
     print("\n" + "=" * 30 + " 📊 核心指标概览 " + "=" * 30)
-    print(f"  - 分析会话数:         {metrics['total_sessions']}")
+    print(f"  - 分析会话总数:       {metrics['total_sessions']}")
     print(f"  - 总对话轮次 (Turns): {metrics['total_turns']} (平均每会话: {metrics['avg_turns_per_session']} 轮)")
     print(f"  - 深度攻坚会话 (≥5轮): {metrics['deep_session_count']} 场 (占比 {metrics['deep_session_ratio']})")
     print(f"  - 用户提问总字数:     {metrics['total_user_chars']} 字符")
     print(f"  - 模型使用分布:       {metrics['model_distribution']}")
     print("=" * 76)
 
-    # 7. 导出产物
-    jsonl_output = "first_prompts_for_clustering.jsonl"
-    csv_output = "prompts_summary.csv"
-    export_first_prompts_to_jsonl(sessions, jsonl_output)
-    export_prompts_summary_csv(sessions, csv_output)
+    # 导出报表产物
+    if export:
+        jsonl_output = "first_prompts_for_clustering.jsonl"
+        csv_output = "prompts_summary.csv"
+        export_first_prompts_to_jsonl(sessions, jsonl_output)
+        export_prompts_summary_csv(sessions, csv_output)
+        print(f"\n📁 分析产物已生成 (基于全量 {len(sessions)} 条资产):")
+        print(f"  1. 首轮提问清洗集 (用于聚类与反思): ./{jsonl_output}")
+        print(f"  2. 对话概览指标明细 (CSV 报表):        ./{csv_output}")
 
-    print(f"\n📁 分析产物已生成：")
-    print(f"  1. 首轮提问清洗集 (用于 LLM 意图聚类): ./{jsonl_output}")
-    print(f"  2. 对话概览指标明细 (CSV 报表):        ./{csv_output}")
+
+def cmd_fetch(args):
+    """仅网络同步"""
+    print("=" * 60)
+    print("🔄 正在执行云端增量同步 (Fetch)")
+    print("=" * 60)
+    client = DriveClient(proxy_url=PROXY_URL)
+    cache = SQLiteCache(cache_dir=".cache")
+
+    total_valid, hits, downloaded = fetch_remote_files(
+        client=client,
+        cache=cache,
+        limit=args.limit,
+        all_files=args.all
+    )
+    print(f"\n✅ 同步完成: 扫描有效项 {total_valid} | 命中缓存 {hits} | 增量下载 {downloaded}")
+    print(f"📦 本地 SQLite 现有总会话数: {cache.count()}")
+
+
+def cmd_analyze(args):
+    """仅本地离线分析"""
+    cache = SQLiteCache(cache_dir=".cache")
+    run_analyze(cache, limit=args.limit, export=not args.no_export)
+
+
+def cmd_pull(args):
+    """先拉取增量，再全量分析 (类似 git pull)"""
+    cmd_fetch(args)
+    cache = SQLiteCache(cache_dir=".cache")
+    run_analyze(cache, limit=0, export=not args.no_export)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Google AI Studio 历史对话分析器 (Git 风格分布式体系)",
+        formatter_class=argparse.RawTextHelpFormatter
+    )
+    subparsers = parser.add_subparsers(dest="command", help="子命令 (输入 -h 查看详情)")
+
+    # 1. fetch 子命令
+    parser_fetch = subparsers.add_parser("fetch", help="[网络] 增量拉取云端最近修改的文件写入本地 SQLite")
+    parser_fetch.add_argument("-n", "--limit", type=int, default=50, help="远程扫描拉取数量限制 (默认: 50)")
+    parser_fetch.add_argument("--all", action="store_true", help="全量扫描云盘 (忽略 -n)")
+
+    # 2. analyze 子命令
+    parser_analyze = subparsers.add_parser("analyze", help="[离线] 纯离线分析本地 SQLite 缓存的历史会话")
+    parser_analyze.add_argument("-n", "--limit", type=int, default=0, help="分析会话上限 (默认 0 表示全量分析)")
+    parser_analyze.add_argument("--no-export", action="store_true", help="仅打印控制台指标，不导出 CSV/JSONL 文件")
+
+    # 3. pull 子命令
+    parser_pull = subparsers.add_parser("pull", help="[组合] 增量拉取最近文件更新本地库，随后执行全量分析")
+    parser_pull.add_argument("-n", "--limit", type=int, default=50, help="增量拉取数量限制 (默认: 50)")
+    parser_pull.add_argument("--all", action="store_true", help="全量扫描云盘并分析")
+    parser_pull.add_argument("--no-export", action="store_true", help="分析完成后不导出 CSV/JSONL 文件")
+
+    return parser
+
+
+def main():
+    parser = build_parser()
+    args = parser.parse_args()
+
+    if args.command == "fetch":
+        cmd_fetch(args)
+    elif args.command == "analyze":
+        cmd_analyze(args)
+    elif args.command == "pull":
+        cmd_pull(args)
+    else:
+        # 无子命令时，默认行为相当于 pull -n 50，同时打印引导提示
+        print("💡 未指定子命令，默认执行 `pull` 流程 (先增量同步最近 50 个文件，再全量分析本地数据)。")
+        print("   可用子命令: `fetch` (仅同步), `analyze` (仅本地分析), `pull` (同步并分析)")
+        print("   运行 `python main.py -h` 可查看完整指令选项。\n")
+        class DefaultArgs:
+            limit = 50
+            all = False
+            no_export = False
+        cmd_pull(DefaultArgs())
 
 
 if __name__ == "__main__":
