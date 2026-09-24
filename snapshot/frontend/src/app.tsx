@@ -11,7 +11,10 @@ const loadingSignal = signal<boolean>(true);
 const syncInProgressSignal = signal<boolean>(false);
 
 async function loadDashboardData() {
-  loadingSignal.value = true;
+  // 仅在首次进入无数据时显示全屏加载态，后续更新保持静默无感平滑切换
+  if (!metricsSignal.value) {
+    loadingSignal.value = true;
+  }
   try {
     const [metricsRes, sessionsRes] = await Promise.all([
       fetch('/api/metrics').then((r) => r.json()),
@@ -30,10 +33,21 @@ async function handleTriggerSync() {
   syncInProgressSignal.value = true;
   try {
     await fetch('/api/sync?limit=50', { method: 'POST' });
-    setTimeout(loadDashboardData, 3000);
+    const timer = setInterval(async () => {
+      try {
+        const res = await fetch('/api/sync/status').then((r) => r.json());
+        if (!res.is_syncing) {
+          clearInterval(timer);
+          syncInProgressSignal.value = false;
+          await loadDashboardData();
+        }
+      } catch {
+        clearInterval(timer);
+        syncInProgressSignal.value = false;
+      }
+    }, 1000);
   } catch (err) {
     console.error('触发同步失败:', err);
-  } finally {
     syncInProgressSignal.value = false;
   }
 }
