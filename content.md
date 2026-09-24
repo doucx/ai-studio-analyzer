@@ -4,6 +4,7 @@
 
 ### 📝 变更文件摘要:
 ```
-.gitignore | 2 ++
- 1 file changed, 2 insertions(+)
+AI_STUDIO_SCHEMA.md | 212 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ inspect_schema.py   | 126 +++++++++++++++++++++++++++++++
+ 2 files changed, 338 insertions(+)
 ```
