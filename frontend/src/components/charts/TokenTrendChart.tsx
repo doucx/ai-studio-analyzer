@@ -1,16 +1,16 @@
-import { useEffect, useRef } from 'preact/hooks';
 import {
-  Chart as ChartJS,
   CategoryScale,
+  Chart as ChartJS,
+  Filler,
+  Legend,
+  LineController,
+  LineElement,
   LinearScale,
   PointElement,
-  LineElement,
-  LineController,
   Title,
   Tooltip,
-  Legend,
-  Filler,
 } from 'chart.js';
+import { useEffect, useRef } from 'preact/hooks';
 import type { DailyTrendItem } from '../../types/metrics';
 
 ChartJS.register(

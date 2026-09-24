@@ -1,13 +1,13 @@
-import { useEffect, useRef } from 'preact/hooks';
 import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
   BarController,
-  Tooltip,
+  BarElement,
+  CategoryScale,
+  Chart as ChartJS,
   Legend,
+  LinearScale,
+  Tooltip,
 } from 'chart.js';
+import { useEffect, useRef } from 'preact/hooks';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, BarController, Tooltip, Legend);
 

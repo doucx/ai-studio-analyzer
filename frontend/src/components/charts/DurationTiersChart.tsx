@@ -1,11 +1,5 @@
+import { ArcElement, Chart as ChartJS, DoughnutController, Legend, Tooltip } from 'chart.js';
 import { useEffect, useRef } from 'preact/hooks';
-import {
-  Chart as ChartJS,
-  ArcElement,
-  Tooltip,
-  Legend,
-  DoughnutController,
-} from 'chart.js';
 
 ChartJS.register(ArcElement, Tooltip, Legend, DoughnutController);
 
@@ -30,12 +24,7 @@ export function DurationTiersChart({ tiers }: Props) {
     }
 
     const labels = ['即时快问 (<10m)', '聚焦推进 (10~60m)', '深度攻坚 (1~6h)', '跨日长线 (>6h)'];
-    const dataValues = [
-      tiers.flash[0],
-      tiers.focus[0],
-      tiers.deep[0],
-      tiers.epic[0],
-    ];
+    const dataValues = [tiers.flash[0], tiers.focus[0], tiers.deep[0], tiers.epic[0]];
 
     chartRef.current = new ChartJS(canvasRef.current, {
       type: 'doughnut',
