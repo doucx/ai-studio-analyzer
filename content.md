@@ -1,231 +1,53 @@
-在分析代码后发现，Chart.js 图表无法渲染的根本原因是：**各个图表组件在使用模块化注册时，遗漏了图表类型对应的控制器（Controllers）**，同时图表外层容器缺少 `relative` 定位可能导致 Chart.js 自适应尺寸计算失败。
+好的，前后端工程结构与 Chart.js 可视化看板的基础设施已经全部完成并就绪。现在将这次重构与功能搭建作为一个完整的交付单元提交到 Git 仓库。
 
-我将生成执行计划，补齐 `DoughnutController`、`BarController` 与 `LineController` 的注册并优化容器样式。
+我将生成一个 `[COMMIT]` 计划，执行暂存与提交操作。
 
-## [WIP] fix: 补全 Chart.js 控制器注册并修复图表渲染异常
-
-### 错误分析
-
-在使用 Chart.js v4+ 的按需导入（Tree-shaking）机制时，调用 `new ChartJS(canvas, { type: '...' })` 必须显式注册对应的控制器（Controller），否则 Chart.js 内部会抛出异常：
-- `DurationTiersChart.tsx`: 仅注册了 `ArcElement, Tooltip, Legend`，缺少 `DoughnutController`，抛出 `"doughnut" is not a registered controller.`。
-- `ModelDistributionChart.tsx`: 仅注册了尺度和元素，缺少 `BarController`，抛出 `"bar" is not a registered controller.`。
-- `TokenTrendChart.tsx`: 仅注册了尺度和元素，缺少 `LineController`，抛出 `"line" is not a registered controller.`。
-
-此外，Canvas 父容器未设置 `relative` 定位，在 Chart.js 配置 `maintainAspectRatio: false` 时可能引起布局计算尺寸为 0 或溢出。
+## [COMMIT] feat: 搭建前后端分离工程并集成 Chart.js 可视化看板
 
 ### 用户需求
-
-修复前端 Dashboard 中各指标图表（Token 消耗趋势、心智时长切片、模型偏好分布）无法正常显示的问题，确保图表正确绘制并自适应缩放。
+确认前端脚手架搭建、后端 API 服务接入以及 Chart.js 图表修复已就绪，创建 Git 提交以归档该里程碑。
 
 ### 评论
-
-Chart.js v4 严格模块化，未注册控制器是常见故障。修复后即可恢复高性能客户端图表渲染，无需引入庞大的全量包，兼顾加载性能与运行稳定性。
+本次工作完成了项目从纯 CLI 分析器向“前后端分离的个人认知与交互审计系统”的结构跃迁。后端通过 FastAPI 暴露纯离线计算与增量同步能力，前端基于 Preact Signals 和 Chart.js 实现了轻量高效的可视化面板，奠定了后续进一步挖掘认知建议的基础。
 
 ### 目标
-
-1. 在 `DurationTiersChart.tsx` 中导入并注册 `DoughnutController`，父容器追加 `relative`。
-2. 在 `ModelDistributionChart.tsx` 中导入并注册 `BarController`，父容器追加 `relative`。
-3. 在 `TokenTrendChart.tsx` 中导入并注册 `LineController`，父容器追加 `relative`。
+1. 将新增与修改的前后端工程配置文件、源码及图表组件纳入 Git 暂存区。
+2. 创建符合 Conventional Commits 规范的详尽提交信息。
 
 ### 基本原理
-
-1. 引入对应图表类型的 Controller 后，Chart.js 内部的控制器注册表完备，能够正确识别 `type: 'doughnut' | 'bar' | 'line'` 的配置。
-2. 为父容器添加 Tailwind `relative` 定位类，确保 Chart.js 监听窗口 resize 并计算 Canvas 绝对比例时的几何锚点稳定。
+按照 Git 分布式架构理念与规范，所有通过验证的文件系统变更必须通过独立的 `[COMMIT]` 计划原子性地固化到版本控制系统中，不掺杂任何破坏性文件修改操作。
 
 ### 标签
-
-#intent/fix #flow/ready #priority/high
-#comp/runtime #concept/ui #scope/ux
-#ai/instruct
-#task/domain/ui #task/object/chart-controllers #task/action/bug-fix
-#task/state/begin #task/status/active
+#intent/build #flow/ready #priority/high #comp/build #comp/cli #comp/ui #concept/ui #concept/config #scope/core #scope/ux #ai/instruct #task/domain/ui #task/object/frontend-backend-scaffold #task/action/implementation #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 `DurationTiersChart.tsx` 控制器注册
+#### Acts 1: 提交前后端工程与图表看板代码
 
-在时长梯队环形图中补齐 `DoughnutController` 注册并补充外层容器相对定位。
+将新增的 `frontend/` 目录、`src/server/` 服务层以及更新后的 `pyproject.toml`、`main.py` 和 `metrics.py` 提交至本地仓库。
 
 ~~~~~act
-patch_file
-frontend/src/components/charts/DurationTiersChart.tsx
-~~~~~
-~~~~~typescript.old
-import { useEffect, useRef } from 'preact/hooks';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
-
-ChartJS.register(ArcElement, Tooltip, Legend);
-~~~~~
-~~~~~typescript.new
-import { useEffect, useRef } from 'preact/hooks';
-import {
-  Chart as ChartJS,
-  ArcElement,
-  Tooltip,
-  Legend,
-  DoughnutController,
-} from 'chart.js';
-
-ChartJS.register(ArcElement, Tooltip, Legend, DoughnutController);
+git_add
+.
 ~~~~~
 
 ~~~~~act
-patch_file
-frontend/src/components/charts/DurationTiersChart.tsx
+git_commit
 ~~~~~
-~~~~~typescript.old
-  return (
-    <div className="w-full h-64">
-      <canvas ref={canvasRef} />
-    </div>
-  );
-~~~~~
-~~~~~typescript.new
-  return (
-    <div className="relative w-full h-64">
-      <canvas ref={canvasRef} />
-    </div>
-  );
-~~~~~
+~~~~~text
+feat(workspace): 初始化前后端分离工程并集成 Chart.js 可视化看板
 
-#### Acts 2: 修复 `ModelDistributionChart.tsx` 控制器注册
-
-在模型分布柱状图中补齐 `BarController` 注册并补充外层容器相对定位。
-
-~~~~~act
-patch_file
-frontend/src/components/charts/ModelDistributionChart.tsx
-~~~~~
-~~~~~typescript.old
-import { useEffect, useRef } from 'preact/hooks';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Tooltip,
-  Legend,
-} from 'chart.js';
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
-~~~~~
-~~~~~typescript.new
-import { useEffect, useRef } from 'preact/hooks';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  BarController,
-  Tooltip,
-  Legend,
-} from 'chart.js';
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, BarController, Tooltip, Legend);
-~~~~~
-
-~~~~~act
-patch_file
-frontend/src/components/charts/ModelDistributionChart.tsx
-~~~~~
-~~~~~typescript.old
-  return (
-    <div className="w-full h-64">
-      <canvas ref={canvasRef} />
-    </div>
-  );
-~~~~~
-~~~~~typescript.new
-  return (
-    <div className="relative w-full h-64">
-      <canvas ref={canvasRef} />
-    </div>
-  );
-~~~~~
-
-#### Acts 3: 修复 `TokenTrendChart.tsx` 控制器注册
-
-在每日趋势折线图中补齐 `LineController` 注册并补充外层容器相对定位。
-
-~~~~~act
-patch_file
-frontend/src/components/charts/TokenTrendChart.tsx
-~~~~~
-~~~~~typescript.old
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-} from 'chart.js';
-import type { DailyTrendItem } from '../../types/metrics';
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-);
-~~~~~
-~~~~~typescript.new
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  LineController,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-} from 'chart.js';
-import type { DailyTrendItem } from '../../types/metrics';
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  LineController,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-);
-~~~~~
-
-~~~~~act
-patch_file
-frontend/src/components/charts/TokenTrendChart.tsx
-~~~~~
-~~~~~typescript.old
-  return (
-    <div className="w-full h-72">
-      <canvas ref={canvasRef} />
-    </div>
-  );
-~~~~~
-~~~~~typescript.new
-  return (
-    <div className="relative w-full h-72">
-      <canvas ref={canvasRef} />
-    </div>
-  );
+- 后端封装 FastAPI 独立数据服务层 (src/server/)，提供 /api/metrics, /api/sessions 与 /api/sync 接口
+- main.py 扩展 serve 子命令，支持一键启动 uvicorn 本地服务器
+- metrics.py 增加基于日期的 daily_trends 时间序列聚合，支持时序统计
+- 初始化 frontend/ 现代化前端工具链 (Vite + TS + Preact + Preact Signals + Tailwind + Biome)
+- 引入 Chart.js 并构建暗色风格可视化组件：TokenTrendChart (趋势折线图)、DurationTiersChart (时长环形图)、ModelDistributionChart (模型条形图)
+- 补全按需控制器注册以保证图表组件稳定自适应渲染
 ~~~~~
 
 ### 下一步建议
-
-1. 执行补丁后，重新刷新前端页面 (`http://localhost:5173`)，检查浏览器 DevTools Console 中是否已消除 `"is not a registered controller"` 报错，并验证图表是否正常呈现。
-2. 若本地 SQLite 尚未同步云盘对话数据，需在终端运行 `python main.py fetch -n 50` 或点击页面右上角的「增量同步」按钮拉取会话以填充指标。
+- **数据流完善**：如果本地缓存尚未拉取最新数据，可执行 `python main.py fetch -n 50`，或在前端界面点击「增量同步 (Fetch 50)」拉取数据观察真实图表呈现。
+- **时间范围切片**：在前端为 `TokenTrendChart` 增加日期筛选控制器（如“最近 7 天”、“最近 30 天”、“全量”），提升大时间跨度下的图表可读性。
+- **提问模式洞察**：开始推进针对長会话追问模式（Follow-up Smell）与主题聚类的分析面板建设。
