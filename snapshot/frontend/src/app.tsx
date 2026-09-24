@@ -1,9 +1,9 @@
 import { signal } from '@preact/signals';
 import { useEffect } from 'preact/hooks';
-import type { MetricsSummary, SessionItem } from './types/metrics';
-import { TokenTrendChart } from './components/charts/TokenTrendChart';
 import { DurationTiersChart } from './components/charts/DurationTiersChart';
 import { ModelDistributionChart } from './components/charts/ModelDistributionChart';
+import { TokenTrendChart } from './components/charts/TokenTrendChart';
+import type { MetricsSummary, SessionItem } from './types/metrics';
 
 const metricsSignal = signal<MetricsSummary | null>(null);
 const sessionsSignal = signal<SessionItem[]>([]);
@@ -111,10 +111,12 @@ export function App() {
                 生命周期中位数 (P50)
               </div>
               <div className="mt-2 text-2xl font-bold text-indigo-400 tracking-tight">
-                {m.dur_stats?.median ?? 0} <span className="text-sm font-normal text-zinc-500">min</span>
+                {m.dur_stats?.median ?? 0}{' '}
+                <span className="text-sm font-normal text-zinc-500">min</span>
               </div>
               <div className="mt-1 text-xs text-zinc-500">
-                多轮攻坚 P50: {m.multi_dur_stats?.median ?? 0} min | Max: {m.dur_stats?.max ?? 0} min
+                多轮攻坚 P50: {m.multi_dur_stats?.median ?? 0} min | Max: {m.dur_stats?.max ?? 0}{' '}
+                min
               </div>
             </div>
 
@@ -138,7 +140,8 @@ export function App() {
                 {m.friction_stats?.branch_ratio ?? '0%'}
               </div>
               <div className="mt-1 text-xs text-zinc-500">
-                {m.friction_stats?.branch_sessions ?? 0} 场出现分叉 (累计 {m.friction_stats?.total_retries ?? 0} 次重试)
+                {m.friction_stats?.branch_sessions ?? 0} 场出现分叉 (累计{' '}
+                {m.friction_stats?.total_retries ?? 0} 次重试)
               </div>
             </div>
           </section>
@@ -168,9 +171,7 @@ export function App() {
             {/* 心智时长梯队环形图 */}
             {m.duration_tiers && (
               <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5">
-                <h2 className="text-sm font-semibold text-zinc-200 mb-1">
-                  ⏱️ 心智时长梯队切片
-                </h2>
+                <h2 className="text-sm font-semibold text-zinc-200 mb-1">⏱️ 心智时长梯队切片</h2>
                 <p className="text-xs text-zinc-500 mb-4">
                   单次任务从首轮交互到最后收尾的时间窗口跨度
                 </p>
@@ -181,9 +182,7 @@ export function App() {
             {/* 模型使用偏好条形图 */}
             {m.model_distribution && (
               <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5">
-                <h2 className="text-sm font-semibold text-zinc-200 mb-1">
-                  🤖 模型偏好与实验分布
-                </h2>
+                <h2 className="text-sm font-semibold text-zinc-200 mb-1">🤖 模型偏好与实验分布</h2>
                 <p className="text-xs text-zinc-500 mb-4">
                   各 Gemini 模型在所有历史会话中的调用总场次
                 </p>
@@ -222,7 +221,9 @@ export function App() {
                           </span>
                         )}
                       </td>
-                      <td className="py-2.5 px-3 text-zinc-400">{s.model.replace('models/', '')}</td>
+                      <td className="py-2.5 px-3 text-zinc-400">
+                        {s.model.replace('models/', '')}
+                      </td>
                       <td className="py-2.5 px-3">{s.turn_count} 轮</td>
                       <td className="py-2.5 px-3">{s.duration_human}</td>
                       <td className="py-2.5 px-3">{s.total_tokens.toLocaleString()}</td>
