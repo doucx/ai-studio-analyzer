@@ -13,14 +13,16 @@ def is_valid_prompt_file(name: str) -> bool:
     return True
 
 
-def parse_prompt_json(file_meta: Dict[str, Any], raw_data: Dict[str, Any]) -> Optional[PromptSession]:
+def parse_prompt_json(file_meta: Optional[Dict[str, Any]], raw_data: Dict[str, Any]) -> Optional[PromptSession]:
     """
     将 Google AI Studio 原始 JSON 转化为结构化的 PromptSession 对象。
     兼容 chunkedPrompt 结构以及标准 contents 结构。
+    支持 file_meta 为空或仅部分元数据的场景（如完全离线从 SQLite 恢复）。
     """
     if not raw_data:
         return None
 
+    file_meta = file_meta or {}
     model = raw_data.get("runSettings", {}).get("model", "unknown")
     turns = []
 
@@ -50,20 +52,27 @@ def parse_prompt_json(file_meta: Dict[str, Any], raw_data: Dict[str, Any]) -> Op
     # 解析时间戳
     created_time = None
     modified_time = None
-    if "createdTime" in file_meta:
+    
+    raw_created = file_meta.get("createdTime") or raw_data.get("createTime") or raw_data.get("createdTime")
+    if raw_created:
         try:
-            created_time = datetime.fromisoformat(file_meta["createdTime"].replace("Z", "+00:00"))
-        except Exception:
-            pass
-    if "modifiedTime" in file_meta:
-        try:
-            modified_time = datetime.fromisoformat(file_meta["modifiedTime"].replace("Z", "+00:00"))
+            created_time = datetime.fromisoformat(str(raw_created).replace("Z", "+00:00"))
         except Exception:
             pass
 
+    raw_modified = file_meta.get("modifiedTime") or raw_data.get("modifiedTime")
+    if raw_modified:
+        try:
+            modified_time = datetime.fromisoformat(str(raw_modified).replace("Z", "+00:00"))
+        except Exception:
+            pass
+
+    # 解析会话名称
+    name = file_meta.get("name") or raw_data.get("name") or raw_data.get("title") or "Untitled"
+
     return PromptSession(
         file_id=file_meta.get("id", ""),
-        name=file_meta.get("name", "Untitled"),
+        name=name,
         model=model,
         created_time=created_time,
         modified_time=modified_time,
