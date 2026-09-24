@@ -134,7 +134,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser_pull.add_argument("--all", action="store_true", help="全量扫描云盘并分析")
     parser_pull.add_argument("--export", action="store_true", help="分析完成后显式导出 CSV 与 JSONL 文件 (默认不导出)")
 
+    # 4. serve 子命令
+    parser_serve = subparsers.add_parser("serve", help="[服务] 启动 FastAPI 本地数据后端服务")
+    parser_serve.add_argument("--host", type=str, default="127.0.0.1", help="绑定监听地址 (默认: 127.0.0.1)")
+    parser_serve.add_argument("-p", "--port", type=int, default=8000, help="监听端口 (默认: 8000)")
+    parser_serve.add_argument("--reload", action="store_true", help="代码热重载模式")
+
     return parser
+
+
+def cmd_serve(args):
+    """启动 FastAPI 服务"""
+    import uvicorn
+    print("=" * 60)
+    print(f"🚀 启动 AI Studio Analyzer 后端服务: http://{args.host}:{args.port}")
+    print(f"📖 Swagger 交互式文档地址:   http://{args.host}:{args.port}/docs")
+    print("=" * 60)
+    uvicorn.run("src.server.app:app", host=args.host, port=args.port, reload=args.reload)
 
 
 def main():
@@ -147,9 +163,11 @@ def main():
         cmd_analyze(args)
     elif args.command == "pull":
         cmd_pull(args)
+    elif args.command == "serve":
+        cmd_serve(args)
     else:
         print("💡 未指定子命令，默认执行 `analyze` 查看本地指标看板。")
-        print("   可用子命令: `fetch` (仅同步), `analyze` (仅本地分析), `pull` (同步并分析)")
+        print("   可用子命令: `fetch` (仅同步), `analyze` (仅本地分析), `pull` (同步并分析), `serve` (启动API服务)")
         print("   运行 `python main.py -h` 可查看完整指令选项。\n")
         class DefaultArgs:
             limit = 0

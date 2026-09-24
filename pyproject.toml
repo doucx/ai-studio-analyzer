@@ -1,0 +1,19 @@
+[project]
+name = "ai-studio-analyzer"
+version = "0.1.0"
+description = "Personal cognitive and interaction auditor based on Google AI Studio"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.32.0",
+    "requests>=2.32.0",
+    "google-auth>=2.35.0",
+    "google-auth-oauthlib>=1.2.0",
+    "pandas>=2.2.0",
+    "tqdm>=4.66.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
