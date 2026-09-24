@@ -1,7 +1,7 @@
-import json
 import os
 import tempfile
-from typing import Optional
+from datetime import datetime, timedelta, timezone
+from typing import Optional, List
 from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import FileResponse
 from src.analyzer.cache import SQLiteCache
@@ -12,54 +12,113 @@ from src.analyzer.exporter import (
 )
 from src.analyzer.loader import load_cached_sessions
 from src.analyzer.metrics import calculate_session_metrics
+from src.analyzer.models import PromptSession
 from src.analyzer.sync import fetch_remote_files
 
 router = APIRouter(prefix="/api")
 cache = SQLiteCache(cache_dir=".cache")
-SNAPSHOT_PATH = os.path.join(cache.cache_dir, "dashboard_snapshot.json")
 
 # 全局后台增量同步状态
 sync_status = {"is_syncing": False, "last_result": None, "error": None}
 
-# 内存全局热缓存
-_MEM_METRICS = None
-_MEM_SESSIONS = None
+# 内存常驻已反序列化的全量会话对象池
+_ALL_SESSIONS: Optional[List[PromptSession]] = None
 
 
-def _load_snapshot_from_disk():
-    """服务冷启动时，优先从磁盘快照极速恢复"""
-    global _MEM_METRICS, _MEM_SESSIONS
-    if os.path.exists(SNAPSHOT_PATH):
-        try:
-            with open(SNAPSHOT_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                _MEM_METRICS = data.get("metrics")
-                _MEM_SESSIONS = data.get("sessions")
-        except Exception:
-            pass
+def _ensure_sessions_loaded() -> List[PromptSession]:
+    """确保内存中常驻已解析的全量会话列表"""
+    global _ALL_SESSIONS
+    if _ALL_SESSIONS is None:
+        _ALL_SESSIONS = load_cached_sessions(cache, limit=0, show_progress=False)
+    return _ALL_SESSIONS
 
 
-_load_snapshot_from_disk()
+def filter_sessions_by_range(
+    sessions: List[PromptSession], range_key: str
+) -> List[PromptSession]:
+    """
+    根据时间范围切片关键词过滤会话：
+    - '7d': 最近 7 天
+    - '30d': 最近 30 天
+    - '90d': 最近 90 天
+    - 'this_year': 今年以来
+    - 'all': 全量历史
+    """
+    if range_key == "all" or not sessions:
+        return sessions
+
+    now = datetime.now(timezone.utc)
+    if range_key == "7d":
+        start_time = now - timedelta(days=7)
+    elif range_key == "30d":
+        start_time = now - timedelta(days=30)
+    elif range_key == "90d":
+        start_time = now - timedelta(days=90)
+    elif range_key == "this_year":
+        start_time = datetime(now.year, 1, 1, tzinfo=timezone.utc)
+    else:
+        return sessions
+
+    filtered = []
+    for s in sessions:
+        ref_time = s.end_time or s.modified_time or s.start_time
+        if ref_time:
+            # 兼容带时区与不带时区的时间戳比较
+            if ref_time.tzinfo is None:
+                ref_time = ref_time.replace(tzinfo=timezone.utc)
+            if ref_time >= start_time:
+                filtered.append(s)
+    return filtered
 
 
-def _recalculate_and_snapshot():
-    """在后台执行全量指标与会话计算，并同步到内存与磁盘快照"""
-    global _MEM_METRICS, _MEM_SESSIONS
-    sessions = load_cached_sessions(cache, limit=0, show_progress=False)
-    if not sessions:
-        _MEM_METRICS = {"total_sessions": 0, "message": "暂无已缓存会话，请先执行同步"}
-        _MEM_SESSIONS = []
-        return
+def _run_sync_task(limit: Optional[int], all_files: bool):
+    global _ALL_SESSIONS
+    sync_status["is_syncing"] = True
+    sync_status["error"] = None
+    try:
+        client = DriveClient(proxy_url=PROXY_URL)
+        total, hits, downloaded = fetch_remote_files(
+            client=client, cache=cache, limit=limit, all_files=all_files
+        )
+        sync_status["last_result"] = {
+            "total_scanned": total,
+            "cache_hits": hits,
+            "downloaded": downloaded,
+            "cache_total": cache.count(),
+        }
+        # 如果有新下载内容，重新加载内存常驻会话池
+        if downloaded > 0 or _ALL_SESSIONS is None:
+            _ALL_SESSIONS = load_cached_sessions(cache, limit=0, show_progress=False)
+    except Exception as exc:
+        sync_status["error"] = str(exc)
+    finally:
+        sync_status["is_syncing"] = False
 
-    _MEM_METRICS = calculate_session_metrics(sessions)
 
-    # 按照最后修改时间降序排序
+@router.get("/metrics")
+def get_metrics(range: str = "all"):
+    """
+    基于内存常驻会话，极速按时间窗口投影指标计算。
+    支持 range: '7d' | '30d' | '90d' | 'this_year' | 'all'
+    """
+    all_sessions = _ensure_sessions_loaded()
+    filtered = filter_sessions_by_range(all_sessions, range)
+    return calculate_session_metrics(filtered)
+
+
+@router.get("/sessions")
+def list_sessions(range: str = "all", limit: int = 50):
+    """
+    按时间窗口过滤后，返回按最后修改时间倒序的会话列表摘要
+    """
+    all_sessions = _ensure_sessions_loaded()
+    filtered = filter_sessions_by_range(all_sessions, range)
     sorted_sessions = sorted(
-        sessions,
+        filtered,
         key=lambda s: s.modified_time.isoformat() if s.modified_time else "",
         reverse=True,
     )
-    _MEM_SESSIONS = [
+    return [
         {
             "file_id": s.file_id,
             "name": s.name,
@@ -75,59 +134,8 @@ def _recalculate_and_snapshot():
             "modified_time": s.modified_time.isoformat() if s.modified_time else None,
             "created_time": s.created_time.isoformat() if s.created_time else None,
         }
-        for s in sorted_sessions[:100]
+        for s in sorted_sessions[:limit]
     ]
-
-    try:
-        with open(SNAPSHOT_PATH, "w", encoding="utf-8") as f:
-            json.dump(
-                {"metrics": _MEM_METRICS, "sessions": _MEM_SESSIONS},
-                f,
-                ensure_ascii=False,
-            )
-    except Exception:
-        pass
-
-
-def _run_sync_task(limit: Optional[int], all_files: bool):
-    sync_status["is_syncing"] = True
-    sync_status["error"] = None
-    try:
-        client = DriveClient(proxy_url=PROXY_URL)
-        total, hits, downloaded = fetch_remote_files(
-            client=client, cache=cache, limit=limit, all_files=all_files
-        )
-        sync_status["last_result"] = {
-            "total_scanned": total,
-            "cache_hits": hits,
-            "downloaded": downloaded,
-            "cache_total": cache.count(),
-        }
-        # 同步有数据下载或内存尚未预热时触发重算与快照更新
-        if downloaded > 0 or _MEM_METRICS is None:
-            _recalculate_and_snapshot()
-    except Exception as exc:
-        sync_status["error"] = str(exc)
-    finally:
-        sync_status["is_syncing"] = False
-
-
-@router.get("/metrics")
-def get_metrics():
-    """纯内存秒级读取全量指标"""
-    global _MEM_METRICS
-    if _MEM_METRICS is None:
-        _recalculate_and_snapshot()
-    return _MEM_METRICS or {"total_sessions": 0, "message": "暂无已缓存会话，请先执行同步"}
-
-
-@router.get("/sessions")
-def list_sessions(limit: int = 50):
-    """纯内存秒级读取按修改时间排序的会话列表摘要"""
-    global _MEM_SESSIONS
-    if _MEM_SESSIONS is None:
-        _recalculate_and_snapshot()
-    return (_MEM_SESSIONS or [])[:limit]
 
 
 @router.post("/sync")
@@ -150,30 +158,34 @@ def get_sync_status():
 
 
 @router.get("/export/csv")
-def export_csv():
-    """导出全量会话指标明细 CSV"""
-    sessions = load_cached_sessions(cache, limit=0, show_progress=False)
-    if not sessions:
-        return {"error": "暂无可导出会话"}
-    tmp_path = os.path.join(tempfile.gettempdir(), "prompts_summary.csv")
-    export_prompts_summary_csv(sessions, tmp_path)
+def export_csv(range: str = "all"):
+    """导出指定时间范围的会话指标明细 CSV"""
+    all_sessions = _ensure_sessions_loaded()
+    filtered = filter_sessions_by_range(all_sessions, range)
+    if not filtered:
+        return {"error": "当前时间范围内无可导出会话"}
+    tmp_path = os.path.join(tempfile.gettempdir(), f"prompts_summary_{range}.csv")
+    export_prompts_summary_csv(filtered, tmp_path)
     return FileResponse(
         path=tmp_path,
-        filename="prompts_summary.csv",
+        filename=f"prompts_summary_{range}.csv",
         media_type="text/csv",
     )
 
 
 @router.get("/export/jsonl")
-def export_jsonl():
-    """导出首轮提问清洗集 JSONL (用于聚类与反思)"""
-    sessions = load_cached_sessions(cache, limit=0, show_progress=False)
-    if not sessions:
-        return {"error": "暂无可导出会话"}
-    tmp_path = os.path.join(tempfile.gettempdir(), "first_prompts_for_clustering.jsonl")
-    export_first_prompts_to_jsonl(sessions, tmp_path)
+def export_jsonl(range: str = "all"):
+    """导出指定时间范围的首轮提问清洗集 JSONL"""
+    all_sessions = _ensure_sessions_loaded()
+    filtered = filter_sessions_by_range(all_sessions, range)
+    if not filtered:
+        return {"error": "当前时间范围内无可导出会话"}
+    tmp_path = os.path.join(
+        tempfile.gettempdir(), f"first_prompts_{range}_for_clustering.jsonl"
+    )
+    export_first_prompts_to_jsonl(filtered, tmp_path)
     return FileResponse(
         path=tmp_path,
-        filename="first_prompts_for_clustering.jsonl",
+        filename=f"first_prompts_{range}_for_clustering.jsonl",
         media_type="application/jsonlines",
     )
