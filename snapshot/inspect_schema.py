@@ -41,29 +41,45 @@ def get_shape_summary(obj: Any, depth: int = 0, max_depth: int = 2) -> Any:
 
 
 def inspect_cache_files(cache_dir: str = ".cache", str_truncate_limit: int = 80):
-    files = glob.glob(os.path.join(cache_dir, "*.json"))
-    files = [f for f in files if not f.endswith("index.json")]
+    db_path = os.path.join(cache_dir, "cache.db")
+    records = []
 
-    if not files:
-        print(f"❌ 在 {cache_dir} 下未找到任何已缓存的对话 JSON 文件。")
-        return
+    # 优先从 SQLite 加载
+    if os.path.exists(db_path):
+        from src.analyzer.cache import SQLiteCache
+        cache = SQLiteCache(cache_dir=cache_dir)
+        total_in_db = cache.count()
+        if total_in_db > 0:
+            print(f"🔍 发现 SQLite 数据库 ({db_path})，共包含 {total_in_db} 条缓存记录，正在分析...\n")
+            for file_id, _, data in cache.iter_all_data():
+                records.append((f"{file_id}.json", data))
 
-    print(f"🔍 发现 {len(files)} 个缓存文件，正在分析数据格式...\n")
+    # 若 SQLite 无数据，回退至扫描平铺 JSON
+    if not records:
+        files = glob.glob(os.path.join(cache_dir, "*.json"))
+        files = [f for f in files if not f.endswith("index.json")]
+
+        if not files:
+            print(f"❌ 在 {cache_dir} 下未找到任何已缓存的对话数据 (SQLite 或 JSON)。")
+            return
+
+        print(f"🔍 发现 {len(files)} 个平铺 JSON 缓存文件，正在分析数据格式...\n")
+        for fpath in files:
+            file_name = os.path.basename(fpath)
+            try:
+                with open(fpath, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                records.append((file_name, data))
+            except Exception as e:
+                corrupted_files.append((file_name, str(e)))
+                continue
 
     top_level_keys_counter = Counter()
     schema_signatures = defaultdict(list)
     chunk_types_counter = Counter()
     corrupted_files = []
 
-    for fpath in files:
-        file_name = os.path.basename(fpath)
-        try:
-            with open(fpath, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception as e:
-            corrupted_files.append((file_name, str(e)))
-            continue
-
+    for file_name, data in records:
         if not isinstance(data, dict):
             continue
 

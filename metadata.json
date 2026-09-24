@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: A AI_STUDIO_SCHEMA.md, A inspect_schema.py", "type": "capture", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790247145.1053836, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(cache): 将平铺 JSON 缓存重构为 SQLite 存储并提供无缝迁移工具", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790249115.9724436, "duration_ms": 0}}
