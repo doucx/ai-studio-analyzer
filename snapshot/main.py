@@ -33,12 +33,17 @@ def run_analyze(cache: SQLiteCache, limit: int = 0, export: bool = True):
 
     # 指标计算
     metrics = calculate_session_metrics(sessions)
-    print("\n" + "=" * 30 + " 📊 核心指标概览 " + "=" * 30)
-    print(f"  - 分析会话总数:       {metrics['total_sessions']}")
-    print(f"  - 总对话轮次 (Turns): {metrics['total_turns']} (平均每会话: {metrics['avg_turns_per_session']} 轮)")
-    print(f"  - 深度攻坚会话 (≥5轮): {metrics['deep_session_count']} 场 (占比 {metrics['deep_session_ratio']})")
-    print(f"  - 用户提问总字数:     {metrics['total_user_chars']} 字符")
-    print(f"  - 模型使用分布:       {metrics['model_distribution']}")
+    print("\n" + "=" * 30 + " 📊 认知与能耗全景概览 " + "=" * 30)
+    print(f"  - 分析会话总数:           {metrics['total_sessions']}")
+    print(f"  - 总对话轮次 (Turns):     {metrics['total_turns']} (平均每会话: {metrics['avg_turns_per_session']} 轮)")
+    print(f"  - 深度攻坚会话 (≥5轮):     {metrics['deep_session_count']} 场 (占比 {metrics['deep_session_ratio']})")
+    print(f"  - 平均持续时长 (Duration): {metrics['avg_duration_minutes']} 分钟")
+    print(f"  - 计算能耗 (Total Tokens): {metrics['total_tokens']:,} (平均每会话: {int(metrics['avg_tokens_per_session']):,} Tokens)")
+    print(f"  - 思考链消耗 (Thinking):   {metrics['total_thought_tokens']:,} Tokens (占总能耗: {metrics['thought_token_ratio']})")
+    print(f"  - 思维摩擦力 (重试/分支):   {metrics['friction_sessions_count']} 场 (占比: {metrics['friction_session_ratio']}, 累计分支重试: {metrics['total_branch_retries']} 次)")
+    print(f"  - 系统指令部署会话数:     {metrics['sys_instruction_configured_count']} 场")
+    print(f"  - 用户提问总字数:         {metrics['total_user_chars']:,} 字符")
+    print(f"  - 模型偏好分布:           {metrics['model_distribution']}")
     print("=" * 76)
 
     # 导出报表产物

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat(storage,cli): 将缓存升级为 SQLite 并解耦为 Git 风格子命令体系", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790250524.332052, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(models,parser): 补齐生命周期 duration、精确 token 统计与分支标记", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790250658.9369226, "duration_ms": 0}}
