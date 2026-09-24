@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] perf(backend,frontend): 实施内存常驻快照与前端 SWR 静默刷新", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790255445.8125217, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor: 收敛架构为纯 Web 端并迁移导出能力", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790255954.5434003, "duration_ms": 0}}

@@ -1,40 +1,70 @@
-立即按照激进演进策略实施：在后端引入**进程级内存热缓存 + 磁盘快照（`dashboard_snapshot.json`）**，在前端实施 **SWR（Stale-While-Revalidate）无感更新 + 同步状态轮询**。
+我将实施收敛方案：将系统全面收敛为纯 Web 架构，移除 `main.py` 中多余的 CLI 子命令和终端报表打印逻辑，使其退化为极简的一键启动器；同时在后端 API 与前端界面补齐 CSV 和 JSONL 数据导出能力。
 
-## [WIP] perf(backend,frontend): 实施内存常驻快照与前端 SWR 静默刷新
+## [WIP] refactor: 收敛架构为纯 Web 端并迁移导出能力
 
 ### 用户需求
-彻底消除打开网页时 20 秒的高延迟加载，并在触发增量同步时避免整页卸载与闪烁全屏 Loading，以极简轻量的方式实现毫秒级交互体验。
+移除冗余的 CLI 工具与终端文本报表逻辑，使整个项目聚焦于纯 Web 端单入口架构，降低代码维护成本，并将 CLI 中的数据导出能力完整迁移至 Web 界面。
 
 ### 评论
-在单机单用户的 MVP 阶段，通过内存常驻配合单文件快照，可以用最少代码行数（零数据库表迁移）换取最大性能收益，将读性能提升数千倍，并在架构上保持与未来正式物化视图方案的兼容性。
+收敛为 Web 单入口能够彻底消除“CLI 增量拉取后 Web 端未刷新”的数据割裂风险，避免同一套统计指标在终端与浏览器中维护两套展现逻辑，显著精简核心代码库。
 
 ### 目标
-1. 在 `src/server/api.py` 中建立全局内存热缓存与 `.cache/dashboard_snapshot.json` 磁盘快照，使 `/api/metrics` 与 `/api/sessions` 达成内存级毫秒级响应。
-2. 在后台同步任务完成且检测到新下载数据时，自动触发重算并同步刷新内存与磁盘快照。
-3. 改造 `frontend/src/app.tsx` 的 `loadDashboardData`，仅在冷启动无数据时触发全局 loading，已有数据时保持静默平滑更新。
-4. 改造 `frontend/src/app.tsx` 的 `handleTriggerSync`，以轮询 `/api/sync/status` 代替硬编码的 `setTimeout`，后台同步完毕后自动拉取最新指标。
+1. 重构 `main.py`，移除 `argparse` 子命令解析及所有终端报表打印函数，简化为纯粹的一键本地服务启动入口。
+2. 在 `src/server/api.py` 中挂载 `/api/export/csv` 与 `/api/export/jsonl` 端点，支持从浏览器直接下载分析明细报表与聚类清洗集。
+3. 在 `frontend/src/app.tsx` 顶部控制条增设原生导出按钮，实现一站式查看与下载。
 
 ### 基本原理
-1. **内存常驻 (In-Memory Hot Cache)**：AI Studio 数据为追加写、不可变模型。将聚合计算结果常驻在 Python 进程变量中，读请求无需执行 SQLite I/O、无大 JSON 反序列化、无 Pandas 动态计算，耗时降至 0.1ms。
-2. **磁盘快照恢复**：计算结果自动持久化为单个轻量 JSON 文件。服务重启时仅需读取一次快照文件（约几十 KB），消除冷启动延迟。
-3. **前端 SWR 模式**：前端优先展示现有陈旧数据，在后台同步完成后无缝替换视图，避免组件被强制销毁与重绘，提供丝滑体验。
+1. **单一入口原则 (Single Entrypoint)**：将 `main.py` 收敛为轻量服务启动器，统一通过本地 Web 服务提供增量同步、指标审计、图表切片与文件导出功能。
+2. **零拷贝文件流响应**：后端导出接口使用 FastAPI 原生 `FileResponse`，结合既有的 `exporter.py`，直接将生成的 CSV 和 JSONL 传输给客户端，无需客户端具备终端执行环境。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/runtime #comp/cli #concept/state #scope/ux #scope/dx #ai/instruct #task/domain/performance #task/object/dashboard-cache #task/action/optimization #task/state/begin
+#intent/refine #flow/ready #priority/high #comp/cli #comp/runtime #concept/ui #scope/ux #scope/dx #ai/instruct #task/domain/cli #task/object/web-convergence #task/action/refactor #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 重构后端 API 服务，支持全内存热缓存与磁盘快照
+#### Acts 1: 精简 `main.py` 为纯粹的一键服务启动器
 
-我们将重构 `src/server/api.py`，加入内存缓存、快照冷启动读取，并在同步完成时触发增量预计算。
+将原本 200 余行的复杂 CLI 调度与终端报表打印逻辑精简为仅保留服务启动能力的入口脚本。
 
 ~~~~~act
 write_file
-src/server/api.py
+main.py
 ~~~~~
 ~~~~~python
+"""
+AI Studio Analyzer - 本地服务启动入口
+
+使用方式:
+  python main.py
+"""
+
+import uvicorn
+
+
+def main():
+    port = 8000
+    print("=" * 60)
+    print(f"🚀 AI Studio Analyzer 看板服务正在启动: http://127.0.0.1:{port}")
+    print(f"📖 Swagger 接口调试文档:             http://127.0.0.1:{port}/docs")
+    print("=" * 60)
+    uvicorn.run("src.server.app:app", host="127.0.0.1", port=port, reload=True)
+
+
+if __name__ == "__main__":
+    main()
+~~~~~
+
+#### Acts 2: 在后端 API 中集成 CSV 与 JSONL 导出接口
+
+在 `src/server/api.py` 中引入 `exporter` 模块，新增两个供浏览器直接下载报表的 GET 端点。
+
+~~~~~act
+patch_file
+src/server/api.py
+~~~~~
+~~~~~python.old
 import json
 import os
 from typing import Optional
@@ -44,224 +74,134 @@ from src.analyzer.drive import DriveClient, PROXY_URL
 from src.analyzer.loader import load_cached_sessions
 from src.analyzer.metrics import calculate_session_metrics
 from src.analyzer.sync import fetch_remote_files
+~~~~~
+~~~~~python.new
+import json
+import os
+import tempfile
+from typing import Optional
+from fastapi import APIRouter, BackgroundTasks
+from fastapi.responses import FileResponse
+from src.analyzer.cache import SQLiteCache
+from src.analyzer.drive import DriveClient, PROXY_URL
+from src.analyzer.exporter import (
+    export_first_prompts_to_jsonl,
+    export_prompts_summary_csv,
+)
+from src.analyzer.loader import load_cached_sessions
+from src.analyzer.metrics import calculate_session_metrics
+from src.analyzer.sync import fetch_remote_files
+~~~~~
 
-router = APIRouter(prefix="/api")
-cache = SQLiteCache(cache_dir=".cache")
-SNAPSHOT_PATH = os.path.join(cache.cache_dir, "dashboard_snapshot.json")
-
-# 全局后台增量同步状态
-sync_status = {"is_syncing": False, "last_result": None, "error": None}
-
-# 内存全局热缓存
-_MEM_METRICS = None
-_MEM_SESSIONS = None
-
-
-def _load_snapshot_from_disk():
-    """服务冷启动时，优先从磁盘快照极速恢复"""
-    global _MEM_METRICS, _MEM_SESSIONS
-    if os.path.exists(SNAPSHOT_PATH):
-        try:
-            with open(SNAPSHOT_PATH, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                _MEM_METRICS = data.get("metrics")
-                _MEM_SESSIONS = data.get("sessions")
-        except Exception:
-            pass
-
-
-_load_snapshot_from_disk()
-
-
-def _recalculate_and_snapshot():
-    """在后台执行全量指标与会话计算，并同步到内存与磁盘快照"""
-    global _MEM_METRICS, _MEM_SESSIONS
-    sessions = load_cached_sessions(cache, limit=0, show_progress=False)
-    if not sessions:
-        _MEM_METRICS = {"total_sessions": 0, "message": "暂无已缓存会话，请先执行同步"}
-        _MEM_SESSIONS = []
-        return
-
-    _MEM_METRICS = calculate_session_metrics(sessions)
-
-    # 按照最后修改时间降序排序
-    sorted_sessions = sorted(
-        sessions,
-        key=lambda s: s.modified_time.isoformat() if s.modified_time else "",
-        reverse=True,
-    )
-    _MEM_SESSIONS = [
-        {
-            "file_id": s.file_id,
-            "name": s.name,
-            "model": s.model,
-            "turn_count": s.turn_count,
-            "total_tokens": s.total_tokens,
-            "thought_tokens": s.thought_tokens,
-            "duration_human": s.duration_human,
-            "duration_seconds": s.duration_seconds,
-            "has_branching": s.has_branching,
-            "branch_count": s.branch_count,
-            "first_prompt": s.user_prompts[0] if s.user_prompts else "",
-            "modified_time": s.modified_time.isoformat() if s.modified_time else None,
-            "created_time": s.created_time.isoformat() if s.created_time else None,
-        }
-        for s in sorted_sessions[:100]
-    ]
-
-    try:
-        with open(SNAPSHOT_PATH, "w", encoding="utf-8") as f:
-            json.dump(
-                {"metrics": _MEM_METRICS, "sessions": _MEM_SESSIONS},
-                f,
-                ensure_ascii=False,
-            )
-    except Exception:
-        pass
-
-
-def _run_sync_task(limit: Optional[int], all_files: bool):
-    sync_status["is_syncing"] = True
-    sync_status["error"] = None
-    try:
-        client = DriveClient(proxy_url=PROXY_URL)
-        total, hits, downloaded = fetch_remote_files(
-            client=client, cache=cache, limit=limit, all_files=all_files
-        )
-        sync_status["last_result"] = {
-            "total_scanned": total,
-            "cache_hits": hits,
-            "downloaded": downloaded,
-            "cache_total": cache.count(),
-        }
-        # 同步有数据下载或内存尚未预热时触发重算与快照更新
-        if downloaded > 0 or _MEM_METRICS is None:
-            _recalculate_and_snapshot()
-    except Exception as exc:
-        sync_status["error"] = str(exc)
-    finally:
-        sync_status["is_syncing"] = False
-
-
-@router.get("/metrics")
-def get_metrics():
-    """纯内存秒级读取全量指标"""
-    global _MEM_METRICS
-    if _MEM_METRICS is None:
-        _recalculate_and_snapshot()
-    return _MEM_METRICS or {"total_sessions": 0, "message": "暂无已缓存会话，请先执行同步"}
-
-
-@router.get("/sessions")
-def list_sessions(limit: int = 50):
-    """纯内存秒级读取按修改时间排序的会话列表摘要"""
-    global _MEM_SESSIONS
-    if _MEM_SESSIONS is None:
-        _recalculate_and_snapshot()
-    return (_MEM_SESSIONS or [])[:limit]
-
-
-@router.post("/sync")
-def trigger_sync(
-    background_tasks: BackgroundTasks, limit: int = 50, all_files: bool = False
-):
-    """异步触发云端增量同步任务"""
-    if sync_status["is_syncing"]:
-        return {"status": "busy", "message": "增量同步正在进行中，请勿重复触发"}
-
-    background_tasks.add_task(_run_sync_task, limit=limit, all_files=all_files)
-    mode_text = "全量" if all_files else f"最近 {limit} 条"
-    return {"status": "started", "message": f"后台已启动云盘增量拉取 ({mode_text})"}
-
-
+~~~~~act
+patch_file
+src/server/api.py
+~~~~~
+~~~~~python.old
 @router.get("/sync/status")
 def get_sync_status():
     """查询后台同步进度状态"""
     return sync_status
 ~~~~~
+~~~~~python.new
+@router.get("/sync/status")
+def get_sync_status():
+    """查询后台同步进度状态"""
+    return sync_status
 
-#### Acts 2: 改造前端数据加载与同步状态流，实现 SWR 静默刷新
 
-修改 `frontend/src/app.tsx` 中的 `loadDashboardData` 与 `handleTriggerSync` 方法，避免刷新时强行进入全屏 loading 遮罩，并用状态轮询替换盲目延迟。
+@router.get("/export/csv")
+def export_csv():
+    """导出全量会话指标明细 CSV"""
+    sessions = load_cached_sessions(cache, limit=0, show_progress=False)
+    if not sessions:
+        return {"error": "暂无可导出会话"}
+    tmp_path = os.path.join(tempfile.gettempdir(), "prompts_summary.csv")
+    export_prompts_summary_csv(sessions, tmp_path)
+    return FileResponse(
+        path=tmp_path,
+        filename="prompts_summary.csv",
+        media_type="text/csv",
+    )
+
+
+@router.get("/export/jsonl")
+def export_jsonl():
+    """导出首轮提问清洗集 JSONL (用于聚类与反思)"""
+    sessions = load_cached_sessions(cache, limit=0, show_progress=False)
+    if not sessions:
+        return {"error": "暂无可导出会话"}
+    tmp_path = os.path.join(tempfile.gettempdir(), "first_prompts_for_clustering.jsonl")
+    export_first_prompts_to_jsonl(sessions, tmp_path)
+    return FileResponse(
+        path=tmp_path,
+        filename="first_prompts_for_clustering.jsonl",
+        media_type="application/jsonlines",
+    )
+~~~~~
+
+#### Acts 3: 在前端控制条增设导出按钮
+
+在 `frontend/src/app.tsx` 顶部的控制按钮区域加入“导出 CSV”与“导出 JSONL”链接，实现原生一键下载。
 
 ~~~~~act
 patch_file
 frontend/src/app.tsx
 ~~~~~
 ~~~~~typescript.old
-async function loadDashboardData() {
-  loadingSignal.value = true;
-  try {
-    const [metricsRes, sessionsRes] = await Promise.all([
-      fetch('/api/metrics').then((r) => r.json()),
-      fetch('/api/sessions?limit=30').then((r) => r.json()),
-    ]);
-    metricsSignal.value = metricsRes;
-    sessionsSignal.value = sessionsRes;
-  } catch (err) {
-    console.error('加载审计数据失败:', err);
-  } finally {
-    loadingSignal.value = false;
-  }
-}
-
-async function handleTriggerSync() {
-  syncInProgressSignal.value = true;
-  try {
-    await fetch('/api/sync?limit=50', { method: 'POST' });
-    setTimeout(loadDashboardData, 3000);
-  } catch (err) {
-    console.error('触发同步失败:', err);
-  } finally {
-    syncInProgressSignal.value = false;
-  }
-}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={loadDashboardData}
+            className="px-3 py-1.5 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 rounded transition"
+          >
+            刷新指标
+          </button>
+          <button
+            type="button"
+            onClick={handleTriggerSync}
+            disabled={syncInProgressSignal.value}
+            className="px-3.5 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded transition shadow-sm"
+          >
+            {syncInProgressSignal.value ? '云端同步中...' : '增量同步 (Fetch 50)'}
+          </button>
+        </div>
 ~~~~~
 ~~~~~typescript.new
-async function loadDashboardData() {
-  // 仅在首次进入无数据时显示全屏加载态，后续更新保持静默无感平滑切换
-  if (!metricsSignal.value) {
-    loadingSignal.value = true;
-  }
-  try {
-    const [metricsRes, sessionsRes] = await Promise.all([
-      fetch('/api/metrics').then((r) => r.json()),
-      fetch('/api/sessions?limit=30').then((r) => r.json()),
-    ]);
-    metricsSignal.value = metricsRes;
-    sessionsSignal.value = sessionsRes;
-  } catch (err) {
-    console.error('加载审计数据失败:', err);
-  } finally {
-    loadingSignal.value = false;
-  }
-}
-
-async function handleTriggerSync() {
-  syncInProgressSignal.value = true;
-  try {
-    await fetch('/api/sync?limit=50', { method: 'POST' });
-    const timer = setInterval(async () => {
-      try {
-        const res = await fetch('/api/sync/status').then((r) => r.json());
-        if (!res.is_syncing) {
-          clearInterval(timer);
-          syncInProgressSignal.value = false;
-          await loadDashboardData();
-        }
-      } catch {
-        clearInterval(timer);
-        syncInProgressSignal.value = false;
-      }
-    }, 1000);
-  } catch (err) {
-    console.error('触发同步失败:', err);
-    syncInProgressSignal.value = false;
-  }
-}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <a
+            href="/api/export/csv"
+            download
+            className="px-3 py-1.5 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 rounded transition flex items-center gap-1.5"
+          >
+            <span>📥</span> 导出 CSV
+          </a>
+          <a
+            href="/api/export/jsonl"
+            download
+            className="px-3 py-1.5 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 rounded transition flex items-center gap-1.5"
+          >
+            <span>📑</span> 导出 JSONL
+          </a>
+          <button
+            type="button"
+            onClick={loadDashboardData}
+            className="px-3 py-1.5 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 rounded transition"
+          >
+            刷新指标
+          </button>
+          <button
+            type="button"
+            onClick={handleTriggerSync}
+            disabled={syncInProgressSignal.value}
+            className="px-3.5 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded transition shadow-sm"
+          >
+            {syncInProgressSignal.value ? '云端同步中...' : '增量同步 (Fetch 50)'}
+          </button>
+        </div>
 ~~~~~
 
 ### 下一步建议
-1. **测试体验验证**：刷新浏览器页面，验证首次打开和多次刷新的响应耗时是否已降至毫秒级（预期 < 5ms）。
-2. **同步测试**：点击“增量同步”按钮，观察按钮变为“云端同步中...”，图表维持展示不闪烁，并在同步完毕后数值自动平滑过渡。
-3. **CLI 联动建议**：在 `main.py` 的 `fetch` 和 `pull` 命令结尾处同样调用快照更新逻辑，确保通过命令行同步的数据也能即刻呈现在网页端。
+1. **启动测试**：在终端直接执行 `python main.py`，确认服务顺利启动且无任何命令行报错。
+2. **导出功能测试**：在浏览器顶部控制栏点击“导出 CSV”和“导出 JSONL”，确认能否正常下载结构化表格和首轮提问清洗集文件。
+3. **环境与文档同步**：可根据需要清理 `README.md` 中旧的 CLI 命令说明（如 `python main.py analyze` 等），使文档与纯 Web 架构保持一致。

@@ -1,9 +1,15 @@
 import json
 import os
+import tempfile
 from typing import Optional
 from fastapi import APIRouter, BackgroundTasks
+from fastapi.responses import FileResponse
 from src.analyzer.cache import SQLiteCache
 from src.analyzer.drive import DriveClient, PROXY_URL
+from src.analyzer.exporter import (
+    export_first_prompts_to_jsonl,
+    export_prompts_summary_csv,
+)
 from src.analyzer.loader import load_cached_sessions
 from src.analyzer.metrics import calculate_session_metrics
 from src.analyzer.sync import fetch_remote_files
@@ -141,3 +147,33 @@ def trigger_sync(
 def get_sync_status():
     """查询后台同步进度状态"""
     return sync_status
+
+
+@router.get("/export/csv")
+def export_csv():
+    """导出全量会话指标明细 CSV"""
+    sessions = load_cached_sessions(cache, limit=0, show_progress=False)
+    if not sessions:
+        return {"error": "暂无可导出会话"}
+    tmp_path = os.path.join(tempfile.gettempdir(), "prompts_summary.csv")
+    export_prompts_summary_csv(sessions, tmp_path)
+    return FileResponse(
+        path=tmp_path,
+        filename="prompts_summary.csv",
+        media_type="text/csv",
+    )
+
+
+@router.get("/export/jsonl")
+def export_jsonl():
+    """导出首轮提问清洗集 JSONL (用于聚类与反思)"""
+    sessions = load_cached_sessions(cache, limit=0, show_progress=False)
+    if not sessions:
+        return {"error": "暂无可导出会话"}
+    tmp_path = os.path.join(tempfile.gettempdir(), "first_prompts_for_clustering.jsonl")
+    export_first_prompts_to_jsonl(sessions, tmp_path)
+    return FileResponse(
+        path=tmp_path,
+        filename="first_prompts_for_clustering.jsonl",
+        media_type="application/jsonlines",
+    )

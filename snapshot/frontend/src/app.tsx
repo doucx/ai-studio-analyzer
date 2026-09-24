@@ -77,7 +77,21 @@ export function App() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <a
+            href="/api/export/csv"
+            download
+            className="px-3 py-1.5 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 rounded transition flex items-center gap-1.5"
+          >
+            <span>📥</span> 导出 CSV
+          </a>
+          <a
+            href="/api/export/jsonl"
+            download
+            className="px-3 py-1.5 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 rounded transition flex items-center gap-1.5"
+          >
+            <span>📑</span> 导出 JSONL
+          </a>
           <button
             type="button"
             onClick={loadDashboardData}
