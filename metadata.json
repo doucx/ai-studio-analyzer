@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(metrics,cli): 修复会话生命周期时长为零的问题并默认关闭产物导出", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790251313.6500945, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(metrics): 引入 pandas 计算稳健分位数与心智时长梯队分布", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790251430.0054574, "duration_ms": 0}}

@@ -31,20 +31,43 @@ def run_analyze(cache: SQLiteCache, limit: int = 0, export: bool = False):
         print("⚠️ 未加载到有效会话。请先运行 `python main.py fetch` 同步数据。")
         return
 
-    # 指标计算
-    metrics = calculate_session_metrics(sessions)
-    print("\n" + "=" * 30 + " 📊 认知与能耗全景概览 " + "=" * 30)
-    print(f"  - 分析会话总数:           {metrics['total_sessions']}")
-    print(f"  - 总对话轮次 (Turns):     {metrics['total_turns']} (平均每会话: {metrics['avg_turns_per_session']} 轮)")
-    print(f"  - 深度攻坚会话 (≥5轮):     {metrics['deep_session_count']} 场 (占比 {metrics['deep_session_ratio']})")
-    print(f"  - 平均交互时长 (有效跨度): {metrics['avg_duration_minutes']} 分钟 (多轮深入会话平均: {metrics['avg_multi_turn_duration_minutes']} 分钟)")
-    print(f"  - 计算能耗 (Total Tokens): {metrics['total_tokens']:,} (平均每会话: {int(metrics['avg_tokens_per_session']):,} Tokens)")
-    print(f"  - 思考链消耗 (Thinking):   {metrics['total_thought_tokens']:,} Tokens (占总能耗: {metrics['thought_token_ratio']})")
-    print(f"  - 思维摩擦力 (重试/分支):   {metrics['friction_sessions_count']} 场 (占比: {metrics['friction_session_ratio']}, 累计分支重试: {metrics['total_branch_retries']} 次)")
-    print(f"  - 系统指令部署会话数:     {metrics['sys_instruction_configured_count']} 场")
-    print(f"  - 用户提问总字数:         {metrics['total_user_chars']:,} 字符")
-    print(f"  - 模型偏好分布:           {metrics['model_distribution']}")
-    print("=" * 76)
+    # 指标计算 (基于 pandas 稳健聚合)
+    m = calculate_session_metrics(sessions)
+    t_stats = m["turn_stats"]
+    d_stats = m["dur_stats"]
+    md_stats = m["multi_dur_stats"]
+    tok_stats = m["tok_stats"]
+    f_stats = m["friction_stats"]
+    tiers = m["duration_tiers"]
+
+    print("\n" + "=" * 30 + " 📊 认知与能耗全景审计 (Pandas 稳健分位数) " + "=" * 30)
+    print(f"  - 全量会话总数:           {m['total_sessions']} 场 (提问总字数: {m['total_user_chars']:,} 字符)")
+    
+    print("\n  ⏱️ [会话生命周期与心智时长 (分钟)]:")
+    print(f"    • 全体时长中位数 (P50):  {d_stats['median']} min  |  算术均值 (Mean): {d_stats['mean']} min (受离群长尾拉动)")
+    print(f"    • 多轮会话中位数 (P50):  {md_stats['median']} min  |  多轮均值 (Mean): {md_stats['mean']} min")
+    print(f"    • 长尾攻坚分位数:       P75: {d_stats['p75']} min  |  P90: {d_stats['p90']} min  |  Max: {d_stats['max']} min")
+    print(f"    • 时长心智梯队分布:")
+    print(f"      - ⚡ 即时快问 (<10m):   {tiers['flash'][0]} 场 ({tiers['flash'][1]})")
+    print(f"      - 🎯 聚焦推进 (10~60m): {tiers['focus'][0]} 场 ({tiers['focus'][1]})")
+    print(f"      - 🔨 深度攻坚 (1~6h):   {tiers['deep'][0]} 场 ({tiers['deep'][1]})")
+    print(f"      - 🏔️ 跨日长线 (>6h):    {tiers['epic'][0]} 场 ({tiers['epic'][1]})")
+
+    print("\n  💬 [交互深度与思维摩擦力]:")
+    print(f"    • 对话轮次 (Turns):     中位数: {t_stats['median']} 轮  |  均值: {t_stats['mean']} 轮  |  P90: {t_stats['p90']} 轮")
+    print(f"    • 深度攻坚会话 (≥5轮):   {t_stats['deep_count']} 场 (占比 {t_stats['deep_ratio']})")
+    print(f"    • 思维摩擦力 (重试/分叉): {f_stats['branch_sessions']} 场 (占比 {f_stats['branch_ratio']}, 累计分支重试: {f_stats['total_retries']} 次)")
+
+    print("\n  🧠 [计算能耗与思考链 (Tokens)]:")
+    print(f"    • 单场消耗中位数 (P50):  {int(tok_stats['median']):,} Tokens  |  均值: {int(tok_stats['mean']):,} Tokens")
+    print(f"    • 高负荷消耗 (P90):      {int(tok_stats['p90']):,} Tokens")
+    print(f"    • 总消耗能耗:           {tok_stats['total']:,} Tokens")
+    print(f"    • 思考链消耗 (Thinking): {tok_stats['total_thought']:,} Tokens (占总能耗: {tok_stats['thought_ratio']})")
+
+    print("\n  ⚙️ [模型偏好与系统指令]:")
+    print(f"    • 系统指令部署会话数:   {m['sys_instruction_count']} 场")
+    print(f"    • 模型使用分布:         {m['model_distribution']}")
+    print("=" * 82)
 
     # 导出报表产物（仅在显式指定 --export 时生成）
     if export:
