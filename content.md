@@ -1,40 +1,45 @@
-好的，针对将 3k+ 平铺 JSON 缓存迁移至 SQLite 并重构缓存层的需求，我为你制定了迁移和升级方案。
+收到，迁移完成后，我们需要对项目进行收敛，移除过渡性的迁移脚本、迁移接口以及冗余的平铺文件兼容回退逻辑，并彻底清理磁盘上的旧 JSON 缓存。
 
-## [WIP] feat(cache): 将平铺 JSON 缓存重构为 SQLite 存储并提供无缝迁移工具
+## [WIP] refactor(cache): 清理一次性迁移脚本、过渡接口与旧平铺缓存
 
 ### 用户需求
-1. 解决当前 `.cache` 目录下堆积 3000+ 碎片 JSON 文件导致的文件系统性能低下、磁盘 inode 浪费和比对缓慢问题。
-2. 将本地缓存机制改为基于 SQLite（开启 WAL 模式）的高性能单文件数据库。
-3. 提供平滑迁移机制，将既有的 3k+ 历史缓存文件及 `index.json` 完整导入 SQLite 数据库中。
+1. 迁移已执行完毕，删除一次性的迁移脚本 `migrate_cache.py`。
+2. 清理 `src/analyzer/cache.py` 中用于数据过渡的 `migrate_from_directory` 接口，使缓存模块职责单一纯粹。
+3. 精简 `inspect_schema.py`，移除针对平铺 JSON 文件的冗余扫描逻辑，完全基于 SQLite 运行。
+4. 清理磁盘 `.cache/` 目录下残留的旧版平铺 `*.json` 文件与 `index.json`，释放磁盘空间。
 
 ### 评论
-平铺数千个小 JSON 文件在现代操作系统中会导致严重的 I/O 碎片和遍历性能惩罚，并且在进行 `is_cached` 比对与更新时存在频繁的文件开关开销。重构为 SQLite + WAL 模式后，3000+ 文件的元数据索引与读取将由 B-Tree 索引处理，单次查询与写入耗时将直接从毫秒/数十毫秒级降至亚毫秒级，且数据库单文件天然利于备份、迁移和后续全文检索（FTS5）扩展。这是一个非常关键的基础设施重构。
+在数据架构迁移完成后，及时剔除过渡性代码（Scaffolding Code）与临时脚本，是保持代码库整洁与降低维护心智负担的关键动作。使各模块直接绑定单一数据源（SQLite），消除了多路径分支带来的潜在不一致风险。
 
 ### 目标
-1. **重构 `src/analyzer/cache.py`**：
-   - 采用标准库 `sqlite3` 实现，开启 WAL 模式 (`PRAGMA journal_mode=WAL`) 与 `synchronous=NORMAL`。
-   - 建立 `cache_entries` 表（记录 `file_id`, `modified_time`, `data`, `updated_at`）并对 `file_id` 和 `modified_time` 建立联合索引。
-   - 保持原 `LocalCache` 接口 (`is_cached`, `get`, `put`) 完全向后兼容，确保上层 `main.py` 无需修改即可直接工作。
-   - 在类中内置 `migrate_from_directory` 批量事务迁移方法。
-2. **新增迁移执行脚本 `migrate_cache.py`**：
-   - 独立提供 CLI 迁移工具，带进度展示，支持事务批量导入现有 `.cache/*.json`，并提供验证统计。
-3. **更新 `inspect_schema.py`**：
-   - 适配 SQLite 缓存源，优先从 SQLite 读取并解析数据，同时保持向下兼容。
+1. 删除已完成使命的 `migrate_cache.py`。
+2. 剥离 `src/analyzer/cache.py` 中的 `migrate_from_directory` 方法，保留纯净的高性能缓存读写、统计与迭代 API。
+3. 重构 `inspect_schema.py`，直接通过 `SQLiteCache` 提取采样数据。
+4. 清除 `.cache` 目录中除 `cache.db` 系列文件以外的所有遗留 `.json` 文件。
 
 ### 基本原理
-1. **WAL 模式与事务批量提交**：通过 `PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;`，SQLite 的写操作转为连续追加日志，读写互不阻塞，迁移 3k+ 记录时使用单个事务批量提交，耗时可在 1~2 秒内完成。
-2. **无缝平替接口**：`src/analyzer/cache.py` 内部导出 `SQLiteCache` 并提供 `LocalCache = SQLiteCache` 别名，保持原签名 `LocalCache(cache_dir=".cache")`（在 `.cache` 目录下自动生成 `cache.db`），使得主运行流程零感知无缝迁移。
+1. **单一数据源原则**：既然全部 3k+ 数据已成功入库 SQLite，后续所有读取、统计、探针操作均应严格收敛至单一的数据驱动层，不再维护向下兼容的 fallback 分支。
+2. **零残留清理**：利用 `rm` 安全清除旧平铺文件，保留 `cache.db`, `cache.db-wal`, `cache.db-shm`。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/runtime #concept/state #scope/core #scope/dx #ai/instruct #task/domain/storage #task/object/sqlite-cache #task/action/integration #task/state/begin
+#intent/refine #flow/ready #priority/medium #comp/runtime #concept/state #scope/core #scope/dx #ai/instruct #task/domain/storage #task/object/sqlite-cache #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 重构 `src/analyzer/cache.py`，实现基于 SQLite 的缓存引擎与迁移接口
+#### Acts 1: 移除一次性迁移脚本 `migrate_cache.py`
 
-我们将重写 `src/analyzer/cache.py`，使用标准库 `sqlite3` 实现兼具高并发与高性能的 SQLite 缓存层，默认在缓存目录中维护单个 `cache.db` 文件。
+迁移已完成，删除该独立工具文件。
+
+~~~~~act
+delete_file
+migrate_cache.py
+~~~~~
+
+#### Acts 2: 精简 `src/analyzer/cache.py`，剥离过渡迁移接口
+
+精简缓存模块代码，删除 `migrate_from_directory`，使代码保持干净高内聚。
 
 ~~~~~act
 write_file
@@ -44,14 +49,14 @@ src/analyzer/cache.py
 import json
 import os
 import sqlite3
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Dict, Any, Optional, Iterator, Tuple
 from contextlib import contextmanager
 
 
 class SQLiteCache:
     """
     基于 SQLite 的高性能单文件缓存器 (开启 WAL 模式)
-    平替原有平铺小 JSON 文件结构，支持高频增量命中检测与快速反序列化。
+    支持高频增量命中检测、按需反序列化与全量流式迭代。
     """
 
     def __init__(self, cache_dir: str = ".cache", db_name: str = "cache.db"):
@@ -90,7 +95,7 @@ class SQLiteCache:
             conn.commit()
 
     def is_cached(self, file_id: str, modified_time: str) -> bool:
-        """检查文件是否已缓存且未被云端修改 (索引级秒查)"""
+        """检查文件是否已缓存且未被云端修改 (索引级查询)"""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -128,20 +133,20 @@ class SQLiteCache:
             conn.commit()
 
     def count(self) -> int:
-        """获取当前缓存条目总数"""
+        """获取当前缓存记录总条目数"""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) AS total FROM file_cache;")
             row = cursor.fetchone()
             return row["total"] if row else 0
 
-    def iter_all_data(self):
-        """流式迭代所有缓存记录，便于分析与 Schema 探测"""
+    def iter_all_data(self) -> Iterator[Tuple[str, str, Dict[str, Any]]]:
+        """流式迭代全量缓存记录，避免一次性消耗过多内存"""
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT file_id, modified_time, data FROM file_cache;")
             while True:
-                rows = cursor.fetchmany(100)
+                rows = cursor.fetchmany(200)
                 if not rows:
                     break
                 for row in rows:
@@ -151,297 +156,146 @@ class SQLiteCache:
                     except Exception:
                         continue
 
-    def migrate_from_directory(self, old_cache_dir: str = ".cache") -> Tuple[int, int]:
-        """
-        从原旧版平铺 JSON 文件目录迁移到 SQLite。
-        返回: (成功导入数, 失败/损坏跳过数)
-        """
-        index_file = os.path.join(old_cache_dir, "index.json")
-        index: Dict[str, str] = {}
-        if os.path.exists(index_file):
-            try:
-                with open(index_file, "r", encoding="utf-8") as f:
-                    index = json.load(f)
-            except Exception:
-                index = {}
 
-        # 扫描所有旧版 json 文件 (排除 index.json)
-        json_files = [
-            f for f in os.listdir(old_cache_dir)
-            if f.endswith(".json") and f != "index.json"
-        ]
-
-        success_count = 0
-        skip_count = 0
-        batch_records: List[Tuple[str, str, str]] = []
-
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            for fname in json_files:
-                file_id = fname[:-5]  # 去掉 .json 后缀
-                mtime = index.get(file_id, "")
-                fpath = os.path.join(old_cache_dir, fname)
-
-                try:
-                    with open(fpath, "r", encoding="utf-8") as f:
-                        content_str = f.read()
-                        # 校验是否合法 JSON 字符串
-                        json.loads(content_str)
-                        batch_records.append((file_id, mtime, content_str))
-                        success_count += 1
-                except Exception:
-                    skip_count += 1
-                    continue
-
-                # 分批批量提交，防止单次内存过载
-                if len(batch_records) >= 500:
-                    cursor.executemany("""
-                        INSERT INTO file_cache (file_id, modified_time, data, updated_at)
-                        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-                        ON CONFLICT(file_id) DO UPDATE SET
-                            modified_time = excluded.modified_time,
-                            data = excluded.data,
-                            updated_at = CURRENT_TIMESTAMP;
-                    """, batch_records)
-                    conn.commit()
-                    batch_records.clear()
-
-            if batch_records:
-                cursor.executemany("""
-                    INSERT INTO file_cache (file_id, modified_time, data, updated_at)
-                    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-                    ON CONFLICT(file_id) DO UPDATE SET
-                        modified_time = excluded.modified_time,
-                        data = excluded.data,
-                        updated_at = CURRENT_TIMESTAMP;
-                """, batch_records)
-                conn.commit()
-                batch_records.clear()
-
-        return success_count, skip_count
-
-
-# 别名映射，保证上层调用代码零修改兼容
+# 保持别名映射，保证上层调用无缝兼容
 LocalCache = SQLiteCache
 ~~~~~
 
-#### Acts 2: 创建独立的迁移脚本 `migrate_cache.py`
+#### Acts 3: 精简 `inspect_schema.py` 为纯 SQLite 探针
 
-创建一个可执行的迁移脚本，帮助一次性将磁盘现有的 3000+ 个平铺 JSON 文件及元数据写入 SQLite 数据库，并提供清理或保留选项。
+移除针对平铺 JSON 文件的目录回退逻辑，直接面向 SQLite 数据库探针。
 
 ~~~~~act
 write_file
-migrate_cache.py
+inspect_schema.py
 ~~~~~
 ~~~~~python
 """
-AI Studio Analyzer 缓存迁移工具：将 .cache 平铺 JSON 数据迁移至 SQLite (cache.db)
+AI Studio 缓存数据 Schema 探针脚本 (直接基于 SQLite WAL 数据库，支持长文本与 Base64 压缩展示)
 """
-import argparse
+import json
 import os
-import sys
-from tqdm import tqdm
+from collections import Counter, defaultdict
+from typing import Any
 from src.analyzer.cache import SQLiteCache
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="将平铺 JSON 缓存迁移至 SQLite 单文件数据库")
-    parser.add_argument(
-        "--cache-dir",
-        default=".cache",
-        help="当前旧缓存所在的目录路径（默认: .cache）"
-    )
-    parser.add_argument(
-        "--clean",
-        action="store_true",
-        help="迁移并校验成功后，自动删除旧的平铺 JSON 文件及 index.json（释放磁盘空间与 Inode）"
-    )
-    return parser.parse_args()
+def truncate_large_content(obj: Any, max_str_len: int = 80) -> Any:
+    """递归截断并压缩过长的字段值（特别是 inlineFile.data、超长 text 等）"""
+    if isinstance(obj, str):
+        if len(obj) > max_str_len:
+            head = obj[: max_str_len // 2]
+            tail = obj[-max_str_len // 4 :]
+            return f"{head}...[已折叠 {len(obj)} 字符]...{tail}"
+        return obj
+    elif isinstance(obj, dict):
+        return {k: truncate_large_content(v, max_str_len) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [truncate_large_content(item, max_str_len) for item in obj]
+    return obj
 
 
-def main():
-    args = parse_args()
-    cache_dir = args.cache_dir
+def get_shape_summary(obj: Any, depth: int = 0, max_depth: int = 2) -> Any:
+    """递归提取 JSON 的数据结构拓扑骨架"""
+    if depth >= max_depth:
+        return type(obj).__name__
 
-    if not os.path.isdir(cache_dir):
-        print(f"❌ 目录不存在: {cache_dir}")
-        sys.exit(1)
+    if isinstance(obj, dict):
+        return {k: get_shape_summary(v, depth + 1, max_depth) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        if not obj:
+            return "[] (empty)"
+        return [get_shape_summary(obj[0], depth + 1, max_depth)]
+    else:
+        return type(obj).__name__
 
-    all_files = os.listdir(cache_dir)
-    json_files = [f for f in all_files if f.endswith(".json") and f != "index.json"]
-    total_json = len(json_files)
 
-    print("=" * 60)
-    print("📦 开始执行 AI Studio 缓存迁移 (Flat JSON -> SQLite WAL)")
-    print(f"📁 缓存目录: {os.path.abspath(cache_dir)}")
-    print(f"🔍 待迁移 JSON 文件数: {total_json}")
-    print("=" * 60)
+def inspect_cache_database(cache_dir: str = ".cache", str_truncate_limit: int = 80):
+    cache = SQLiteCache(cache_dir=cache_dir)
+    total_records = cache.count()
 
-    if total_json == 0:
-        print("ℹ️ 未发现需要迁移的平铺 JSON 文件。")
+    if total_records == 0:
+        print(f"❌ 在 {cache.db_path} 中未发现任何已缓存的会话记录。")
         return
 
-    # 初始化 SQLite 缓存器
-    cache = SQLiteCache(cache_dir=cache_dir, db_name="cache.db")
-    before_count = cache.count()
+    print(f"🔍 正在从 SQLite 数据库 ({cache.db_path}) 分析 {total_records} 条缓存记录...\n")
 
-    print(f"⚡ 正在批量将数据写入 SQLite (事务模式)...")
-    success_count, skip_count = cache.migrate_from_directory(old_cache_dir=cache_dir)
-    after_count = cache.count()
+    top_level_keys_counter = Counter()
+    schema_signatures = defaultdict(list)
+    chunk_types_counter = Counter()
 
-    print("\n" + "=" * 30 + " 📊 迁移完成报告 " + "=" * 30)
-    print(f"  - 成功导入记录数: {success_count}")
-    print(f"  - 异常跳过文件数: {skip_count}")
-    print(f"  - 迁移前 SQLite 条目: {before_count}")
-    print(f"  - 迁移后 SQLite 条目: {after_count}")
-    print(f"  - 数据库文件位置: {cache.db_path}")
-    print("=" * 68)
+    for file_id, _, data in cache.iter_all_data():
+        if not isinstance(data, dict):
+            continue
 
-    # 清理旧平铺文件（如果用户指定了 --clean）
-    if args.clean:
-        print("\n🧹 正在清理旧的平铺 JSON 文件...")
-        removed_count = 0
-        for fname in tqdm(json_files, desc="清理进度", unit="file"):
-            try:
-                os.remove(os.path.join(cache_dir, fname))
-                removed_count += 1
-            except Exception:
-                pass
+        # 1. 统计顶层键名
+        keys_tuple = tuple(sorted(data.keys()))
+        top_level_keys_counter.update(keys_tuple)
 
-        index_path = os.path.join(cache_dir, "index.json")
-        if os.path.exists(index_path):
-            try:
-                os.remove(index_path)
-            except Exception:
-                pass
+        # 2. 统计 chunks 内部载荷形态 (text, driveDocument, inlineFile 等)
+        chunks = data.get("chunkedPrompt", {}).get("chunks", [])
+        for chunk in chunks:
+            payload_types = [k for k in chunk.keys() if k not in ("role", "tokenCount", "createTime")]
+            chunk_types_counter[", ".join(sorted(payload_types))] += 1
 
-        print(f"✅ 清理完成：已安全移除 {removed_count} 个平铺 JSON 文件及 index.json。")
-    else:
-        print("\n💡 提示：原平铺 JSON 文件仍保留在磁盘上。")
-        print("   如果你确认迁移后的数据正常，可手动删除或再次运行 `python migrate_cache.py --clean` 释放磁盘空间。")
+        # 3. 记录不同结构签名的代表样本
+        sig_str = json.dumps(get_shape_summary(data, max_depth=2), ensure_ascii=False, sort_keys=True)
+        if len(schema_signatures[sig_str]) < 2:
+            schema_signatures[sig_str].append((file_id, data))
+
+    # --- 打印分析结果 ---
+
+    print("=" * 30 + " 1. 顶层 Key 出现频率 " + "=" * 30)
+    for key, count in top_level_keys_counter.most_common():
+        percentage = round((count / total_records) * 100, 1)
+        print(f"  - {key:<25} : 出现 {count} 次 ({percentage}%)")
+
+    print("\n" + "=" * 30 + " 2. 对话载荷类型分布 (Chunk Payloads) " + "=" * 30)
+    for p_type, count in chunk_types_counter.most_common():
+        label = p_type if p_type else "(仅元数据/空)"
+        print(f"  - 载荷形态 [{label}]: 出现 {count} 次")
+
+    print("\n" + "=" * 30 + " 3. 典型数据骨架 (已开启长文本折叠) " + "=" * 30)
+    for idx, (sig, samples) in enumerate(schema_signatures.items(), start=1):
+        sample_ids = [s[0] for s in samples]
+        raw_sample = samples[0][1]
+        print(f"\n▶ 格式形态 #{idx} (命中样本 File ID: {sample_ids}):")
+        print(json.dumps(json.loads(sig), indent=2, ensure_ascii=False))
+
+        print("  💡 核心对话字段探测 (采样首个 Chunk):")
+        chunks = raw_sample.get("chunkedPrompt", {}).get("chunks", [])
+        if chunks:
+            sample_chunk = chunks[0]
+            compressed_chunk = truncate_large_content(sample_chunk, max_str_len=str_truncate_limit)
+            print(f"    - Chunk 结构示例:")
+            print("      " + json.dumps(compressed_chunk, ensure_ascii=False))
+
+        sys_inst = raw_sample.get("systemInstruction", {})
+        if sys_inst:
+            compressed_sys = truncate_large_content(sys_inst, max_str_len=str_truncate_limit)
+            print(f"    - 系统指令: {json.dumps(compressed_sys, ensure_ascii=False)}")
 
 
 if __name__ == "__main__":
-    main()
+    inspect_cache_database(".cache", str_truncate_limit=80)
 ~~~~~
 
-#### Acts 3: 改造 `inspect_schema.py` 优先从 SQLite 加载数据
+#### Acts 4: 清理 `.cache/` 目录中的平铺 JSON 文件与 `index.json`
 
-让探针脚本优先读取 SQLite 中的海量数据，若 SQLite 为空再回退读取普通 JSON 文件。
+仅保留 SQLite 数据库核心文件 (`cache.db`, `cache.db-wal`, `cache.db-shm`)，彻底清除旧的小 JSON 文件。
 
 ~~~~~act
-patch_file
-inspect_schema.py
+run_command
 ~~~~~
-~~~~~python.old
-def inspect_cache_files(cache_dir: str = ".cache", str_truncate_limit: int = 80):
-    files = glob.glob(os.path.join(cache_dir, "*.json"))
-    files = [f for f in files if not f.endswith("index.json")]
-
-    if not files:
-        print(f"❌ 在 {cache_dir} 下未找到任何已缓存的对话 JSON 文件。")
-        return
-
-    print(f"🔍 发现 {len(files)} 个缓存文件，正在分析数据格式...\n")
-
-    top_level_keys_counter = Counter()
-    schema_signatures = defaultdict(list)
-    chunk_types_counter = Counter()
-    corrupted_files = []
-
-    for fpath in files:
-        file_name = os.path.basename(fpath)
-        try:
-            with open(fpath, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception as e:
-            corrupted_files.append((file_name, str(e)))
-            continue
-
-        if not isinstance(data, dict):
-            continue
-
-        # 1. 统计顶层键名
-        keys_tuple = tuple(sorted(data.keys()))
-        top_level_keys_counter.update(keys_tuple)
-
-        # 2. 统计 chunks 内部载荷形态 (text, driveDocument, inlineFile 等)
-        chunks = data.get("chunkedPrompt", {}).get("chunks", [])
-        for chunk in chunks:
-            payload_types = [k for k in chunk.keys() if k not in ("role", "tokenCount", "createTime")]
-            chunk_types_counter[", ".join(sorted(payload_types))] += 1
-
-        # 3. 记录不同结构签名的代表文件
-        sig_str = json.dumps(get_shape_summary(data, max_depth=2), ensure_ascii=False, sort_keys=True)
-        if len(schema_signatures[sig_str]) < 2:
-            schema_signatures[sig_str].append((file_name, data))
 ~~~~~
-~~~~~python.new
-def inspect_cache_files(cache_dir: str = ".cache", str_truncate_limit: int = 80):
-    db_path = os.path.join(cache_dir, "cache.db")
-    records = []
-
-    # 优先从 SQLite 加载
-    if os.path.exists(db_path):
-        from src.analyzer.cache import SQLiteCache
-        cache = SQLiteCache(cache_dir=cache_dir)
-        total_in_db = cache.count()
-        if total_in_db > 0:
-            print(f"🔍 发现 SQLite 数据库 ({db_path})，共包含 {total_in_db} 条缓存记录，正在分析...\n")
-            for file_id, _, data in cache.iter_all_data():
-                records.append((f"{file_id}.json", data))
-
-    # 若 SQLite 无数据，回退至扫描平铺 JSON
-    if not records:
-        files = glob.glob(os.path.join(cache_dir, "*.json"))
-        files = [f for f in files if not f.endswith("index.json")]
-
-        if not files:
-            print(f"❌ 在 {cache_dir} 下未找到任何已缓存的对话数据 (SQLite 或 JSON)。")
-            return
-
-        print(f"🔍 发现 {len(files)} 个平铺 JSON 缓存文件，正在分析数据格式...\n")
-        for fpath in files:
-            file_name = os.path.basename(fpath)
-            try:
-                with open(fpath, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                records.append((file_name, data))
-            except Exception as e:
-                corrupted_files.append((file_name, str(e)))
-                continue
-
-    top_level_keys_counter = Counter()
-    schema_signatures = defaultdict(list)
-    chunk_types_counter = Counter()
-    corrupted_files = []
-
-    for file_name, data in records:
-        if not isinstance(data, dict):
-            continue
-
-        # 1. 统计顶层键名
-        keys_tuple = tuple(sorted(data.keys()))
-        top_level_keys_counter.update(keys_tuple)
-
-        # 2. 统计 chunks 内部载荷形态 (text, driveDocument, inlineFile 等)
-        chunks = data.get("chunkedPrompt", {}).get("chunks", [])
-        for chunk in chunks:
-            payload_types = [k for k in chunk.keys() if k not in ("role", "tokenCount", "createTime")]
-            chunk_types_counter[", ".join(sorted(payload_types))] += 1
-
-        # 3. 记录不同结构签名的代表文件
-        sig_str = json.dumps(get_shape_summary(data, max_depth=2), ensure_ascii=False, sort_keys=True)
-        if len(schema_signatures[sig_str]) < 2:
-            schema_signatures[sig_str].append((file_name, data))
+rm -f .cache/*.json
+ls -lh .cache/
 ~~~~~
 
 ### 下一步建议
 
-1. **执行迁移**：
-   运行 `python migrate_cache.py`，将现存的 3000+ 个 `.cache/*.json` 文件一次性导入至 `.cache/cache.db`。导入完成后系统会自动打印出总耗时与条目对比。
-2. **校验功能**：
-   - 运行 `python inspect_schema.py` 验证数据结构检测是否直接且极速地从 SQLite 读出。
-   - 运行 `python main.py -n 10` 检查主程序的缓存检测与写入是否完全兼容。
-3. **安全清理**：
-   确认迁移无误后，运行 `python migrate_cache.py --clean` 安全删除旧的平铺小文件，彻底释放磁盘资源。
+1. **测试主链路运行**：运行 `python main.py -n 5`，确认增量同步命中检测与反序列化表现正常，观察终端响应速度与内存占用。
+2. **Schema 深度审计**：运行 `python inspect_schema.py` 验证 SQLite 探针输出。
+3. **迈向下一阶段**：根据你的宏观路线图，底层 SQLite 已经就绪，下一步可以：
+   - 升级 `models.py` 与 `parser.py`：解析更多维度字段（如思考块 `isThought`、真实 Token 消耗、分叉 `branchParent` 与时长 `duration`）。
+   - 或者引入 SQLite FTS5 全文检索引擎，实现毫秒级关键词/主题语义切片。
