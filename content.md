@@ -4,6 +4,7 @@
 
 ### 📝 变更文件摘要:
 ```
-.gitignore | 263 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 263 insertions(+)
+frontend/package-lock.json | 3238 ++++++++++++++++++++++++++++++++++++++++++++
+ uv.lock                    |  976 +++++++++++++
+ 2 files changed, 4214 insertions(+)
 ```
