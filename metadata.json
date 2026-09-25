@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 增加 cache.db 健康度诊断与上下文假设验证脚本", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790334459.2022827, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] fix(storage): 修复 FTS5 索引全表扫描与 WAL 膨胀，并引入离线重建与健康度诊断探针", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790335103.7094328, "duration_ms": 0}}
