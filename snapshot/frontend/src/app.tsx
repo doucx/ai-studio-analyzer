@@ -1,10 +1,10 @@
 import { signal } from '@preact/signals';
 import { useEffect } from 'preact/hooks';
+import { SessionDetailPanel } from './components/SessionDetailPanel';
+import { VirtualSessionList } from './components/VirtualSessionList';
 import { DurationTiersChart } from './components/charts/DurationTiersChart';
 import { ModelDistributionChart } from './components/charts/ModelDistributionChart';
 import { TokenTrendChart } from './components/charts/TokenTrendChart';
-import { SessionDetailPanel } from './components/SessionDetailPanel';
-import { VirtualSessionList } from './components/VirtualSessionList';
 import type { MetricsSummary, SessionItem } from './types/metrics';
 
 export type TimeRange = '7d' | '30d' | '90d' | 'this_year' | 'all';
@@ -97,7 +97,10 @@ export function App() {
           >
             {isSidebarCollapsed ? '📂 展开' : '◀ 收起'}
           </button>
-          <span className="text-2xl cursor-pointer" onClick={() => (selectedSessionSignal.value = null)}>
+          <span
+            className="text-2xl cursor-pointer"
+            onClick={() => (selectedSessionSignal.value = null)}
+          >
             🧠
           </span>
           <div>
@@ -206,7 +209,9 @@ export function App() {
                 <div className="bg-zinc-900/70 border border-zinc-800 rounded-lg p-4">
                   <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider flex items-center justify-between">
                     <span>交互总场次</span>
-                    <span className="text-[10px] text-zinc-500 font-mono">[{activeRangeLabel}]</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">
+                      [{activeRangeLabel}]
+                    </span>
                   </div>
                   <div className="mt-1.5 text-2xl font-bold text-white tracking-tight">
                     {m.total_sessions} <span className="text-xs font-normal text-zinc-500">场</span>
@@ -219,7 +224,9 @@ export function App() {
                 <div className="bg-zinc-900/70 border border-zinc-800 rounded-lg p-4">
                   <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider flex items-center justify-between">
                     <span>时长中位数 (P50)</span>
-                    <span className="text-[10px] text-zinc-500 font-mono">[{activeRangeLabel}]</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">
+                      [{activeRangeLabel}]
+                    </span>
                   </div>
                   <div className="mt-1.5 text-2xl font-bold text-indigo-400 tracking-tight">
                     {m.dur_stats?.median ?? 0}{' '}
@@ -233,7 +240,9 @@ export function App() {
                 <div className="bg-zinc-900/70 border border-zinc-800 rounded-lg p-4">
                   <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider flex items-center justify-between">
                     <span>总 Token 能耗</span>
-                    <span className="text-[10px] text-zinc-500 font-mono">[{activeRangeLabel}]</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">
+                      [{activeRangeLabel}]
+                    </span>
                   </div>
                   <div className="mt-1.5 text-2xl font-bold text-emerald-400 tracking-tight">
                     {(m.tok_stats?.total || 0).toLocaleString()}
@@ -246,13 +255,16 @@ export function App() {
                 <div className="bg-zinc-900/70 border border-zinc-800 rounded-lg p-4">
                   <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider flex items-center justify-between">
                     <span>思维摩擦力</span>
-                    <span className="text-[10px] text-zinc-500 font-mono">[{activeRangeLabel}]</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">
+                      [{activeRangeLabel}]
+                    </span>
                   </div>
                   <div className="mt-1.5 text-2xl font-bold text-amber-400 tracking-tight">
                     {m.friction_stats?.branch_ratio ?? '0%'}
                   </div>
                   <div className="mt-1 text-[11px] text-zinc-500 truncate">
-                    {m.friction_stats?.branch_sessions ?? 0} 场分叉 ({m.friction_stats?.total_retries ?? 0} 次重试)
+                    {m.friction_stats?.branch_sessions ?? 0} 场分叉 (
+                    {m.friction_stats?.total_retries ?? 0} 次重试)
                   </div>
                 </div>
               </section>
@@ -282,7 +294,9 @@ export function App() {
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
                   {m.duration_tiers && (
                     <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5">
-                      <h2 className="text-sm font-semibold text-zinc-200 mb-1">⏱️ 心智时长梯队切片</h2>
+                      <h2 className="text-sm font-semibold text-zinc-200 mb-1">
+                        ⏱️ 心智时长梯队切片
+                      </h2>
                       <p className="text-xs text-zinc-500 mb-3">
                         单次任务从首轮交互到最后收尾的时间窗口跨度
                       </p>

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 清理冗余侧栏控件与提示文本并统一暗色模式滚动条", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790310531.0999327, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M app.tsx, M SessionDetailPanel.tsx, M VirtualSessionList.tsx ... and 1 more files", "type": "capture", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790310668.0665784, "duration_ms": 0}}

@@ -25,7 +25,7 @@ export function VirtualSessionList({ sessions, selectedId, onSelect }: Props) {
         (s) =>
           s.name.toLowerCase().includes(term) ||
           s.first_prompt.toLowerCase().includes(term) ||
-          s.model.toLowerCase().includes(term)
+          s.model.toLowerCase().includes(term),
       );
     }
 

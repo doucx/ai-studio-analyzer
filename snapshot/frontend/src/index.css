@@ -68,9 +68,15 @@ body {
   margin-bottom: 0.5rem;
 }
 
-.prose-chat h1 { font-size: 1.25rem; }
-.prose-chat h2 { font-size: 1.125rem; }
-.prose-chat h3 { font-size: 1rem; }
+.prose-chat h1 {
+  font-size: 1.25rem;
+}
+.prose-chat h2 {
+  font-size: 1.125rem;
+}
+.prose-chat h3 {
+  font-size: 1rem;
+}
 
 .prose-chat ul,
 .prose-chat ol {
@@ -79,8 +85,12 @@ body {
   padding-left: 1.25rem;
 }
 
-.prose-chat ul { list-style-type: disc; }
-.prose-chat ol { list-style-type: decimal; }
+.prose-chat ul {
+  list-style-type: disc;
+}
+.prose-chat ol {
+  list-style-type: decimal;
+}
 
 .prose-chat li {
   margin-top: 0.25rem;

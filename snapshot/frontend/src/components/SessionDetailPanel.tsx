@@ -251,7 +251,9 @@ export function SessionDetailPanel({ session, onClose }: Props) {
           <div className="bg-zinc-900/80 border border-zinc-800/60 rounded p-2.5">
             <div className="text-[10px] text-zinc-400">最后修改时间</div>
             <div className="text-xs font-medium text-zinc-300 font-mono mt-1 truncate">
-              {session.modified_time ? session.modified_time.replace('T', ' ').slice(0, 16) : '未知'}
+              {session.modified_time
+                ? session.modified_time.replace('T', ' ').slice(0, 16)
+                : '未知'}
             </div>
             <div className="text-[10px] text-zinc-500 truncate">
               创建: {session.created_time ? session.created_time.slice(0, 10) : '未知'}
