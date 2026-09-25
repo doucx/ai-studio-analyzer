@@ -11,11 +11,13 @@ import {
   FileText,
   MessagesSquare,
   Paperclip,
+  RefreshCw,
   User,
   X,
 } from 'lucide-preact';
 import { marked } from 'marked';
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
+import { syncVersionSignal } from '../state/sync';
 import type { ConversationTurnItem, SessionDetail, SessionItem } from '../types/metrics';
 
 marked.setOptions({
@@ -276,24 +278,40 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
 export function SessionDetailPanel({ session, onClose }: Props) {
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [showMetadata, setShowMetadata] = useState<boolean>(true);
 
   const aiStudioUrl = `https://aistudio.google.com/prompts/${session.file_id}`;
 
-  useEffect(() => {
-    setLoading(true);
-    fetch(`/api/sessions/${session.file_id}`)
-      .then((res) => res.json())
-      .then((data) => {
+  const fetchSessionDetail = useCallback(
+    async (isSilent = false) => {
+      if (!isSilent) {
+        setLoading(true);
+      } else {
+        setRefreshing(true);
+      }
+      try {
+        const res = await fetch(`/api/sessions/${session.file_id}`);
+        const data = await res.json();
         setDetail(data);
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error('获取会话详情失败:', err);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [session.file_id]);
+      } finally {
+        if (!isSilent) {
+          setLoading(false);
+        } else {
+          setRefreshing(false);
+        }
+      }
+    },
+    [session.file_id],
+  );
+
+  // 初次进入或切换会话时全屏加载；增量同步完成触发 syncVersionSignal 时静默刷新
+  useEffect(() => {
+    const isInitialLoad = !detail || detail.file_id !== session.file_id;
+    fetchSessionDetail(!isInitialLoad);
+  }, [session.file_id, syncVersionSignal.value, fetchSessionDetail]);
 
   return (
     <div className="bg-zinc-900/40 border border-zinc-800 rounded-lg flex flex-col h-full min-h-[calc(100vh-140px)]">
