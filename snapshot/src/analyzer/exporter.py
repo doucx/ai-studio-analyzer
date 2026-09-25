@@ -64,7 +64,9 @@ def export_prompts_summary_csv(sessions: List[PromptSession], output_path: str):
                     "model": s.model,
                     "turn_count": s.turn_count,
                     "duration_human": s.duration_human,
-                    "duration_seconds": s.duration_seconds,
+                    "duration_seconds": s.duration_seconds
+                    if s.duration_seconds is not None
+                    else "",
                     "total_tokens": s.total_tokens,
                     "thought_tokens": s.thought_tokens,
                     "has_branching": s.has_branching,

@@ -55,7 +55,7 @@ class SQLiteCache:
                     total_tokens INTEGER NOT NULL,
                     thought_tokens INTEGER NOT NULL,
                     user_char_count INTEGER NOT NULL,
-                    duration_seconds REAL NOT NULL,
+                    duration_seconds REAL,
                     duration_human TEXT NOT NULL,
                     has_branching INTEGER NOT NULL,
                     branch_count INTEGER NOT NULL,
@@ -159,7 +159,7 @@ class SQLiteCache:
         """清空二级索引与 FTS 虚表并重新初始化结构（重建前调用）"""
         with self._get_connection() as conn:
             conn.execute("DROP TABLE IF EXISTS session_fts;")
-            conn.execute("DELETE FROM session_index;")
+            conn.execute("DROP TABLE IF EXISTS session_index;")
             conn.commit()
         self._init_db()
 

@@ -75,7 +75,7 @@ export interface SessionItem {
   total_tokens: number;
   thought_tokens: number;
   duration_human: string;
-  duration_seconds: number;
+  duration_seconds: number | null;
   has_branching: boolean;
   branch_count: number;
   first_prompt: string;
