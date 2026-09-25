@@ -313,11 +313,12 @@ class SQLiteCache:
             return []
 
         fts_match_expr = f'"{clean_query}"'
+        # snippet 第二个参数限定为 3 (即 session_fts 的 content 列，避免遍历整表其他列产生极大 I/O)
         sql = """
             SELECT 
                 f.file_id,
                 bm25(session_fts) AS rank,
-                snippet(session_fts, -1, '<mark class="bg-indigo-500/30 text-indigo-300 font-semibold px-0.5 rounded">', '</mark>', '...', 22) AS snippet,
+                snippet(session_fts, 3, '<mark class="bg-indigo-500/30 text-indigo-300 font-semibold px-0.5 rounded">', '</mark>', '...', 22) AS snippet,
                 s.name,
                 s.model,
                 s.turn_count,
@@ -339,9 +340,15 @@ class SQLiteCache:
         with self._get_connection() as conn:
             cursor = conn.cursor()
             try:
+                cursor.execute("PRAGMA busy_timeout = 3000;")
                 cursor.execute(sql, (fts_match_expr, limit, offset))
                 rows = cursor.fetchall()
-                return [dict(r) for r in rows]
+                results = []
+                for r in rows:
+                    item = dict(r)
+                    item["has_branching"] = bool(item.get("has_branching", 0))
+                    results.append(item)
+                return results
             except sqlite3.OperationalError:
                 return []
 

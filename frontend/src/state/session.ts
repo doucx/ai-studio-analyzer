@@ -24,7 +24,8 @@ export const isSearchingFtsSignal = signal<boolean>(false);
 // 动态提取当前数据集中所有模型列表及其会话计数 (降序)
 export const availableModelsSignal = computed(() => {
   const counts = new Map<string, number>();
-  for (const s of sessionsSignal.value) {
+  const list = Array.isArray(sessionsSignal.value) ? sessionsSignal.value : [];
+  for (const s of list) {
     const m = s.model.replace('models/', '');
     counts.set(m, (counts.get(m) || 0) + 1);
   }
@@ -45,10 +46,12 @@ export const isFilterActiveSignal = computed(() => {
 export const filteredSessionsSignal = computed(() => {
   const term = searchKeywordSignal.value.trim().toLowerCase();
   // 当开启 FTS 全文搜索且命中结果集时，直接接入 FTS 倒排结果
-  const list =
+  const rawList =
     term.length >= 2 && ftsResultsSignal.value !== null
       ? ftsResultsSignal.value
       : sessionsSignal.value;
+
+  const list = Array.isArray(rawList) ? rawList : [];
 
   const model = selectedModelSignal.value;
   const depth = depthFilterSignal.value;
@@ -100,8 +103,10 @@ export async function fetchSessions(range = timeRangeSignal.value) {
   }
   try {
     const res = await fetch(`/api/sessions?range=${range}`);
-    const data = await res.json();
-    sessionsSignal.value = data;
+    if (res.ok) {
+      const data = await res.json();
+      sessionsSignal.value = Array.isArray(data) ? data : [];
+    }
   } catch (err) {
     console.error('加载会话列表失败:', err);
   } finally {
@@ -117,6 +122,7 @@ export function toggleSidebar() {
   sidebarCollapsedSignal.value = !sidebarCollapsedSignal.value;
 }
 
+let activeSearchAbortController: AbortController | null = null;
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function handleSearchInput(keyword: string) {
@@ -125,6 +131,12 @@ export function handleSearchInput(keyword: string) {
 
   if (searchDebounceTimer) {
     clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = null;
+  }
+
+  if (activeSearchAbortController) {
+    activeSearchAbortController.abort();
+    activeSearchAbortController = null;
   }
 
   if (term.length < 2) {
@@ -135,23 +147,41 @@ export function handleSearchInput(keyword: string) {
 
   isSearchingFtsSignal.value = true;
   searchDebounceTimer = setTimeout(async () => {
+    const controller = new AbortController();
+    activeSearchAbortController = controller;
+
     try {
-      const res = await fetch(`/api/sessions/search?q=${encodeURIComponent(term)}&limit=100`);
+      const res = await fetch(`/api/sessions/search?q=${encodeURIComponent(term)}&limit=100`, {
+        signal: controller.signal,
+      });
       if (res.ok) {
         const data = await res.json();
         if (searchKeywordSignal.value.trim() === term) {
-          ftsResultsSignal.value = data;
+          ftsResultsSignal.value = Array.isArray(data) ? data : [];
         }
       }
-    } catch (err) {
-      console.error('FTS 全文检索异常:', err);
+    } catch (err: unknown) {
+      if ((err as Error)?.name !== 'AbortError') {
+        console.error('FTS 全文检索异常:', err);
+      }
     } finally {
-      isSearchingFtsSignal.value = false;
+      if (activeSearchAbortController === controller) {
+        isSearchingFtsSignal.value = false;
+        activeSearchAbortController = null;
+      }
     }
-  }, 250);
+  }, 300);
 }
 
 export function resetFilters() {
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = null;
+  }
+  if (activeSearchAbortController) {
+    activeSearchAbortController.abort();
+    activeSearchAbortController = null;
+  }
   searchKeywordSignal.value = '';
   ftsResultsSignal.value = null;
   isSearchingFtsSignal.value = false;

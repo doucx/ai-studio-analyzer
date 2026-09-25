@@ -8,7 +8,6 @@ AI Studio 离线索引重建与诊断探针工具 (带 tqdm 细粒度进度条�
 
 import argparse
 import os
-import sys
 import time
 from tqdm import tqdm
 

@@ -3,7 +3,12 @@ import { useLocation, useRoute } from 'preact-iso';
 import { useMemo } from 'preact/hooks';
 import { SessionDetailPanel } from '../components/SessionDetailPanel';
 import { VirtualSessionList } from '../components/VirtualSessionList';
-import { sessionsLoadingSignal, sessionsSignal, sidebarCollapsedSignal } from '../state/session';
+import {
+  filteredSessionsSignal,
+  sessionsLoadingSignal,
+  sessionsSignal,
+  sidebarCollapsedSignal,
+} from '../state/session';
 import type { SessionItem } from '../types/metrics';
 
 export function SessionsRoute() {
@@ -15,10 +20,33 @@ export function SessionsRoute() {
   const isSidebarCollapsed = sidebarCollapsedSignal.value;
   const selectedId = params.id || null;
 
-  // 根据 URL 的 :id 参数匹配当前会话实体
+  // 根据 URL 的 :id 参数跨全量与 FTS 倒排结果匹配当前会话实体
   const currentSession = useMemo<SessionItem | null>(() => {
-    if (!selectedId || sessions.length === 0) return null;
-    return sessions.find((s) => s.file_id === selectedId) || null;
+    if (!selectedId) return null;
+    // 1. 优先在当前加载的 sessions 中匹配
+    const foundInSessions = sessions.find((s) => s.file_id === selectedId);
+    if (foundInSessions) return foundInSessions;
+
+    // 2. 其次在当前过滤或 FTS 全文搜索命中的结果集中匹配
+    const foundInFiltered = filteredSessionsSignal.value.find((s) => s.file_id === selectedId);
+    if (foundInFiltered) return foundInFiltered;
+
+    // 3. 若列表未预加载该项（如外部直连），构造最小上下文驱动详情面板完成异步读取
+    return {
+      file_id: selectedId,
+      name: '加载会话中...',
+      model: 'unknown',
+      turn_count: 0,
+      total_tokens: 0,
+      thought_tokens: 0,
+      duration_human: '',
+      duration_seconds: 0,
+      has_branching: false,
+      branch_count: 0,
+      first_prompt: '',
+      modified_time: null,
+      created_time: null,
+    };
   }, [selectedId, sessions]);
 
   const handleSelectSession = (s: SessionItem) => {
@@ -53,7 +81,11 @@ export function SessionsRoute() {
             正在载入会话工作台索引...
           </div>
         ) : currentSession ? (
-          <SessionDetailPanel session={currentSession} onClose={handleCloseDetail} />
+          <SessionDetailPanel
+            key={currentSession.file_id}
+            session={currentSession}
+            onClose={handleCloseDetail}
+          />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center p-12 text-center border border-zinc-800/80 bg-zinc-900/30 rounded-lg">
             <div className="p-3.5 rounded-full bg-zinc-900 border border-zinc-800 text-indigo-400 mb-3">

@@ -4,7 +4,7 @@ import os
 import tempfile
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Set
-from fastapi import APIRouter, BackgroundTasks, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from src.analyzer.cache import SQLiteCache
 from src.analyzer.drive import DriveClient, PROXY_URL
@@ -175,6 +175,12 @@ def list_sessions(range: str = "all", limit: Optional[int] = None):
     ]
 
 
+@router.get("/sessions/search")
+def search_sessions(q: str, limit: int = 50, offset: int = 0):
+    """基于 SQLite FTS5 全文索引的高性能深度检索接口 (声明于 /sessions/{file_id} 前避免被拦截)"""
+    return cache.search_fts(query=q, limit=limit, offset=offset)
+
+
 @router.get("/sessions/{file_id}")
 def get_session_detail(file_id: str):
     """
@@ -182,12 +188,12 @@ def get_session_detail(file_id: str):
     """
     raw_data = cache.get(file_id)
     if not raw_data:
-        return {"error": "未找到指定的会话记录"}
+        raise HTTPException(status_code=404, detail="未找到指定的会话记录")
 
     file_meta = {"id": file_id, "name": raw_data.get("name", "Untitled")}
     target = parse_prompt_json(file_meta, raw_data)
     if not target:
-        return {"error": "解析会话数据失败"}
+        raise HTTPException(status_code=500, detail="解析会话数据失败")
 
     return {
         "file_id": target.file_id,
@@ -269,12 +275,6 @@ def reindex_cache():
         print(f"⚠️ Reindex Checkpoint/Vacuum 异常: {exc}")
 
     return {"status": "success", "reindexed_count": count}
-
-
-@router.get("/sessions/search")
-def search_sessions(q: str, limit: int = 50, offset: int = 0):
-    """基于 SQLite FTS5 全文索引的高性能深度检索接口 (返回带高亮 Snippet)"""
-    return cache.search_fts(query=q, limit=limit, offset=offset)
 
 
 @router.get("/sessions/{file_id}/raw")

@@ -11,12 +11,11 @@ import {
   FileText,
   MessagesSquare,
   Paperclip,
-  RefreshCw,
   User,
   X,
 } from 'lucide-preact';
 import { marked } from 'marked';
-import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { syncVersionSignal } from '../state/sync';
 import type { ConversationTurnItem, SessionDetail, SessionItem } from '../types/metrics';
 
@@ -278,40 +277,68 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
 export function SessionDetailPanel({ session, onClose }: Props) {
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [_refreshing, setRefreshing] = useState<boolean>(false);
   const [showMetadata, setShowMetadata] = useState<boolean>(true);
 
   const aiStudioUrl = `https://aistudio.google.com/prompts/${session.file_id}`;
 
   const fetchSessionDetail = useCallback(
-    async (isSilent = false) => {
+    async (isSilent = false, signal?: AbortSignal) => {
       if (!isSilent) {
         setLoading(true);
       } else {
         setRefreshing(true);
       }
       try {
-        const res = await fetch(`/api/sessions/${session.file_id}`);
+        const res = await fetch(`/api/sessions/${session.file_id}`, { signal });
+        if (!res.ok) return;
         const data = await res.json();
         setDetail(data);
-      } catch (err) {
-        console.error('获取会话详情失败:', err);
+      } catch (err: unknown) {
+        if ((err as Error)?.name !== 'AbortError') {
+          console.error('获取会话详情失败:', err);
+        }
       } finally {
-        if (!isSilent) {
-          setLoading(false);
-        } else {
-          setRefreshing(false);
+        if (!signal?.aborted) {
+          if (!isSilent) {
+            setLoading(false);
+          } else {
+            setRefreshing(false);
+          }
         }
       }
     },
     [session.file_id],
   );
 
-  // 初次进入或切换会话时全屏加载；增量同步完成触发 syncVersionSignal 时静默刷新
+  // 1. 初次进入或切换会话时全屏加载，并重置旧详情数据以避免数据脏读
   useEffect(() => {
-    const isInitialLoad = !detail || detail.file_id !== session.file_id;
-    fetchSessionDetail(!isInitialLoad);
-  }, [session.file_id, syncVersionSignal.value, fetchSessionDetail]);
+    const controller = new AbortController();
+    setLoading(true);
+    setDetail(null);
+    fetchSessionDetail(false, controller.signal);
+    return () => {
+      controller.abort();
+    };
+  }, [fetchSessionDetail]);
+
+  // 2. 外部增量同步完成触发 syncVersionSignal 递增时，静默刷新当前打开的会话
+  const syncVersion = syncVersionSignal.value;
+  const isInitialMountRef = useRef(true);
+
+  useEffect(() => {
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      return;
+    }
+    if (syncVersion > 0) {
+      const controller = new AbortController();
+      fetchSessionDetail(true, controller.signal);
+      return () => {
+        controller.abort();
+      };
+    }
+  }, [syncVersion, fetchSessionDetail]);
 
   return (
     <div className="bg-zinc-900/40 border border-zinc-800 rounded-lg flex flex-col h-full min-h-[calc(100vh-140px)]">
