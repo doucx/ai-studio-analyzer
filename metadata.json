@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "ruff Capture: M metrics.py, M parser.py, M api.py", "type": "capture", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790313569.7665036, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(frontend): 下沉全局状态并拆分解耦看板视图", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790314493.3818512, "duration_ms": 0}}
