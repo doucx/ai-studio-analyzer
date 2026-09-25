@@ -1,20 +1,12 @@
 import asyncio
 import json
-import os
-import tempfile
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Set
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from src.analyzer.cache import SQLiteCache
 from src.analyzer.drive import DriveClient, PROXY_URL
-from src.analyzer.exporter import (
-    export_first_prompts_to_jsonl,
-    export_prompts_summary_csv,
-)
-from src.analyzer.loader import load_cached_sessions
 from src.analyzer.metrics import calculate_session_metrics
-from src.analyzer.models import PromptSession
 from src.analyzer.parser import parse_prompt_json
 from src.analyzer.sync import fetch_remote_files
 
@@ -50,52 +42,6 @@ def _get_range_start_iso(range_key: str) -> Optional[str]:
     if range_key == "this_year":
         return datetime(now.year, 1, 1, tzinfo=timezone.utc).isoformat()
     return None
-
-
-def _ensure_sessions_loaded() -> List[PromptSession]:
-    """确保内存中常驻已解析的全量会话列表"""
-    global _ALL_SESSIONS
-    if _ALL_SESSIONS is None:
-        _ALL_SESSIONS = load_cached_sessions(cache, limit=0, show_progress=False)
-    return _ALL_SESSIONS
-
-
-def filter_sessions_by_range(
-    sessions: List[PromptSession], range_key: str
-) -> List[PromptSession]:
-    """
-    根据时间范围切片关键词过滤会话：
-    - '7d': 最近 7 天
-    - '30d': 最近 30 天
-    - '90d': 最近 90 天
-    - 'this_year': 今年以来
-    - 'all': 全量历史
-    """
-    if range_key == "all" or not sessions:
-        return sessions
-
-    now = datetime.now(timezone.utc)
-    if range_key == "7d":
-        start_time = now - timedelta(days=7)
-    elif range_key == "30d":
-        start_time = now - timedelta(days=30)
-    elif range_key == "90d":
-        start_time = now - timedelta(days=90)
-    elif range_key == "this_year":
-        start_time = datetime(now.year, 1, 1, tzinfo=timezone.utc)
-    else:
-        return sessions
-
-    filtered = []
-    for s in sessions:
-        ref_time = s.end_time or s.modified_time or s.start_time
-        if ref_time:
-            # 兼容带时区与不带时区的时间戳比较
-            if ref_time.tzinfo is None:
-                ref_time = ref_time.replace(tzinfo=timezone.utc)
-            if ref_time >= start_time:
-                filtered.append(s)
-    return filtered
 
 
 def _run_sync_task(limit: Optional[int], all_files: bool):
@@ -342,38 +288,4 @@ async def sync_events(request: Request):
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
         },
-    )
-
-
-@router.get("/export/csv")
-def export_csv(range: str = "all"):
-    """导出指定时间范围的会话指标明细 CSV"""
-    all_sessions = _ensure_sessions_loaded()
-    filtered = filter_sessions_by_range(all_sessions, range)
-    if not filtered:
-        return {"error": "当前时间范围内无可导出会话"}
-    tmp_path = os.path.join(tempfile.gettempdir(), f"prompts_summary_{range}.csv")
-    export_prompts_summary_csv(filtered, tmp_path)
-    return FileResponse(
-        path=tmp_path,
-        filename=f"prompts_summary_{range}.csv",
-        media_type="text/csv",
-    )
-
-
-@router.get("/export/jsonl")
-def export_jsonl(range: str = "all"):
-    """导出指定时间范围的首轮提问清洗集 JSONL"""
-    all_sessions = _ensure_sessions_loaded()
-    filtered = filter_sessions_by_range(all_sessions, range)
-    if not filtered:
-        return {"error": "当前时间范围内无可导出会话"}
-    tmp_path = os.path.join(
-        tempfile.gettempdir(), f"first_prompts_{range}_for_clustering.jsonl"
-    )
-    export_first_prompts_to_jsonl(filtered, tmp_path)
-    return FileResponse(
-        path=tmp_path,
-        filename=f"first_prompts_{range}_for_clustering.jsonl",
-        media_type="application/jsonlines",
     )
