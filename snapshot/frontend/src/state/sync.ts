@@ -2,6 +2,7 @@ import { signal } from '@preact/signals';
 
 export const syncInProgressSignal = signal<boolean>(false);
 export const syncProgressTextSignal = signal<string>('');
+export const syncVersionSignal = signal<number>(0);
 
 export async function triggerSync(limit = 50) {
   syncInProgressSignal.value = true;
@@ -30,6 +31,7 @@ export function setupSyncEventListener(onSyncComplete: () => void): () => void {
   eventSource.addEventListener('sync_done', () => {
     syncInProgressSignal.value = false;
     syncProgressTextSignal.value = '';
+    syncVersionSignal.value += 1;
     onSyncComplete();
   });
 
