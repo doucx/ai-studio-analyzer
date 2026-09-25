@@ -11,7 +11,7 @@ import os
 import sqlite3
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 
 def format_bytes(size: float) -> str:

@@ -11,7 +11,6 @@ import {
   FileText,
   MessagesSquare,
   Paperclip,
-  RefreshCw,
   User,
   X,
 } from 'lucide-preact';
