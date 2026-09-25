@@ -278,7 +278,7 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
 export function SessionDetailPanel({ session, onClose }: Props) {
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [_refreshing, setRefreshing] = useState<boolean>(false);
   const [showMetadata, setShowMetadata] = useState<boolean>(true);
 
   const aiStudioUrl = `https://aistudio.google.com/prompts/${session.file_id}`;
