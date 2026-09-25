@@ -51,8 +51,33 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function DownloadButton({ text, filename }: { text: string; filename: string }) {
+  const handleDownload = () => {
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleDownload}
+      className="px-2 py-1 text-[11px] rounded transition flex items-center gap-1 border bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 border-zinc-700/60 cursor-pointer"
+      title="下载文件附件"
+    >
+      <span>💾</span>
+      <span>下载</span>
+    </button>
+  );
+}
+
 function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: number }) {
   const [isThinkingOpen, setIsThinkingOpen] = useState(false);
+  const [isAttachmentOpen, setIsAttachmentOpen] = useState(false);
 
   // 提取可能的 Drive 文件 ID (支持格式: "ID: xxx" 或 "[挂载云盘大文档 ID: xxx]")
   const driveDocId = useMemo(() => {
@@ -144,7 +169,7 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
         <CopyButton text={turn.text} />
       </div>
 
-      {/* 消息正文：云盘大文档专属卡片 或 Markdown 正文呈现 */}
+      {/* 消息正文：云盘大文档专属卡片 或 内联附件卡片 或 Markdown 正文呈现 */}
       <div className="p-4 sm:p-5">
         {turn.payload_type === 'driveDocument' ? (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-indigo-950/30 border border-indigo-800/40 rounded-lg">
@@ -170,6 +195,51 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
                   <span>在云盘查看</span>
                 </a>
               </div>
+            )}
+          </div>
+        ) : turn.payload_type === 'inlineFile' ? (
+          <div className="rounded-lg border border-cyan-900/40 bg-cyan-950/20 overflow-hidden">
+            <div className="px-3.5 py-2.5 flex items-center justify-between bg-cyan-950/40 border-b border-cyan-900/30 text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-base">📎</span>
+                <div className="min-w-0">
+                  <span className="font-semibold text-cyan-300 truncate">
+                    {turn.extra_metadata?.display_name || '内联上下文文件 (inlineFile)'}
+                  </span>
+                  <span className="ml-2 font-mono text-[11px] text-cyan-400/80">
+                    {turn.extra_metadata?.mime_type || 'text/plain'}
+                    {turn.extra_metadata?.byte_size !== undefined &&
+                      ` · ${(turn.extra_metadata.byte_size / 1024).toFixed(1)} KB`}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsAttachmentOpen(!isAttachmentOpen)}
+                  className="px-2 py-1 text-[11px] font-mono rounded bg-cyan-900/40 hover:bg-cyan-900/60 text-cyan-200 border border-cyan-800/50 transition cursor-pointer"
+                >
+                  {isAttachmentOpen ? '▲ 收起内容' : '▼ 展开预览'}
+                </button>
+                <CopyButton text={turn.text} />
+                <DownloadButton
+                  text={turn.text}
+                  filename={turn.extra_metadata?.display_name || `attachment_${index + 1}.txt`}
+                />
+              </div>
+            </div>
+            {isAttachmentOpen ? (
+              <div className="p-4 text-xs font-mono whitespace-pre-wrap leading-relaxed max-h-96 overflow-y-auto bg-black/40 text-cyan-100/90 select-text border-t border-cyan-900/20">
+                {turn.text}
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="w-full text-left px-4 py-2 text-xs text-cyan-300/60 font-mono truncate cursor-pointer hover:bg-cyan-950/30 bg-transparent border-none"
+                onClick={() => setIsAttachmentOpen(true)}
+              >
+                {turn.text.slice(0, 160)}...
+              </button>
             )}
           </div>
         ) : (
