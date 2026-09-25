@@ -16,9 +16,7 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
         <div className="bg-zinc-900/70 border border-zinc-800 rounded-lg p-4">
           <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider flex items-center justify-between">
             <span>交互总场次</span>
-            <span className="text-[10px] text-zinc-500 font-mono">
-              [{activeRangeLabel}]
-            </span>
+            <span className="text-[10px] text-zinc-500 font-mono">[{activeRangeLabel}]</span>
           </div>
           <div className="mt-1.5 text-2xl font-bold text-white tracking-tight">
             {metrics.total_sessions} <span className="text-xs font-normal text-zinc-500">场</span>
@@ -31,9 +29,7 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
         <div className="bg-zinc-900/70 border border-zinc-800 rounded-lg p-4">
           <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider flex items-center justify-between">
             <span>时长中位数 (P50)</span>
-            <span className="text-[10px] text-zinc-500 font-mono">
-              [{activeRangeLabel}]
-            </span>
+            <span className="text-[10px] text-zinc-500 font-mono">[{activeRangeLabel}]</span>
           </div>
           <div className="mt-1.5 text-2xl font-bold text-indigo-400 tracking-tight">
             {metrics.dur_stats?.median ?? 0}{' '}
@@ -47,9 +43,7 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
         <div className="bg-zinc-900/70 border border-zinc-800 rounded-lg p-4">
           <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider flex items-center justify-between">
             <span>总 Token 能耗</span>
-            <span className="text-[10px] text-zinc-500 font-mono">
-              [{activeRangeLabel}]
-            </span>
+            <span className="text-[10px] text-zinc-500 font-mono">[{activeRangeLabel}]</span>
           </div>
           <div className="mt-1.5 text-2xl font-bold text-emerald-400 tracking-tight">
             {(metrics.tok_stats?.total || 0).toLocaleString()}
@@ -62,9 +56,7 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
         <div className="bg-zinc-900/70 border border-zinc-800 rounded-lg p-4">
           <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider flex items-center justify-between">
             <span>思维摩擦力</span>
-            <span className="text-[10px] text-zinc-500 font-mono">
-              [{activeRangeLabel}]
-            </span>
+            <span className="text-[10px] text-zinc-500 font-mono">[{activeRangeLabel}]</span>
           </div>
           <div className="mt-1.5 text-2xl font-bold text-amber-400 tracking-tight">
             {metrics.friction_stats?.branch_ratio ?? '0%'}
@@ -101,9 +93,7 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
           {metrics.duration_tiers && (
             <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5">
-              <h2 className="text-sm font-semibold text-zinc-200 mb-1">
-                ⏱️ 心智时长梯队切片
-              </h2>
+              <h2 className="text-sm font-semibold text-zinc-200 mb-1">⏱️ 心智时长梯队切片</h2>
               <p className="text-xs text-zinc-500 mb-3">
                 单次任务从首轮交互到最后收尾的时间窗口跨度
               </p>
@@ -114,9 +104,7 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
           {metrics.model_distribution && Object.keys(metrics.model_distribution).length > 0 && (
             <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5">
               <h2 className="text-sm font-semibold text-zinc-200 mb-1">🤖 模型偏好分布</h2>
-              <p className="text-xs text-zinc-500 mb-3">
-                各 Gemini 模型在所选周期内的调用场次
-              </p>
+              <p className="text-xs text-zinc-500 mb-3">各 Gemini 模型在所选周期内的调用场次</p>
               <ModelDistributionChart distribution={metrics.model_distribution} />
             </section>
           )}

@@ -2,12 +2,8 @@ import { useLocation, useRoute } from 'preact-iso';
 import { useMemo } from 'preact/hooks';
 import { SessionDetailPanel } from '../components/SessionDetailPanel';
 import { VirtualSessionList } from '../components/VirtualSessionList';
+import { sessionsLoadingSignal, sessionsSignal, sidebarCollapsedSignal } from '../state/session';
 import type { SessionItem } from '../types/metrics';
-import {
-  sessionsLoadingSignal,
-  sessionsSignal,
-  sidebarCollapsedSignal,
-} from '../state/session';
 
 export function SessionsRoute() {
   const { params } = useRoute();
@@ -62,7 +58,8 @@ export function SessionsRoute() {
             <div className="text-4xl mb-3">💬</div>
             <h3 className="text-base font-semibold text-zinc-300">会话工作台已就绪</h3>
             <p className="text-xs text-zinc-500 mt-1 max-w-sm leading-relaxed">
-              请在左侧列表中选择任意会话，查看包含完整 Markdown 呈现、内联附件、思考链与分支追踪的详细对话流。
+              请在左侧列表中选择任意会话，查看包含完整 Markdown
+              呈现、内联附件、思考链与分支追踪的详细对话流。
             </p>
           </div>
         )}

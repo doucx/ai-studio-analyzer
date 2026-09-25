@@ -10,11 +10,7 @@ import {
   setTimeRange,
   timeRangeSignal,
 } from './state/metrics';
-import {
-  fetchSessions,
-  sidebarCollapsedSignal,
-  toggleSidebar,
-} from './state/session';
+import { fetchSessions, sidebarCollapsedSignal, toggleSidebar } from './state/session';
 import {
   setupSyncEventListener,
   syncInProgressSignal,
