@@ -1,352 +1,248 @@
-已完成对 Phase 1 状态与逻辑下沉方案的设计。
+已完成 Phase 2 基于 `preact-iso` 的页面级路由骨架设计。
 
-我们将在保持现有 UI 和交互完全不变（Zero UI Breaking）的前提下，将混杂在 `app.tsx` 中的全局状态与网络通讯逻辑解耦为领域 Store，并将全景大盘指标卡片与图表抽离为独立的 `OverviewDashboard` 组件。
+我们将引入 `preact-iso` 极轻量路由库（约 1.5KB），将应用拆分为独立的**全景大盘路由 (`/`)** 与**会话工作台路由 (`/sessions` 与 `/sessions/:id`)**，使每个会话具备原生 URL 寻址与分享能力，并在顶部导航栏加入多视图切换 Tab。
 
-## [WIP] refactor(frontend): 下沉全局状态并拆分解耦看板视图
+## [WIP] feat(frontend): 基于 preact-iso 构建页面级多路由骨架
 
 ### 用户需求
-针对前端应用从 MVP 单文件演进导致的逻辑紧耦合问题，执行重构第一阶段（Phase 1: 状态与逻辑下沉）：
-1. 将散落在 `app.tsx` 顶部的全局 Signals 按照业务领域拆分下沉至独立的状态管理层；
-2. 抽离 SSE 实时事件流监听与云盘增量同步调度逻辑；
-3. 将全景看板指标大盘（指标卡、时序趋势图、心智时长梯队、模型偏好）拆分为专职视图组件；
-4. 保证现有 UI、交互逻辑与虚拟滚动列表行为 100% 一致。
+推进前端重构路线图第二阶段（Phase 2: 页面级骨架与路由拆分）：
+1. 引入 `preact-iso` 路由解决方案，解决单屏堆砌视图过载的问题；
+2. 将全景概览看板拆分为独立页面路由（`/`）；
+3. 将会话检索与沉浸详情拆分为独立工作台路由（`/sessions` 与 `/sessions/:id`），支持根据 URL 路径直接定位和分享具体会话；
+4. 在全局 Header 中添加视图导航 Tab，并在未找到路由时提供 404 兜底机制。
 
 ### 评论
-当前 `app.tsx` 承担了状态枢纽、通信调度与视图渲染的多重职责，是后续引入独立分析页与多维筛选的主要阻碍。本次重构在不改动外部可见特性的前提下，实现职责归位与状态分层，为后续轻量路由与多维下钻过滤打下清晰坚固的架构底座。
+当前系统虽然通过 Phase 1 完成了状态解耦，但所有 UI 仍集中在单屏展示。引入轻量路由后，系统获得了真正的页面级隔离与深度链接能力（Deep Linking），彻底解决了用户刷新页面会话丢失、无法收藏特定会话 URL 的痛点，也为后续接入「`/topics` 主题认知分析」与「`/cloud` 词云透视」预留了标准插槽。
 
 ### 目标
-1. 新建 `frontend/src/state/metrics.ts`：管理全局时间切片、聚合指标拉取与指标加载状态；
-2. 新建 `frontend/src/state/session.ts`：管理会话列表数据源、选中会话实体、侧边栏折叠状态与调度操作；
-3. 新建 `frontend/src/state/sync.ts`：封装 Google Drive 增量同步请求与 SSE 事件通道的订阅生命周期；
-4. 新建 `frontend/src/components/OverviewDashboard.tsx`：承接全景看板的所有图表与指标卡片；
-5. 重构 `frontend/src/app.tsx`：使其精简为仅关注应用骨架布局与路由/面板分发的高层组件（代码量减少 70%）。
+1. 在 `frontend/package.json` 中声明 `preact-iso` 依赖并完成安装；
+2. 新建 `frontend/src/routes/OverviewRoute.tsx`：承接全景大盘看板视图；
+3. 新建 `frontend/src/routes/SessionsRoute.tsx`：承接虚拟滚动列表与会话详情的双栏/单栏工作台视图，支持 `:id` 动态路径解析；
+4. 新建 `frontend/src/routes/NotFoundRoute.tsx`：提供优雅的路由兜底回跳；
+5. 重构 `frontend/src/app.tsx`：集成 `LocationProvider`、`Router` 与全局导航 Tab。
 
 ### 基本原理
-通过 Preact Signals 的原子化响应式特性，将状态以模块化导出（Module-level Signals），各组件根据关注点订阅特定领域信号，避免根组件因非相关状态变更引发的无效重渲染。同时采用外观模式封装异步 API 与 SSE 监听，保证副作用生命周期与 UI 渲染生命周期的清晰解耦。
+`preact-iso` 是 Preact 官方推荐的超轻量客户端/同构路由组件库。其核心通过 `LocationProvider` 监听 HTML5 History API，配合 `Router` 进行模式匹配，并通过 `useRoute()` 和 `useLocation()` 实现动态参数抽取和编程式导航。相比庞大的通用路由库，`preact-iso` 体积仅 1.5KB，完美契合本项目毫秒级极速交互的技术基调。
 
 ### 标签
-#intent/refine #flow/ready #priority/high
-#comp/frontend #concept/state #scope/dx
+#intent/build #flow/ready #priority/high
+#comp/frontend #concept/navigation #scope/ux #scope/dx
 #ai/instruct
 #task/domain/ui
-#task/object/state-layer-refactor
-#task/action/refactor
-#task/state/begin #task/status/active
+#task/object/routing-infrastructure
+#task/action/implementation
+#task/state/continue #task/status/active
 
 ---
 
 ### Script
 
-#### Acts 1: 创建指标与时间切片状态模块 (`state/metrics.ts`)
+#### Acts 1: 添加 `preact-iso` 依赖并执行安装
 
-我们将提取时间切片配置与指标拉取逻辑，建立独立指标领域 Store。
+更新 `frontend/package.json` 并执行安装指令引入 `preact-iso`。
+
+~~~~~act
+patch_file
+frontend/package.json
+~~~~~
+~~~~~json
+    "marked": "^18.0.14",
+    "preact": "^10.25.4",
+    "tailwind-merge": "^2.5.5"
+  },
+~~~~~
+~~~~~json
+    "marked": "^18.0.14",
+    "preact": "^10.25.4",
+    "preact-iso": "^2.9.1",
+    "tailwind-merge": "^2.5.5"
+  },
+~~~~~
+
+#### Acts 2: 创建全景大盘路由页面 (`routes/OverviewRoute.tsx`)
+
+承接指标大盘，当数据处于加载期时呈现骨架占位，数据就绪后渲染 `OverviewDashboard`。
 
 ~~~~~act
 write_file
-frontend/src/state/metrics.ts
+frontend/src/routes/OverviewRoute.tsx
 ~~~~~
 ~~~~~typescript
-import { signal } from '@preact/signals';
-import type { MetricsSummary } from '../types/metrics';
+import { OverviewDashboard } from '../components/OverviewDashboard';
+import {
+  TIME_RANGE_OPTIONS,
+  metricsLoadingSignal,
+  metricsSignal,
+  timeRangeSignal,
+} from '../state/metrics';
 
-export type TimeRange = '7d' | '30d' | '90d' | 'this_year' | 'all';
+export function OverviewRoute() {
+  const metrics = metricsSignal.value;
+  const isLoading = metricsLoadingSignal.value;
+  const currentRange = timeRangeSignal.value;
+  const activeRangeLabel = TIME_RANGE_OPTIONS.find((o) => o.key === currentRange)?.label || '全部';
 
-export const TIME_RANGE_OPTIONS: { key: TimeRange; label: string }[] = [
-  { key: '7d', label: '7天' },
-  { key: '30d', label: '30天' },
-  { key: '90d', label: '90天' },
-  { key: 'this_year', label: '今年' },
-  { key: 'all', label: '全部' },
-];
-
-export const timeRangeSignal = signal<TimeRange>('all');
-export const metricsSignal = signal<MetricsSummary | null>(null);
-export const metricsLoadingSignal = signal<boolean>(true);
-
-export async function fetchMetrics(range: TimeRange = timeRangeSignal.value) {
-  if (!metricsSignal.value) {
-    metricsLoadingSignal.value = true;
+  if (isLoading && !metrics) {
+    return (
+      <div className="py-24 text-center text-zinc-500 text-sm animate-pulse">
+        正在从本地 SQLite 数据库聚合全景认知审计指标...
+      </div>
+    );
   }
-  try {
-    const res = await fetch(`/api/metrics?range=${range}`);
-    const data = await res.json();
-    metricsSignal.value = data;
-  } catch (err) {
-    console.error('加载审计指标失败:', err);
-  } finally {
-    metricsLoadingSignal.value = false;
+
+  if (!metrics) {
+    return (
+      <div className="py-24 text-center text-zinc-500 text-sm">
+        未检索到符合当前时间切片的统计指标
+      </div>
+    );
   }
-}
 
-export function setTimeRange(newRange: TimeRange) {
-  timeRangeSignal.value = newRange;
-}
-~~~~~
-
-#### Acts 2: 创建会话数据与选择状态模块 (`state/session.ts`)
-
-我们将抽离会话列表集合、选中实体与侧边栏折叠状态。
-
-~~~~~act
-write_file
-frontend/src/state/session.ts
-~~~~~
-~~~~~typescript
-import { signal } from '@preact/signals';
-import type { SessionItem } from '../types/metrics';
-import { timeRangeSignal } from './metrics';
-
-export const sessionsSignal = signal<SessionItem[]>([]);
-export const selectedSessionSignal = signal<SessionItem | null>(null);
-export const sessionsLoadingSignal = signal<boolean>(true);
-export const sidebarCollapsedSignal = signal<boolean>(false);
-
-export async function fetchSessions(range = timeRangeSignal.value) {
-  if (sessionsSignal.value.length === 0) {
-    sessionsLoadingSignal.value = true;
-  }
-  try {
-    const res = await fetch(`/api/sessions?range=${range}`);
-    const data = await res.json();
-    sessionsSignal.value = data;
-  } catch (err) {
-    console.error('加载会话列表失败:', err);
-  } finally {
-    sessionsLoadingSignal.value = false;
-  }
-}
-
-export function selectSession(session: SessionItem | null) {
-  selectedSessionSignal.value = session;
-}
-
-export function toggleSidebar() {
-  sidebarCollapsedSignal.value = !sidebarCollapsedSignal.value;
-}
-~~~~~
-
-#### Acts 3: 创建云盘增量同步与 SSE 通讯模块 (`state/sync.ts`)
-
-我们将异步同步任务触发与 SSE 事件监听管道封装为独立服务。
-
-~~~~~act
-write_file
-frontend/src/state/sync.ts
-~~~~~
-~~~~~typescript
-import { signal } from '@preact/signals';
-
-export const syncInProgressSignal = signal<boolean>(false);
-export const syncProgressTextSignal = signal<string>('');
-
-export async function triggerSync(limit = 50) {
-  syncInProgressSignal.value = true;
-  syncProgressTextSignal.value = '准备同步...';
-  try {
-    await fetch(`/api/sync?limit=${limit}`, { method: 'POST' });
-  } catch (err) {
-    console.error('触发同步失败:', err);
-    syncInProgressSignal.value = false;
-    syncProgressTextSignal.value = '';
-  }
-}
-
-export function setupSyncEventListener(onSyncComplete: () => void): () => void {
-  const eventSource = new EventSource('/api/sync/events');
-
-  eventSource.addEventListener('sync_progress', (e) => {
-    try {
-      const data = JSON.parse(e.data);
-      syncProgressTextSignal.value = `${data.current}/${data.total} (拉取:${data.downloaded})`;
-    } catch {
-      // 忽略解析错误
-    }
-  });
-
-  eventSource.addEventListener('sync_done', () => {
-    syncInProgressSignal.value = false;
-    syncProgressTextSignal.value = '';
-    onSyncComplete();
-  });
-
-  eventSource.addEventListener('sync_error', (e) => {
-    console.error('同步异常:', e.data);
-    syncInProgressSignal.value = false;
-    syncProgressTextSignal.value = '';
-  });
-
-  return () => {
-    eventSource.close();
-  };
-}
-~~~~~
-
-#### Acts 4: 抽离全景看板大盘组件 (`components/OverviewDashboard.tsx`)
-
-将关键能耗卡片、每日趋势时序图、时长心智梯队切片与模型偏好图表封装为自包含的看板组件。
-
-~~~~~act
-write_file
-frontend/src/components/OverviewDashboard.tsx
-~~~~~
-~~~~~typescript
-import type { MetricsSummary } from '../types/metrics';
-import { DurationTiersChart } from './charts/DurationTiersChart';
-import { ModelDistributionChart } from './charts/ModelDistributionChart';
-import { TokenTrendChart } from './charts/TokenTrendChart';
-
-interface Props {
-  metrics: MetricsSummary;
-  activeRangeLabel: string;
-}
-
-export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
   return (
-    <div className="space-y-6">
-      {/* 四大关键能耗卡片 */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="bg-zinc-900/70 border border-zinc-800 rounded-lg p-4">
-          <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider flex items-center justify-between">
-            <span>交互总场次</span>
-            <span className="text-[10px] text-zinc-500 font-mono">
-              [{activeRangeLabel}]
-            </span>
-          </div>
-          <div className="mt-1.5 text-2xl font-bold text-white tracking-tight">
-            {metrics.total_sessions} <span className="text-xs font-normal text-zinc-500">场</span>
-          </div>
-          <div className="mt-1 text-[11px] text-zinc-500 truncate">
-            输入: {(metrics.total_user_chars || 0).toLocaleString()} 字符
-          </div>
-        </div>
-
-        <div className="bg-zinc-900/70 border border-zinc-800 rounded-lg p-4">
-          <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider flex items-center justify-between">
-            <span>时长中位数 (P50)</span>
-            <span className="text-[10px] text-zinc-500 font-mono">
-              [{activeRangeLabel}]
-            </span>
-          </div>
-          <div className="mt-1.5 text-2xl font-bold text-indigo-400 tracking-tight">
-            {metrics.dur_stats?.median ?? 0}{' '}
-            <span className="text-xs font-normal text-zinc-500">min</span>
-          </div>
-          <div className="mt-1 text-[11px] text-zinc-500 truncate">
-            多轮 P50: {metrics.multi_dur_stats?.median ?? 0}m | Max: {metrics.dur_stats?.max ?? 0}m
-          </div>
-        </div>
-
-        <div className="bg-zinc-900/70 border border-zinc-800 rounded-lg p-4">
-          <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider flex items-center justify-between">
-            <span>总 Token 能耗</span>
-            <span className="text-[10px] text-zinc-500 font-mono">
-              [{activeRangeLabel}]
-            </span>
-          </div>
-          <div className="mt-1.5 text-2xl font-bold text-emerald-400 tracking-tight">
-            {(metrics.tok_stats?.total || 0).toLocaleString()}
-          </div>
-          <div className="mt-1 text-[11px] text-zinc-500 truncate">
-            思考链 (Thinking): {metrics.tok_stats?.thought_ratio ?? '0%'}
-          </div>
-        </div>
-
-        <div className="bg-zinc-900/70 border border-zinc-800 rounded-lg p-4">
-          <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider flex items-center justify-between">
-            <span>思维摩擦力</span>
-            <span className="text-[10px] text-zinc-500 font-mono">
-              [{activeRangeLabel}]
-            </span>
-          </div>
-          <div className="mt-1.5 text-2xl font-bold text-amber-400 tracking-tight">
-            {metrics.friction_stats?.branch_ratio ?? '0%'}
-          </div>
-          <div className="mt-1 text-[11px] text-zinc-500 truncate">
-            {metrics.friction_stats?.branch_sessions ?? 0} 场分叉 (
-            {metrics.friction_stats?.total_retries ?? 0} 次重试)
-          </div>
-        </div>
-      </section>
-
-      {/* 每日 Token 消耗趋势时序图 */}
-      {metrics.daily_trends && metrics.daily_trends.length > 0 && (
-        <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h2 className="text-sm font-semibold text-zinc-200">
-                📈 每日 Token 能耗趋势 (按时间序列)
-              </h2>
-              <p className="text-xs text-zinc-500 mt-0.5">
-                展示【{activeRangeLabel}】周期内的总 Token 与思考链能耗
-              </p>
-            </div>
-            <span className="text-xs font-mono text-zinc-400 bg-zinc-800/60 px-2 py-1 rounded">
-              {metrics.daily_trends.length} 活跃天
-            </span>
-          </div>
-          <TokenTrendChart data={metrics.daily_trends} />
-        </section>
-      )}
-
-      {/* 时长梯队与模型偏好双图并排 */}
-      {metrics.total_sessions > 0 && (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-          {metrics.duration_tiers && (
-            <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5">
-              <h2 className="text-sm font-semibold text-zinc-200 mb-1">
-                ⏱️ 心智时长梯队切片
-              </h2>
-              <p className="text-xs text-zinc-500 mb-3">
-                单次任务从首轮交互到最后收尾的时间窗口跨度
-              </p>
-              <DurationTiersChart tiers={metrics.duration_tiers} />
-            </section>
-          )}
-
-          {metrics.model_distribution && Object.keys(metrics.model_distribution).length > 0 && (
-            <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5">
-              <h2 className="text-sm font-semibold text-zinc-200 mb-1">🤖 模型偏好分布</h2>
-              <p className="text-xs text-zinc-500 mb-3">
-                各 Gemini 模型在所选周期内的调用场次
-              </p>
-              <ModelDistributionChart distribution={metrics.model_distribution} />
-            </section>
-          )}
-        </div>
-      )}
+    <div className="max-w-7xl mx-auto w-full p-4 md:p-6 overflow-y-auto">
+      <OverviewDashboard metrics={metrics} activeRangeLabel={activeRangeLabel} />
     </div>
   );
 }
 ~~~~~
 
-#### Acts 5: 重构主应用入口 (`app.tsx`)
+#### Acts 3: 创建会话工作台路由页面 (`routes/SessionsRoute.tsx`)
 
-使用新的状态管理与拆分组件重写 `app.tsx`，大幅降低圈复杂度与代码体量。
+处理 `/sessions` 与 `/sessions/:id`，支持根据路由参数自动高亮选中项、双栏/全屏响应式布局以及 URL 双向绑定。
+
+~~~~~act
+write_file
+frontend/src/routes/SessionsRoute.tsx
+~~~~~
+~~~~~typescript
+import { useLocation, useRoute } from 'preact-iso';
+import { useMemo } from 'preact/hooks';
+import { SessionDetailPanel } from '../components/SessionDetailPanel';
+import { VirtualSessionList } from '../components/VirtualSessionList';
+import type { SessionItem } from '../types/metrics';
+import {
+  sessionsLoadingSignal,
+  sessionsSignal,
+  sidebarCollapsedSignal,
+} from '../state/session';
+
+export function SessionsRoute() {
+  const { params } = useRoute();
+  const { route } = useLocation();
+
+  const sessions = sessionsSignal.value;
+  const isLoading = sessionsLoadingSignal.value;
+  const isSidebarCollapsed = sidebarCollapsedSignal.value;
+  const selectedId = params.id || null;
+
+  // 根据 URL 的 :id 参数匹配当前会话实体
+  const currentSession = useMemo<SessionItem | null>(() => {
+    if (!selectedId || sessions.length === 0) return null;
+    return sessions.find((s) => s.file_id === selectedId) || null;
+  }, [selectedId, sessions]);
+
+  const handleSelectSession = (s: SessionItem) => {
+    route(`/sessions/${s.file_id}`);
+  };
+
+  const handleCloseDetail = () => {
+    route('/sessions');
+  };
+
+  return (
+    <div
+      className={`flex-1 flex flex-col lg:flex-row overflow-hidden p-4 md:p-6 gap-6 w-full mx-auto transition-all duration-300 ${
+        isSidebarCollapsed ? 'max-w-full px-6' : 'max-w-7xl'
+      }`}
+    >
+      {/* 左侧：5000+ 虚拟列表会话检索器 */}
+      {!isSidebarCollapsed && (
+        <aside className="w-full lg:w-[380px] h-[520px] lg:h-[calc(100vh-120px)] flex-shrink-0">
+          <VirtualSessionList
+            sessions={sessions}
+            selectedId={selectedId}
+            onSelect={handleSelectSession}
+          />
+        </aside>
+      )}
+
+      {/* 右侧：单会话详情 或 空状态引导 */}
+      <main className="flex-1 overflow-y-auto lg:h-[calc(100vh-120px)] pr-1 w-full flex flex-col">
+        {isLoading && sessions.length === 0 ? (
+          <div className="py-24 text-center text-zinc-500 text-sm animate-pulse">
+            正在载入会话工作台索引...
+          </div>
+        ) : currentSession ? (
+          <SessionDetailPanel session={currentSession} onClose={handleCloseDetail} />
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center p-12 text-center border border-zinc-800/80 bg-zinc-900/30 rounded-lg">
+            <div className="text-4xl mb-3">💬</div>
+            <h3 className="text-base font-semibold text-zinc-300">会话工作台已就绪</h3>
+            <p className="text-xs text-zinc-500 mt-1 max-w-sm leading-relaxed">
+              请在左侧列表中选择任意会话，查看包含完整 Markdown 呈现、内联附件、思考链与分支追踪的详细对话流。
+            </p>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+~~~~~
+
+#### Acts 4: 创建 404 兜底路由 (`routes/NotFoundRoute.tsx`)
+
+为非法或过期的 URL 路径提供优雅的友好提示与导航跳回。
+
+~~~~~act
+write_file
+frontend/src/routes/NotFoundRoute.tsx
+~~~~~
+~~~~~typescript
+import { useLocation } from 'preact-iso';
+
+export function NotFoundRoute() {
+  const { route } = useLocation();
+
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center p-16 text-center">
+      <div className="text-5xl mb-4">🔍</div>
+      <h2 className="text-lg font-bold text-zinc-200">页面不存在</h2>
+      <p className="text-xs text-zinc-500 mt-1 mb-6">您访问的路由或会话路径未找到</p>
+      <button
+        type="button"
+        onClick={() => route('/')}
+        className="px-4 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded transition shadow-sm"
+      >
+        返回全景大盘
+      </button>
+    </div>
+  );
+}
+~~~~~
+
+#### Acts 5: 重构主应用入口 (`app.tsx`) 集成路由与导航栏
+
+使用 `LocationProvider` 与 `Router` 装配整个前端体系，并加入视图 Tab。
 
 ~~~~~act
 write_file
 frontend/src/app.tsx
 ~~~~~
 ~~~~~typescript
+import { LocationProvider, Route, Router, useLocation } from 'preact-iso';
 import { useEffect } from 'preact/hooks';
-import { OverviewDashboard } from './components/OverviewDashboard';
-import { SessionDetailPanel } from './components/SessionDetailPanel';
-import { VirtualSessionList } from './components/VirtualSessionList';
+import { NotFoundRoute } from './routes/NotFoundRoute';
+import { OverviewRoute } from './routes/OverviewRoute';
+import { SessionsRoute } from './routes/SessionsRoute';
 import {
   TIME_RANGE_OPTIONS,
   type TimeRange,
   fetchMetrics,
-  metricsLoadingSignal,
-  metricsSignal,
   setTimeRange,
   timeRangeSignal,
 } from './state/metrics';
 import {
   fetchSessions,
-  selectSession,
-  selectedSessionSignal,
-  sessionsLoadingSignal,
-  sessionsSignal,
   sidebarCollapsedSignal,
   toggleSidebar,
 } from './state/session';
@@ -366,6 +262,130 @@ function handleTimeRangeChange(newRange: TimeRange) {
   loadAllData(newRange);
 }
 
+function HeaderBar() {
+  const { path, route } = useLocation();
+  const currentRange = timeRangeSignal.value;
+  const isSidebarCollapsed = sidebarCollapsedSignal.value;
+  const isSessionsView = path.startsWith('/sessions');
+
+  return (
+    <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur px-6 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-0 z-20">
+      <div className="flex items-center gap-3">
+        {isSessionsView && (
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="p-1.5 text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded transition text-xs"
+            title={isSidebarCollapsed ? '展开会话历史侧边栏' : '收起会话历史侧边栏'}
+          >
+            {isSidebarCollapsed ? '📂 展开' : '◀ 收起'}
+          </button>
+        )}
+        <button
+          type="button"
+          className="text-2xl cursor-pointer bg-transparent border-none p-0 leading-none"
+          onClick={() => route('/')}
+          title="回到概览看板"
+        >
+          🧠
+        </button>
+        <div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="text-base font-bold tracking-tight text-white cursor-pointer hover:text-indigo-400 transition bg-transparent border-none p-0 text-left"
+              onClick={() => route('/')}
+            >
+              AI Studio Analyzer
+            </button>
+            <span className="text-[10px] font-mono uppercase bg-indigo-950/80 text-indigo-400 border border-indigo-800/60 px-1.5 py-0.2 rounded">
+              v0.2 Workstation
+            </span>
+          </div>
+        </div>
+
+        {/* 页面主视图切换 Tab */}
+        <nav className="flex items-center gap-1 ml-4 bg-zinc-900 border border-zinc-800 p-0.5 rounded-lg text-xs">
+          <button
+            type="button"
+            onClick={() => route('/')}
+            className={`px-3 py-1 rounded-md font-medium transition ${
+              path === '/'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+            }`}
+          >
+            📊 全景大盘
+          </button>
+          <button
+            type="button"
+            onClick={() => route('/sessions')}
+            className={`px-3 py-1 rounded-md font-medium transition ${
+              isSessionsView
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+            }`}
+          >
+            💬 会话工作台
+          </button>
+        </nav>
+      </div>
+
+      <div className="flex items-center gap-3 flex-wrap">
+        {/* 全局时间范围胶囊 */}
+        <div className="inline-flex items-center rounded-lg bg-zinc-900 border border-zinc-800 p-0.5 shadow-inner">
+          {TIME_RANGE_OPTIONS.map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => handleTimeRangeChange(key)}
+              className={`px-2.5 py-1 text-xs rounded-md font-medium transition-all ${
+                currentRange === key
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="h-4 w-px bg-zinc-800 hidden sm:block" />
+
+        {/* 快捷导出与增量同步操作组 */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <a
+            href={`/api/export/csv?range=${currentRange}`}
+            download
+            className="px-2.5 py-1 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 rounded transition"
+          >
+            📥 CSV
+          </a>
+          <a
+            href={`/api/export/jsonl?range=${currentRange}`}
+            download
+            className="px-2.5 py-1 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 rounded transition"
+          >
+            📑 JSONL
+          </a>
+          <button
+            type="button"
+            onClick={() => triggerSync(50)}
+            disabled={syncInProgressSignal.value}
+            className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded transition shadow-sm"
+          >
+            {syncInProgressSignal.value
+              ? syncProgressTextSignal.value
+                ? `同步中 ${syncProgressTextSignal.value}`
+                : '同步中...'
+              : '增量同步 (50)'}
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}
+
 export function App() {
   useEffect(() => {
     loadAllData();
@@ -375,152 +395,25 @@ export function App() {
     return cleanupSync;
   }, []);
 
-  const metrics = metricsSignal.value;
-  const sessions = sessionsSignal.value;
-  const currentRange = timeRangeSignal.value;
-  const activeRangeLabel = TIME_RANGE_OPTIONS.find((o) => o.key === currentRange)?.label || '全部';
-  const selectedSession = selectedSessionSignal.value;
-  const isSidebarCollapsed = sidebarCollapsedSignal.value;
-  const isLoading = metricsLoadingSignal.value && sessionsLoadingSignal.value;
-
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans">
-      {/* 顶部全局控制栏 */}
-      <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-0 z-20">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            className="p-1.5 text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded transition text-xs"
-            title={isSidebarCollapsed ? '展开会话历史侧边栏' : '收起会话历史侧边栏'}
-          >
-            {isSidebarCollapsed ? '📂 展开' : '◀ 收起'}
-          </button>
-          <button
-            type="button"
-            className="text-2xl cursor-pointer bg-transparent border-none p-0 leading-none"
-            onClick={() => selectSession(null)}
-            title="回到概览看板"
-          >
-            🧠
-          </button>
-          <div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="text-lg font-bold tracking-tight text-white cursor-pointer hover:text-indigo-400 transition bg-transparent border-none p-0 text-left"
-                onClick={() => selectSession(null)}
-              >
-                AI Studio Analyzer
-              </button>
-              <span className="text-[10px] font-mono uppercase bg-indigo-950/80 text-indigo-400 border border-indigo-800/60 px-1.5 py-0.2 rounded">
-                v0.2 Workstation
-              </span>
-            </div>
-            <p className="text-[11px] text-zinc-400">
-              5,000+ 会话虚拟工作台 · 个人认知审计与元工作流沉淀
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* 全局时间范围胶囊 */}
-          <div className="inline-flex items-center rounded-lg bg-zinc-900 border border-zinc-800 p-0.5 shadow-inner">
-            {TIME_RANGE_OPTIONS.map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => handleTimeRangeChange(key)}
-                className={`px-2.5 py-1 text-xs rounded-md font-medium transition-all ${
-                  currentRange === key
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div className="h-4 w-px bg-zinc-800 hidden sm:block" />
-
-          {/* 快捷操作组 */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <a
-              href={`/api/export/csv?range=${currentRange}`}
-              download
-              className="px-2.5 py-1 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 rounded transition"
-            >
-              📥 CSV
-            </a>
-            <a
-              href={`/api/export/jsonl?range=${currentRange}`}
-              download
-              className="px-2.5 py-1 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 rounded transition"
-            >
-              📑 JSONL
-            </a>
-            <button
-              type="button"
-              onClick={() => triggerSync(50)}
-              disabled={syncInProgressSignal.value}
-              className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded transition shadow-sm"
-            >
-              {syncInProgressSignal.value
-                ? syncProgressTextSignal.value
-                  ? `同步中 ${syncProgressTextSignal.value}`
-                  : '同步中...'
-                : '增量同步 (50)'}
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* 工作台主视口：Master-Detail 布局 */}
-      <div
-        className={`flex-1 flex flex-col lg:flex-row overflow-hidden p-4 md:p-6 gap-6 w-full mx-auto transition-all duration-300 ${
-          isSidebarCollapsed ? 'max-w-full px-6' : 'max-w-7xl'
-        }`}
-      >
-        {/* 左侧栏：5000+ 虚拟列表会话查看器 */}
-        {!isSidebarCollapsed && (
-          <aside className="w-full lg:w-[380px] h-[520px] lg:h-[calc(100vh-120px)] flex-shrink-0">
-            <VirtualSessionList
-              sessions={sessions}
-              selectedId={selectedSession?.file_id ?? null}
-              onSelect={(s) => selectSession(s)}
-            />
-          </aside>
-        )}
-
-        {/* 右侧主视口：全景审计看板 或 单会话详情 */}
-        <main className="flex-1 overflow-y-auto lg:h-[calc(100vh-120px)] pr-1 space-y-6 w-full">
-          {isLoading && (
-            <div className="py-24 text-center text-zinc-500 text-sm animate-pulse">
-              正在从本地 SQLite WAL 数据库加载全景认知指标与会话索引...
-            </div>
-          )}
-
-          {!isLoading && selectedSession && (
-            <SessionDetailPanel
-              session={selectedSession}
-              onClose={() => selectSession(null)}
-            />
-          )}
-
-          {!isLoading && !selectedSession && metrics && (
-            <OverviewDashboard metrics={metrics} activeRangeLabel={activeRangeLabel} />
-          )}
-        </main>
+    <LocationProvider>
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans">
+        <HeaderBar />
+        <Router>
+          <Route path="/" component={OverviewRoute} />
+          <Route path="/sessions" component={SessionsRoute} />
+          <Route path="/sessions/:id" component={SessionsRoute} />
+          <Route default component={NotFoundRoute} />
+        </Router>
       </div>
-    </div>
+    </LocationProvider>
   );
 }
 ~~~~~
 
 ### 下一步建议
 
-Phase 1 已经将全局状态解耦下沉完毕，且不改变任何已有视图表现。后续建议：
-1. **测试与语法验证**: 执行 `npm run check` (Biome + `tsc --noEmit`) 验证所有类型与代码风格；
-2. **进入 Phase 2 (页面级路由骨架)**: 将当前通过三元运算符判断的 `selectedSession ? <Detail> : <Dashboard>` 升级为轻量路由（例如 Tab 或 Hash 路由），支持直接通过 URL 打开指定会话（`/sessions/:id`）以及导航到未来的 `/topics` 分析页；
-3. 验证无误后可生成 `[COMMIT]` 计划以归档 Phase 1 代码成果。
+Phase 2 已经将页面级路由骨架搭建完毕，支持多视图切换与原生 URL 会话持久化。后续建议：
+1. **代码检查与构建验证**: 执行 `cd frontend && npm run check`（包含 Biome 代码校验与 TypeScript 类型检查）确认无任何类型与语法警告；
+2. **进入 Phase 3 (会话多维复合筛选)**: 针对笔记《查看不同模型轮次深度的会话明细.md》的要求，在 `SessionsRoute` 中为虚拟列表上方增加「模型多选筛选器」与「轮次深度分段按钮（单轮快问 / 多轮攻坚 / 分叉重试）」；
+3. 验证功能正常后，可提交对应的 Git 变更记录。
