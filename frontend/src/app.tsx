@@ -1,7 +1,5 @@
 import {
   Brain,
-  FileSpreadsheet,
-  FileText,
   LayoutDashboard,
   MessagesSquare,
   PanelLeftClose,
@@ -130,26 +128,8 @@ function HeaderBar() {
 
         <div className="h-4 w-px bg-zinc-800 hidden sm:block" />
 
-        {/* 快捷导出与增量同步操作组 */}
+        {/* 增量同步操作组 */}
         <div className="flex items-center gap-2 flex-wrap">
-          <a
-            href={`/api/export/csv?range=${currentRange}`}
-            download
-            className="px-2.5 py-1 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 rounded transition flex items-center gap-1"
-            title="导出概览 CSV"
-          >
-            <FileSpreadsheet size={13} />
-            <span>CSV</span>
-          </a>
-          <a
-            href={`/api/export/jsonl?range=${currentRange}`}
-            download
-            className="px-2.5 py-1 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 rounded transition flex items-center gap-1"
-            title="导出提问聚类 JSONL"
-          >
-            <FileText size={13} />
-            <span>JSONL</span>
-          </a>
           <button
             type="button"
             onClick={() => triggerSync(50)}
