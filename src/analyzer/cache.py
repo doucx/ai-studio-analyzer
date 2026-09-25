@@ -32,6 +32,7 @@ class SQLiteCache:
             cursor = conn.cursor()
             cursor.execute("PRAGMA journal_mode=WAL;")
             cursor.execute("PRAGMA synchronous=NORMAL;")
+            cursor.execute("PRAGMA wal_autocheckpoint=1000;")
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS file_cache (
                     file_id TEXT PRIMARY KEY,
@@ -72,6 +73,16 @@ class SQLiteCache:
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_sidx_date 
                 ON session_index(date);
+            """)
+            # 全文检索虚表：采用 trigram 分词器支持中文、英文及代码子串匹配
+            cursor.execute("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS session_fts USING fts5(
+                    file_id,
+                    title,
+                    system_instruction,
+                    content,
+                    tokenize = 'trigram'
+                );
             """)
             conn.commit()
 
@@ -125,6 +136,32 @@ class SQLiteCache:
             cursor.execute("SELECT COUNT(*) AS total FROM file_cache;")
             row = cursor.fetchone()
             return row["total"] if row else 0
+
+    def checkpoint(self, truncate: bool = True) -> Tuple[int, int, int]:
+        """
+        显式将 WAL 脏页完整刷回主数据库文件并释放磁盘空间。
+        :param truncate: 是否截断 WAL 文件归零
+        :return: (busy_flag, log_pages, checkpointed_pages)
+        """
+        mode = "TRUNCATE" if truncate else "PASSIVE"
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"PRAGMA wal_checkpoint({mode});")
+            row = cursor.fetchone()
+            return tuple(row) if row else (0, 0, 0)
+
+    def vacuum(self):
+        """整理并压缩数据库碎片"""
+        with self._get_connection() as conn:
+            conn.execute("VACUUM;")
+
+    def clear_indices(self):
+        """清空二级索引与 FTS 虚表并重新初始化结构（重建前调用）"""
+        with self._get_connection() as conn:
+            conn.execute("DROP TABLE IF EXISTS session_fts;")
+            conn.execute("DELETE FROM session_index;")
+            conn.commit()
+        self._init_db()
 
     def iter_all_data(self) -> Iterator[Tuple[str, str, Dict[str, Any]]]:
         """流式迭代全量缓存记录，避免一次性消耗过多内存"""
@@ -229,6 +266,84 @@ class SQLiteCache:
             cursor.execute(sql, params)
             rows = cursor.fetchall()
             return [dict(r) for r in rows]
+
+    def upsert_session_fts(self, s: Any):
+        """将单个会话的全部对话正文物化写入 FTS5 虚拟表"""
+        turn_texts = []
+        for idx, t in enumerate(getattr(s, "turns", []), start=1):
+            if getattr(t, "is_thought", False):
+                turn_texts.append(f"[Thinking #{idx}]: {t.text}")
+            elif getattr(t, "payload_type", "text") == "text" and t.text:
+                role_label = "User" if t.role == "user" else "Model"
+                turn_texts.append(f"[{role_label} #{idx}]: {t.text}")
+            elif getattr(t, "payload_type", "text") == "inlineFile":
+                dname = (
+                    t.extra_metadata.get("display_name", "")
+                    if getattr(t, "extra_metadata", None)
+                    else ""
+                )
+                turn_texts.append(f"[附件: {dname}] {t.text[:500]}")
+            elif getattr(t, "payload_type", "text") == "driveDocument":
+                turn_texts.append(f"[挂载云盘: {t.text}]")
+
+        full_content = "\n".join(turn_texts)
+        sys_inst = getattr(s, "system_instruction", "") or ""
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM session_fts WHERE file_id = ?;", (s.file_id,))
+            cursor.execute(
+                """
+                INSERT INTO session_fts (file_id, title, system_instruction, content)
+                VALUES (?, ?, ?, ?);
+                """,
+                (s.file_id, s.name, sys_inst, full_content),
+            )
+            conn.commit()
+
+    def search_fts(
+        self,
+        query: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """基于 FTS5 Trigram 与 BM25 进行全文检索，并提取上下文命中片段 (Snippet)"""
+        clean_query = query.strip().replace('"', '""')
+        if not clean_query:
+            return []
+
+        fts_match_expr = f'"{clean_query}"'
+        sql = """
+            SELECT 
+                f.file_id,
+                bm25(session_fts) AS rank,
+                snippet(session_fts, -1, '<mark class="bg-indigo-500/30 text-indigo-300 font-semibold px-0.5 rounded">', '</mark>', '...', 22) AS snippet,
+                s.name,
+                s.model,
+                s.turn_count,
+                s.total_tokens,
+                s.thought_tokens,
+                s.duration_human,
+                s.duration_seconds,
+                s.has_branching,
+                s.branch_count,
+                s.first_prompt,
+                s.modified_time,
+                s.created_time
+            FROM session_fts f
+            JOIN session_index s ON f.file_id = s.file_id
+            WHERE session_fts MATCH ?
+            ORDER BY rank
+            LIMIT ? OFFSET ?;
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(sql, (fts_match_expr, limit, offset))
+                rows = cursor.fetchall()
+                return [dict(r) for r in rows]
+            except sqlite3.OperationalError:
+                return []
 
 
 # 保持别名映射，保证上层调用无缝兼容

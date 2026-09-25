@@ -64,10 +64,11 @@ def fetch_remote_files(
                     cache.put(fid, mtime, raw_data)
                     download_count += 1
 
-                    # 仅解析这一个更新的文件对象，并直接写入二级索引表
+                    # 仅解析这一个更新的文件对象，并直接写入二级索引表与 FTS 索引
                     session = parse_prompt_json(fmeta, raw_data)
                     if session:
                         cache.upsert_session_index(session)
+                        cache.upsert_session_fts(session)
                         updated_sessions.append(session)
 
             pbar.set_postfix(
@@ -75,5 +76,11 @@ def fetch_remote_files(
             )
             if progress_callback:
                 progress_callback(idx, total_valid, cache_hit_count, download_count)
+
+    # 增量拉取与索引写入完成后，主动将 WAL 日志完整合并回主数据库并截断释放磁盘
+    try:
+        cache.checkpoint(truncate=True)
+    except Exception as exc:
+        print(f"⚠️ WAL Checkpoint 异常: {exc}")
 
     return total_valid, cache_hit_count, updated_sessions
