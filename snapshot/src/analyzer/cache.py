@@ -146,7 +146,9 @@ class SQLiteCache:
         """将单个会话摘要物化写入索引表"""
         st = s.start_time or s.modified_time
         date_str = st.strftime("%Y-%m-%d") if st else None
-        first_prompt = s.user_prompts[0] if s.user_prompts else ""
+        first_prompt = getattr(s, "first_effective_prompt", None) or (
+            s.user_prompts[0] if s.user_prompts else ""
+        )
         c_time = s.created_time.isoformat() if s.created_time else None
         m_time = s.modified_time.isoformat() if s.modified_time else None
 

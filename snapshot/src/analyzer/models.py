@@ -89,6 +89,34 @@ class PromptSession:
         return [turn.text for turn in self.turns if turn.role == "user"]
 
     @property
+    def first_effective_prompt(self) -> str:
+        """
+        推导会话的首轮核心用户提示词：
+        跳过纯内联附件，定位用户真实的意图提问；若首轮附带附件，则附带紧凑标签前缀。
+        """
+        user_turns = [t for t in self.turns if t.role == "user"]
+        if not user_turns:
+            return ""
+
+        first_turn = user_turns[0]
+        if first_turn.payload_type == "inlineFile":
+            mime = first_turn.extra_metadata.get("mime_type", "附件")
+            # 寻找后续首条真实文本提问
+            subsequent_prompt = next(
+                (
+                    t.text.strip()
+                    for t in user_turns[1:]
+                    if t.payload_type == "text" and t.text.strip()
+                ),
+                "",
+            )
+            if subsequent_prompt:
+                return f"[📎 {mime}] {subsequent_prompt}"
+            return f"[📎 附件: {mime}]"
+
+        return first_turn.text.strip()
+
+    @property
     def turn_count(self) -> int:
         """对话轮次总数 (排除纯思考块)"""
         return len([t for t in self.turns if not t.is_thought])

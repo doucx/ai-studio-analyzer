@@ -14,6 +14,24 @@ def is_valid_prompt_file(name: str) -> bool:
     return True
 
 
+def is_text_mime(mime: str) -> bool:
+    """判断 MIME 类型是否属于可直接阅读或展示的文本/代码类文件"""
+    m = mime.lower()
+    return (
+        m.startswith("text/")
+        or "json" in m
+        or "xml" in m
+        or "javascript" in m
+        or "typescript" in m
+        or "yaml" in m
+        or "csv" in m
+        or "sql" in m
+        or "markdown" in m
+        or "x-sh" in m
+        or "x-python" in m
+    )
+
+
 def parse_prompt_json(
     file_meta: Optional[Dict[str, Any]], raw_data: Dict[str, Any]
 ) -> Optional[PromptSession]:
@@ -64,19 +82,31 @@ def parse_prompt_json(
             # 优先分支 2: 内联 Base64 编码文件
             elif "inlineFile" in c:
                 file_info = c["inlineFile"]
-                mime = file_info.get("mimeType", "")
+                mime = file_info.get("mimeType", "application/octet-stream")
+                display_name = file_info.get("displayName") or file_info.get("name") or ""
                 payload_type = "inlineFile"
-                if "text" in mime or "json" in mime or "xml" in mime:
+                raw_b64 = file_info.get("data", "")
+                raw_bytes = b""
+                try:
+                    if raw_b64:
+                        raw_bytes = base64.b64decode(raw_b64)
+                except Exception:
+                    pass
+
+                byte_size = len(raw_bytes)
+                extra_meta = {
+                    "mime_type": mime,
+                    "byte_size": byte_size,
+                    "display_name": display_name,
+                }
+
+                if is_text_mime(mime):
                     try:
-                        raw_bytes = base64.b64decode(file_info.get("data", ""))
-                        text = (
-                            raw_bytes.decode("utf-8", errors="ignore")[:300]
-                            + "... [内联文本附件]"
-                        )
+                        text = raw_bytes.decode("utf-8", errors="replace")
                     except Exception:
-                        text = "[无法解码的文本附件]"
+                        text = "[无法按 UTF-8 解码的文本附件]"
                 else:
-                    text = f"[{mime} 媒体附件]"
+                    text = f"[{mime} 媒体/二进制附件 ({byte_size} bytes)]"
             # 分支 3: 常规纯文本交互
             elif "text" in c:
                 text = c.get("text", "")

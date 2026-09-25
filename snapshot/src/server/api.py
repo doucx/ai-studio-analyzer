@@ -217,10 +217,28 @@ def get_session_detail(file_id: str):
                 "payload_type": t.payload_type,
                 "timestamp": t.timestamp.isoformat() if t.timestamp else None,
                 "is_edited": t.is_edited,
+                "extra_metadata": t.extra_metadata,
             }
             for t in target.turns
         ],
     }
+
+
+@router.post("/reindex")
+def reindex_cache():
+    """基于本地 SQLite file_cache 增量重新生成并同步 session_index（耗时 <1s）"""
+    count = 0
+    for file_id, mtime, raw_data in cache.iter_all_data():
+        file_meta = {
+            "id": file_id,
+            "modifiedTime": mtime,
+            "name": raw_data.get("name", "Untitled"),
+        }
+        session = parse_prompt_json(file_meta, raw_data)
+        if session:
+            cache.upsert_session_index(session)
+            count += 1
+    return {"status": "success", "reindexed_count": count}
 
 
 @router.get("/sessions/{file_id}/raw")

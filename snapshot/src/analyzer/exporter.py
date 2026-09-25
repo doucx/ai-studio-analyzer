@@ -11,11 +11,14 @@ def export_first_prompts_to_jsonl(sessions: List[PromptSession], output_path: st
     """
     with open(output_path, "w", encoding="utf-8") as f:
         for s in sessions:
-            if s.user_prompts:
+            prompt_text = getattr(s, "first_effective_prompt", None) or (
+                s.user_prompts[0] if s.user_prompts else ""
+            )
+            if prompt_text:
                 record = {
                     "file_id": s.file_id,
                     "title": s.name,
-                    "first_prompt": s.user_prompts[0],
+                    "first_prompt": prompt_text,
                     "total_turns": s.turn_count,
                     "total_tokens": s.total_tokens,
                     "duration_seconds": s.duration_seconds,
@@ -48,7 +51,9 @@ def export_prompts_summary_csv(sessions: List[PromptSession], output_path: str):
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         for s in sessions:
-            first_prompt = s.user_prompts[0] if s.user_prompts else ""
+            first_prompt = getattr(s, "first_effective_prompt", None) or (
+                s.user_prompts[0] if s.user_prompts else ""
+            )
             preview = first_prompt[:80].replace("\n", " ") + (
                 "..." if len(first_prompt) > 80 else ""
             )

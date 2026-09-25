@@ -90,6 +90,13 @@ export interface ConversationTurnItem {
   payload_type: string;
   timestamp: string | null;
   is_edited: boolean;
+  extra_metadata?: {
+    mime_type?: string;
+    byte_size?: number;
+    display_name?: string;
+    doc_id?: string;
+    [key: string]: unknown;
+  };
 }
 
 export interface SessionDetail extends SessionItem {
