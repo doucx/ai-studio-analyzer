@@ -3,13 +3,10 @@ import pandas as pd
 from .models import PromptSession
 
 
-def calculate_session_metrics(sessions: List[PromptSession]) -> Dict[str, Any]:
+def calculate_session_metrics(sessions: List[Any]) -> Dict[str, Any]:
     """
     基于 pandas 的稳健认知与交互指标引擎：
-    1. 引入中位数 (Median) 与分位数 (P75, P90)，抗长尾极值干扰
-    2. 生命周期心智时长梯队切片
-    3. Token 能耗与思考链细分
-    4. 沟通阻抗与模型分布
+    兼容 PromptSession 实例列表或来自 session_index 表的字典列表。
     """
     if not sessions:
         return {
@@ -66,27 +63,48 @@ def calculate_session_metrics(sessions: List[PromptSession]) -> Dict[str, Any]:
 
     total_sessions = len(sessions)
 
-    # 1. 构造结构化 DataFrame
+    # 1. 构造结构化 DataFrame (自适应字典或 PromptSession 对象)
     records = []
-    for s in sessions:
-        st = s.start_time or s.modified_time
-        date_str = st.strftime("%Y-%m-%d") if st else None
-        records.append(
-            {
-                "file_id": s.file_id,
-                "date": date_str,
-                "turn_count": s.turn_count,
-                "duration_seconds": s.duration_seconds,
-                "duration_minutes": round(s.duration_seconds / 60, 2),
-                "total_tokens": s.total_tokens,
-                "thought_tokens": s.thought_tokens,
-                "user_chars": s.total_user_chars,
-                "has_branching": s.has_branching,
-                "branch_count": s.branch_count,
-                "has_sys_instruction": bool(s.system_instruction),
-                "model": s.model,
-            }
-        )
+    first_item = sessions[0]
+    if isinstance(first_item, dict):
+        for d in sessions:
+            dur_sec = d.get("duration_seconds", 0.0)
+            records.append(
+                {
+                    "file_id": d["file_id"],
+                    "date": d.get("date"),
+                    "turn_count": d.get("turn_count", 0),
+                    "duration_seconds": dur_sec,
+                    "duration_minutes": round(dur_sec / 60, 2),
+                    "total_tokens": d.get("total_tokens", 0),
+                    "thought_tokens": d.get("thought_tokens", 0),
+                    "user_chars": d.get("user_char_count", 0),
+                    "has_branching": bool(d.get("has_branching", False)),
+                    "branch_count": d.get("branch_count", 0),
+                    "has_sys_instruction": bool(d.get("has_sys_instruction", False)),
+                    "model": d.get("model", "unknown"),
+                }
+            )
+    else:
+        for s in sessions:
+            st = s.start_time or s.modified_time
+            date_str = st.strftime("%Y-%m-%d") if st else None
+            records.append(
+                {
+                    "file_id": s.file_id,
+                    "date": date_str,
+                    "turn_count": s.turn_count,
+                    "duration_seconds": s.duration_seconds,
+                    "duration_minutes": round(s.duration_seconds / 60, 2),
+                    "total_tokens": s.total_tokens,
+                    "thought_tokens": s.thought_tokens,
+                    "user_chars": s.total_user_chars,
+                    "has_branching": s.has_branching,
+                    "branch_count": s.branch_count,
+                    "has_sys_instruction": bool(s.system_instruction),
+                    "model": s.model,
+                }
+            )
 
     df = pd.DataFrame(records)
 
