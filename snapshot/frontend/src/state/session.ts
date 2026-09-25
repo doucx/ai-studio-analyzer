@@ -117,6 +117,7 @@ export function toggleSidebar() {
   sidebarCollapsedSignal.value = !sidebarCollapsedSignal.value;
 }
 
+let activeSearchAbortController: AbortController | null = null;
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function handleSearchInput(keyword: string) {
@@ -125,6 +126,12 @@ export function handleSearchInput(keyword: string) {
 
   if (searchDebounceTimer) {
     clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = null;
+  }
+
+  if (activeSearchAbortController) {
+    activeSearchAbortController.abort();
+    activeSearchAbortController = null;
   }
 
   if (term.length < 2) {
@@ -135,23 +142,41 @@ export function handleSearchInput(keyword: string) {
 
   isSearchingFtsSignal.value = true;
   searchDebounceTimer = setTimeout(async () => {
+    const controller = new AbortController();
+    activeSearchAbortController = controller;
+
     try {
-      const res = await fetch(`/api/sessions/search?q=${encodeURIComponent(term)}&limit=100`);
+      const res = await fetch(`/api/sessions/search?q=${encodeURIComponent(term)}&limit=100`, {
+        signal: controller.signal,
+      });
       if (res.ok) {
         const data = await res.json();
         if (searchKeywordSignal.value.trim() === term) {
           ftsResultsSignal.value = data;
         }
       }
-    } catch (err) {
-      console.error('FTS 全文检索异常:', err);
+    } catch (err: unknown) {
+      if ((err as Error)?.name !== 'AbortError') {
+        console.error('FTS 全文检索异常:', err);
+      }
     } finally {
-      isSearchingFtsSignal.value = false;
+      if (activeSearchAbortController === controller) {
+        isSearchingFtsSignal.value = false;
+        activeSearchAbortController = null;
+      }
     }
-  }, 250);
+  }, 300);
 }
 
 export function resetFilters() {
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = null;
+  }
+  if (activeSearchAbortController) {
+    activeSearchAbortController.abort();
+    activeSearchAbortController = null;
+  }
   searchKeywordSignal.value = '';
   ftsResultsSignal.value = null;
   isSearchingFtsSignal.value = false;

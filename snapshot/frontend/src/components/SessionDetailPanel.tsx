@@ -284,23 +284,28 @@ export function SessionDetailPanel({ session, onClose }: Props) {
   const aiStudioUrl = `https://aistudio.google.com/prompts/${session.file_id}`;
 
   const fetchSessionDetail = useCallback(
-    async (isSilent = false) => {
+    async (isSilent = false, signal?: AbortSignal) => {
       if (!isSilent) {
         setLoading(true);
       } else {
         setRefreshing(true);
       }
       try {
-        const res = await fetch(`/api/sessions/${session.file_id}`);
+        const res = await fetch(`/api/sessions/${session.file_id}`, { signal });
+        if (!res.ok) return;
         const data = await res.json();
         setDetail(data);
-      } catch (err) {
-        console.error('获取会话详情失败:', err);
+      } catch (err: unknown) {
+        if ((err as Error)?.name !== 'AbortError') {
+          console.error('获取会话详情失败:', err);
+        }
       } finally {
-        if (!isSilent) {
-          setLoading(false);
-        } else {
-          setRefreshing(false);
+        if (!signal?.aborted) {
+          if (!isSilent) {
+            setLoading(false);
+          } else {
+            setRefreshing(false);
+          }
         }
       }
     },
@@ -309,8 +314,12 @@ export function SessionDetailPanel({ session, onClose }: Props) {
 
   // 初次进入或切换会话时全屏加载；增量同步完成触发 syncVersionSignal 时静默刷新
   useEffect(() => {
+    const controller = new AbortController();
     const isInitialLoad = !detail || detail.file_id !== session.file_id;
-    fetchSessionDetail(!isInitialLoad);
+    fetchSessionDetail(!isInitialLoad, controller.signal);
+    return () => {
+      controller.abort();
+    };
   }, [session.file_id, syncVersionSignal.value, fetchSessionDetail]);
 
   return (
