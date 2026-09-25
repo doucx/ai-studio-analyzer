@@ -27,9 +27,10 @@ const ITEM_HEIGHT = 86; // 每项固定高度 86px
 const BUFFER = 5; // 视口外缓冲项数
 
 const DEPTH_OPTIONS: { key: DepthFilter; label: string; tip: string }[] = [
-  { key: 'all', label: '全部', tip: '全量轮次' },
-  { key: 'single', label: '快问 (1轮)', tip: '仅 1 轮轻量交互' },
-  { key: 'deep', label: '攻坚 (≥5轮)', tip: '5 轮以上深度攻坚' },
+  { key: 'all', label: '全部', tip: '全量会话' },
+  { key: 'single', label: '≤2 Chunks', tip: '轻量快速问答 (1~2 个数据块)' },
+  { key: 'few', label: '3~6 Chunks', tip: '标准交互推进 (3~6 个数据块)' },
+  { key: 'many', label: '≥7 Chunks', tip: '长线深度交互 (≥7 个数据块)' },
   { key: 'branch', label: '分叉', tip: '发生过分支或编辑重试' },
 ];
 
@@ -89,7 +90,7 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
           >
             <option value="modified">最近修改</option>
             <option value="tokens">Token 能耗</option>
-            <option value="turns">轮次深度</option>
+            <option value="chunks">Chunk 数量</option>
           </select>
         </div>
 
@@ -97,7 +98,7 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
         <div className="relative">
           <input
             type="text"
-            placeholder="全文检索会话正文、思考链、代码..."
+            placeholder="全文检索，或输入 chunk:2、c:>5 按块搜索..."
             value={currentKeyword}
             onInput={(e) => {
               handleSearchInput((e.target as HTMLInputElement).value);
@@ -145,8 +146,8 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
           </select>
         </div>
 
-        {/* 第四行：轮次深度与摩擦力胶囊切换 */}
-        <div className="grid grid-cols-4 gap-1 p-0.5 bg-zinc-950 border border-zinc-800 rounded-md">
+        {/* 第四行：Chunk 数量梯队与摩擦力胶囊切换 */}
+        <div className="grid grid-cols-5 gap-1 p-0.5 bg-zinc-950 border border-zinc-800 rounded-md">
           {DEPTH_OPTIONS.map(({ key, label, tip }) => (
             <button
               key={key}
@@ -248,7 +249,7 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
                         {s.model.replace('models/', '')}
                       </span>
                       <span>
-                        {s.total_tokens.toLocaleString()} tok · {s.turn_count} 轮
+                        {s.total_tokens.toLocaleString()} tok · {s.chunk_count ?? s.turn_count} chunks
                       </span>
                     </div>
                   </button>

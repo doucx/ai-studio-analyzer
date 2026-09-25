@@ -117,9 +117,14 @@ class PromptSession:
         return first_turn.text.strip()
 
     @property
+    def chunk_count(self) -> int:
+        """会话包含的 Chunk (数据块) 总数"""
+        return len(self.turns)
+
+    @property
     def turn_count(self) -> int:
-        """对话轮次总数 (排除纯思考块)"""
-        return len([t for t in self.turns if not t.is_thought])
+        """为向后兼容保留，直接返回 Chunk 总数"""
+        return self.chunk_count
 
     @property
     def total_tokens(self) -> int:
