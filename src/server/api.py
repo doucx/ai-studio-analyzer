@@ -107,9 +107,10 @@ def get_metrics(range: str = "all"):
 
 
 @router.get("/sessions")
-def list_sessions(range: str = "all", limit: int = 50):
+def list_sessions(range: str = "all", limit: Optional[int] = None):
     """
-    按时间窗口过滤后，返回按最后修改时间倒序的会话列表摘要
+    按时间窗口过滤后，返回按最后修改时间倒序的会话列表摘要。
+    当 limit 为 None 或 <= 0 时，返回当前范围全量列表供前端虚拟滚动使用。
     """
     all_sessions = _ensure_sessions_loaded()
     filtered = filter_sessions_by_range(all_sessions, range)
@@ -118,6 +119,7 @@ def list_sessions(range: str = "all", limit: int = 50):
         key=lambda s: s.modified_time.isoformat() if s.modified_time else "",
         reverse=True,
     )
+    result_slice = sorted_sessions if (limit is None or limit <= 0) else sorted_sessions[:limit]
     return [
         {
             "file_id": s.file_id,
@@ -134,8 +136,46 @@ def list_sessions(range: str = "all", limit: int = 50):
             "modified_time": s.modified_time.isoformat() if s.modified_time else None,
             "created_time": s.created_time.isoformat() if s.created_time else None,
         }
-        for s in sorted_sessions[:limit]
+        for s in result_slice
     ]
+
+
+@router.get("/sessions/{file_id}")
+def get_session_detail(file_id: str):
+    """获取单个会话的完整轮次与核心参数，为提示词详情展示做准备"""
+    all_sessions = _ensure_sessions_loaded()
+    target = next((s for s in all_sessions if s.file_id == file_id), None)
+    if not target:
+        return {"error": "未找到指定的会话记录"}
+
+    return {
+        "file_id": target.file_id,
+        "name": target.name,
+        "model": target.model,
+        "created_time": target.created_time.isoformat() if target.created_time else None,
+        "modified_time": target.modified_time.isoformat() if target.modified_time else None,
+        "duration_human": target.duration_human,
+        "duration_seconds": target.duration_seconds,
+        "turn_count": target.turn_count,
+        "total_tokens": target.total_tokens,
+        "thought_tokens": target.thought_tokens,
+        "total_user_chars": target.total_user_chars,
+        "has_branching": target.has_branching,
+        "branch_count": target.branch_count,
+        "system_instruction": target.system_instruction,
+        "turns": [
+            {
+                "role": t.role,
+                "text": t.text,
+                "token_count": t.token_count,
+                "is_thought": t.is_thought,
+                "payload_type": t.payload_type,
+                "timestamp": t.timestamp.isoformat() if t.timestamp else None,
+                "is_edited": t.is_edited,
+            }
+            for t in target.turns
+        ],
+    }
 
 
 @router.post("/sync")
