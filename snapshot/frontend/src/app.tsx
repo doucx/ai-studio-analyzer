@@ -196,8 +196,6 @@ export function App() {
             <SessionDetailPanel
               session={selectedSession}
               onClose={() => (selectedSessionSignal.value = null)}
-              isSidebarCollapsed={isSidebarCollapsed}
-              onToggleSidebar={() => (sidebarCollapsedSignal.value = !sidebarCollapsedSignal.value)}
             />
           )}
 

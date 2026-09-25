@@ -10,8 +10,6 @@ marked.setOptions({
 interface Props {
   session: SessionItem;
   onClose: () => void;
-  isSidebarCollapsed?: boolean;
-  onToggleSidebar?: () => void;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -148,12 +146,7 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
   );
 }
 
-export function SessionDetailPanel({
-  session,
-  onClose,
-  isSidebarCollapsed = false,
-  onToggleSidebar,
-}: Props) {
+export function SessionDetailPanel({ session, onClose }: Props) {
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [showMetadata, setShowMetadata] = useState<boolean>(true);
@@ -179,33 +172,20 @@ export function SessionDetailPanel({
     <div className="bg-zinc-900/40 border border-zinc-800 rounded-lg flex flex-col h-full min-h-[calc(100vh-140px)]">
       {/* 头部导航与操作条 */}
       <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-5 py-3.5 bg-zinc-900/90 backdrop-blur sticky top-0 z-10 rounded-t-lg">
-        <div className="flex items-center gap-3 min-w-0">
-          {onToggleSidebar && (
-            <button
-              type="button"
-              onClick={onToggleSidebar}
-              className="p-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded border border-zinc-700/80 transition flex items-center justify-center shrink-0"
-              title={isSidebarCollapsed ? '展开历史侧边栏' : '收起历史侧边栏以全屏浏览'}
-            >
-              {isSidebarCollapsed ? '📂 展开侧栏' : '◀ 收起侧栏'}
-            </button>
-          )}
-
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-white tracking-tight truncate max-w-md">
-                {session.name}
-              </h2>
-              {session.has_branching && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-400 border border-amber-800/60 font-mono shrink-0">
-                  分叉 {session.branch_count} 次
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-zinc-400 font-mono truncate">
-              ID: {session.file_id} · 模型: {session.model.replace('models/', '')}
-            </p>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-bold text-white tracking-tight truncate max-w-md">
+              {session.name}
+            </h2>
+            {session.has_branching && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-400 border border-amber-800/60 font-mono shrink-0">
+                分叉 {session.branch_count} 次
+              </span>
+            )}
           </div>
+          <p className="text-[11px] text-zinc-400 font-mono truncate">
+            ID: {session.file_id} · 模型: {session.model.replace('models/', '')}
+          </p>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -291,9 +271,6 @@ export function SessionDetailPanel({
               {detail?.turns?.length ?? session.turn_count} 个 Chunks
             </span>
           </div>
-          <span className="text-xs text-zinc-500 hidden sm:inline">
-            已挂载 Markdown 富文本只读视图
-          </span>
         </div>
 
         {loading ? (
