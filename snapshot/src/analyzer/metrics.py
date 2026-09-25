@@ -1,6 +1,5 @@
 from typing import List, Dict, Any
 import pandas as pd
-from .models import PromptSession
 
 
 def calculate_session_metrics(sessions: List[Any]) -> Dict[str, Any]:

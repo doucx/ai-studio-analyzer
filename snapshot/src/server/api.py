@@ -193,8 +193,12 @@ def get_session_detail(file_id: str):
         "file_id": target.file_id,
         "name": target.name,
         "model": target.model,
-        "created_time": target.created_time.isoformat() if target.created_time else None,
-        "modified_time": target.modified_time.isoformat() if target.modified_time else None,
+        "created_time": target.created_time.isoformat()
+        if target.created_time
+        else None,
+        "modified_time": target.modified_time.isoformat()
+        if target.modified_time
+        else None,
         "duration_human": target.duration_human,
         "duration_seconds": target.duration_seconds,
         "turn_count": target.turn_count,
