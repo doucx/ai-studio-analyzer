@@ -81,3 +81,19 @@ export interface SessionItem {
   modified_time: string | null;
   created_time: string | null;
 }
+
+export interface ConversationTurnItem {
+  role: 'user' | 'model' | 'system';
+  text: string;
+  token_count: number;
+  is_thought: boolean;
+  payload_type: string;
+  timestamp: string | null;
+  is_edited: boolean;
+}
+
+export interface SessionDetail extends SessionItem {
+  total_user_chars: number;
+  system_instruction: string;
+  turns: ConversationTurnItem[];
+}
