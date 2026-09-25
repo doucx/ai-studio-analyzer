@@ -470,7 +470,9 @@ export function SessionDetailPanel({ session, onClose }: Props) {
               {detail?.turns?.length ?? session.chunk_count ?? session.turn_count} 块
             </div>
             <div className="text-[10px] text-zinc-500">
-              {(detail?.turns?.length ?? session.chunk_count ?? session.turn_count) >= 7 ? '深度攻坚' : '轻量快问'}
+              {(detail?.turns?.length ?? session.chunk_count ?? session.turn_count) >= 7
+                ? '深度攻坚'
+                : '轻量快问'}
             </div>
           </div>
 

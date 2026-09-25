@@ -249,7 +249,8 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
                         {s.model.replace('models/', '')}
                       </span>
                       <span>
-                        {s.total_tokens.toLocaleString()} tok · {s.chunk_count ?? s.turn_count} chunks
+                        {s.total_tokens.toLocaleString()} tok · {s.chunk_count ?? s.turn_count}{' '}
+                        chunks
                       </span>
                     </div>
                   </button>
