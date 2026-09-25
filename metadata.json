@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(frontend): 会话详情面板新增下载原始会话 JSON 按钮", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790312734.6999683, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(server): 格式化导出的原始会话 JSON 内容", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790312809.354465, "duration_ms": 0}}
