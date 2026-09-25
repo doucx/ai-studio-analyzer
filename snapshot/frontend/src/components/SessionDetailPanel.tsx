@@ -94,7 +94,7 @@ function DownloadButton({ text, filename }: { text: string; filename: string }) 
 }
 
 function SystemInstructionCard({ instruction }: { instruction: string }) {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
 
   if (!instruction || !instruction.trim()) return null;
 
