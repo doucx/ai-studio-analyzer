@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 重构会话生命周期时长推导状态机消除 0s 假死与沉睡累加", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790338497.8258166, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "ruff Capture: M metrics.py, M models.py", "type": "capture", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790339203.3011346, "duration_ms": 0}}

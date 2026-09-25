@@ -167,10 +167,16 @@ def calculate_session_metrics(sessions: List[Any]) -> Dict[str, Any]:
 
     tier_flash = int((valid_dur_df["duration_minutes"] < 10).sum())  # 即时快问 (<10m)
     tier_focus = int(
-        ((valid_dur_df["duration_minutes"] >= 10) & (valid_dur_df["duration_minutes"] < 60)).sum()
+        (
+            (valid_dur_df["duration_minutes"] >= 10)
+            & (valid_dur_df["duration_minutes"] < 60)
+        ).sum()
     )  # 聚焦推进 (10~60m)
     tier_deep = int(
-        ((valid_dur_df["duration_minutes"] >= 60) & (valid_dur_df["duration_minutes"] < 360)).sum()
+        (
+            (valid_dur_df["duration_minutes"] >= 60)
+            & (valid_dur_df["duration_minutes"] < 360)
+        ).sum()
     )  # 深度攻坚 (1~6h)
     tier_epic = int((valid_dur_df["duration_minutes"] >= 360).sum())  # 跨日长线 (>6h)
 

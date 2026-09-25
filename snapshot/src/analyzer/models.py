@@ -89,9 +89,15 @@ class PromptSession:
                 else:
                     # 超过 30 分钟属于跨日或沉睡搁置，截断为空闲，仅计入该轮次推进的合理心智窗口
                     curr_turn = self.turns[i + 1] if i + 1 < len(self.turns) else None
-                    c_chars = len(curr_turn.text) if curr_turn and curr_turn.role == "user" else 0
+                    c_chars = (
+                        len(curr_turn.text)
+                        if curr_turn and curr_turn.role == "user"
+                        else 0
+                    )
                     c_tok = curr_turn.token_count if curr_turn else 0
-                    active_sec += max(15.0, min(300.0, 15.0 + c_chars / 5.0 + c_tok / 8.0))
+                    active_sec += max(
+                        15.0, min(300.0, 15.0 + c_chars / 5.0 + c_tok / 8.0)
+                    )
 
             return timedelta(seconds=round(active_sec, 1))
 
