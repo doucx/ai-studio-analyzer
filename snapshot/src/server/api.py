@@ -239,6 +239,13 @@ def reindex_cache():
             cache.upsert_session_index(session)
             cache.upsert_session_fts(session)
             count += 1
+
+    # 批量建立索引结束后，立即截断 WAL 日志文件
+    try:
+        cache.checkpoint(truncate=True)
+    except Exception as exc:
+        print(f"⚠️ Reindex Checkpoint 异常: {exc}")
+
     return {"status": "success", "reindexed_count": count}
 
 

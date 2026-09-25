@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(fts): 引入 SQLite FTS5 全文检索引擎与前后端深度搜索", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790333048.5706077, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(cache): 根治 SQLite WAL 日志文件无限膨胀与磁盘占用问题", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790333627.8904028, "duration_ms": 0}}

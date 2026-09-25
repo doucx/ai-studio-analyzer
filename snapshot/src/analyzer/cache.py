@@ -32,6 +32,7 @@ class SQLiteCache:
             cursor = conn.cursor()
             cursor.execute("PRAGMA journal_mode=WAL;")
             cursor.execute("PRAGMA synchronous=NORMAL;")
+            cursor.execute("PRAGMA wal_autocheckpoint=1000;")
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS file_cache (
                     file_id TEXT PRIMARY KEY,
@@ -135,6 +136,24 @@ class SQLiteCache:
             cursor.execute("SELECT COUNT(*) AS total FROM file_cache;")
             row = cursor.fetchone()
             return row["total"] if row else 0
+
+    def checkpoint(self, truncate: bool = True) -> Tuple[int, int, int]:
+        """
+        显式将 WAL 脏页完整刷回主数据库文件并释放磁盘空间。
+        :param truncate: 是否截断 WAL 文件归零
+        :return: (busy_flag, log_pages, checkpointed_pages)
+        """
+        mode = "TRUNCATE" if truncate else "PASSIVE"
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(f"PRAGMA wal_checkpoint({mode});")
+            row = cursor.fetchone()
+            return tuple(row) if row else (0, 0, 0)
+
+    def vacuum(self):
+        """整理并压缩数据库碎片"""
+        with self._get_connection() as conn:
+            conn.execute("VACUUM;")
 
     def iter_all_data(self) -> Iterator[Tuple[str, str, Dict[str, Any]]]:
         """流式迭代全量缓存记录，避免一次性消耗过多内存"""
