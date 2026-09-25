@@ -226,7 +226,7 @@ def get_session_detail(file_id: str):
 
 @router.post("/reindex")
 def reindex_cache():
-    """基于本地 SQLite file_cache 增量重新生成并同步 session_index（耗时 <1s）"""
+    """基于本地 SQLite file_cache 增量重新生成并同步 session_index 及 session_fts（耗时 <2s）"""
     count = 0
     for file_id, mtime, raw_data in cache.iter_all_data():
         file_meta = {
@@ -237,8 +237,15 @@ def reindex_cache():
         session = parse_prompt_json(file_meta, raw_data)
         if session:
             cache.upsert_session_index(session)
+            cache.upsert_session_fts(session)
             count += 1
     return {"status": "success", "reindexed_count": count}
+
+
+@router.get("/sessions/search")
+def search_sessions(q: str, limit: int = 50, offset: int = 0):
+    """基于 SQLite FTS5 全文索引的高性能深度检索接口 (返回带高亮 Snippet)"""
+    return cache.search_fts(query=q, limit=limit, offset=offset)
 
 
 @router.get("/sessions/{file_id}/raw")

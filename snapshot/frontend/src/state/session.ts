@@ -17,6 +17,10 @@ export const selectedModelSignal = signal<string>('all');
 export const depthFilterSignal = signal<DepthFilter>('all');
 export const sortBySignal = signal<SortOption>('modified');
 
+// FTS5 全文检索专属状态
+export const ftsResultsSignal = signal<SessionItem[] | null>(null);
+export const isSearchingFtsSignal = signal<boolean>(false);
+
 // 动态提取当前数据集中所有模型列表及其会话计数 (降序)
 export const availableModelsSignal = computed(() => {
   const counts = new Map<string, number>();
@@ -39,8 +43,13 @@ export const isFilterActiveSignal = computed(() => {
 
 // 核心多维复合过滤计算管道 (响应式原子派生)
 export const filteredSessionsSignal = computed(() => {
-  const list = sessionsSignal.value;
   const term = searchKeywordSignal.value.trim().toLowerCase();
+  // 当开启 FTS 全文搜索且命中结果集时，直接接入 FTS 倒排结果
+  const list =
+    term.length >= 2 && ftsResultsSignal.value !== null
+      ? ftsResultsSignal.value
+      : sessionsSignal.value;
+
   const model = selectedModelSignal.value;
   const depth = depthFilterSignal.value;
   const sort = sortBySignal.value;
@@ -58,8 +67,8 @@ export const filteredSessionsSignal = computed(() => {
       if (depth === 'deep' && s.turn_count < 5) return false;
       if (depth === 'branch' && !s.has_branching) return false;
 
-      // 3. 关键字模糊搜索 (标题、首轮 Prompt、模型)
-      if (term) {
+      // 3. 非 FTS 检索状态下的首轮轻量模糊过滤
+      if (term && ftsResultsSignal.value === null) {
         const matchName = s.name.toLowerCase().includes(term);
         const matchPrompt = (s.first_prompt || '').toLowerCase().includes(term);
         const matchModel = s.model.toLowerCase().includes(term);
@@ -69,6 +78,10 @@ export const filteredSessionsSignal = computed(() => {
       return true;
     })
     .sort((a, b) => {
+      // FTS 模式下默认保持 BM25 相关度排序
+      if (term.length >= 2 && ftsResultsSignal.value !== null && sort === 'modified') {
+        return 0;
+      }
       if (sort === 'tokens') {
         return b.total_tokens - a.total_tokens;
       }
@@ -104,8 +117,44 @@ export function toggleSidebar() {
   sidebarCollapsedSignal.value = !sidebarCollapsedSignal.value;
 }
 
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function handleSearchInput(keyword: string) {
+  searchKeywordSignal.value = keyword;
+  const term = keyword.trim();
+
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer);
+  }
+
+  if (term.length < 2) {
+    ftsResultsSignal.value = null;
+    isSearchingFtsSignal.value = false;
+    return;
+  }
+
+  isSearchingFtsSignal.value = true;
+  searchDebounceTimer = setTimeout(async () => {
+    try {
+      const res = await fetch(`/api/sessions/search?q=${encodeURIComponent(term)}&limit=100`);
+      if (res.ok) {
+        const data = await res.json();
+        if (searchKeywordSignal.value.trim() === term) {
+          ftsResultsSignal.value = data;
+        }
+      }
+    } catch (err) {
+      console.error('FTS 全文检索异常:', err);
+    } finally {
+      isSearchingFtsSignal.value = false;
+    }
+  }, 250);
+}
+
 export function resetFilters() {
   searchKeywordSignal.value = '';
+  ftsResultsSignal.value = null;
+  isSearchingFtsSignal.value = false;
   selectedModelSignal.value = 'all';
   depthFilterSignal.value = 'all';
   sortBySignal.value = 'modified';

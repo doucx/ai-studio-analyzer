@@ -1,3 +1,4 @@
+import { Loader2 } from 'lucide-preact';
 import { useRef, useState } from 'preact/hooks';
 import {
   type DepthFilter,
@@ -5,7 +6,9 @@ import {
   availableModelsSignal,
   depthFilterSignal,
   filteredSessionsSignal,
+  handleSearchInput,
   isFilterActiveSignal,
+  isSearchingFtsSignal,
   resetFilters,
   searchKeywordSignal,
   selectedModelSignal,
@@ -90,30 +93,35 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
           </select>
         </div>
 
-        {/* 第二行：关键字模糊输入 */}
+        {/* 第二行：FTS 全文检索输入 */}
         <div className="relative">
           <input
             type="text"
-            placeholder="搜索会话标题、首轮 Prompt、模型..."
+            placeholder="全文检索会话正文、思考链、代码..."
             value={currentKeyword}
             onInput={(e) => {
-              searchKeywordSignal.value = (e.target as HTMLInputElement).value;
+              handleSearchInput((e.target as HTMLInputElement).value);
               setScrollTop(0);
               if (containerRef.current) containerRef.current.scrollTop = 0;
             }}
             className="w-full bg-zinc-950 border border-zinc-800 focus:border-indigo-500 rounded px-2.5 py-1 text-xs text-zinc-200 placeholder-zinc-500 outline-none transition"
           />
-          {currentKeyword && (
+          {isSearchingFtsSignal.value ? (
+            <Loader2
+              size={13}
+              className="absolute right-2.5 top-2 text-indigo-400 animate-spin pointer-events-none"
+            />
+          ) : currentKeyword ? (
             <button
               type="button"
               onClick={() => {
-                searchKeywordSignal.value = '';
+                handleSearchInput('');
               }}
               className="absolute right-2 top-1 text-xs text-zinc-500 hover:text-zinc-300 cursor-pointer"
             >
               ✕
             </button>
-          )}
+          ) : null}
         </div>
 
         {/* 第三行：模型下拉筛选 */}
@@ -223,9 +231,17 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
                       </span>
                     </div>
 
-                    <p className="text-[11px] text-zinc-400 truncate font-sans w-full">
-                      {s.first_prompt || '(无首轮文本提示)'}
-                    </p>
+                    {s.snippet ? (
+                      <p
+                        className="text-[11px] text-zinc-300 truncate font-mono w-full bg-black/20 px-1 py-0.5 rounded border border-zinc-800/40"
+                        // biome-ignore lint/security/noDangerouslySetInnerHtml: 用于呈现 FTS 高亮标记 (<mark>)
+                        dangerouslySetInnerHTML={{ __html: s.snippet }}
+                      />
+                    ) : (
+                      <p className="text-[11px] text-zinc-400 truncate font-sans w-full">
+                        {s.first_prompt || '(无首轮文本提示)'}
+                      </p>
+                    )}
 
                     <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono w-full">
                       <span className="bg-zinc-800/80 px-1 py-0.2 rounded text-zinc-400 max-w-[130px] truncate">

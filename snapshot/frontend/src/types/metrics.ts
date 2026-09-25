@@ -80,6 +80,7 @@ export interface SessionItem {
   first_prompt: string;
   modified_time: string | null;
   created_time: string | null;
+  snippet?: string;
 }
 
 export interface ConversationTurnItem {
