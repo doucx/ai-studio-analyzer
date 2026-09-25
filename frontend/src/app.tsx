@@ -15,6 +15,7 @@ const sessionsSignal = signal<SessionItem[]>([]);
 const selectedSessionSignal = signal<SessionItem | null>(null);
 const loadingSignal = signal<boolean>(true);
 const syncInProgressSignal = signal<boolean>(false);
+const syncProgressTextSignal = signal<string>('');
 const sidebarCollapsedSignal = signal<boolean>(false);
 
 const TIME_RANGE_OPTIONS: { key: TimeRange; label: string }[] = [
@@ -51,30 +52,47 @@ function handleTimeRangeChange(newRange: TimeRange) {
 
 async function handleTriggerSync() {
   syncInProgressSignal.value = true;
+  syncProgressTextSignal.value = '准备同步...';
   try {
     await fetch('/api/sync?limit=50', { method: 'POST' });
-    const timer = setInterval(async () => {
-      try {
-        const res = await fetch('/api/sync/status').then((r) => r.json());
-        if (!res.is_syncing) {
-          clearInterval(timer);
-          syncInProgressSignal.value = false;
-          await loadDashboardData();
-        }
-      } catch {
-        clearInterval(timer);
-        syncInProgressSignal.value = false;
-      }
-    }, 1000);
   } catch (err) {
     console.error('触发同步失败:', err);
     syncInProgressSignal.value = false;
+    syncProgressTextSignal.value = '';
   }
 }
 
 export function App() {
   useEffect(() => {
     loadDashboardData();
+
+    // 订阅后端 SSE 事件通道，杜绝轮询开销
+    const eventSource = new EventSource('/api/sync/events');
+
+    eventSource.addEventListener('sync_progress', (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        syncProgressTextSignal.value = `${data.current}/${data.total} (拉取:${data.downloaded})`;
+      } catch {
+        // ignore parse error
+      }
+    });
+
+    eventSource.addEventListener('sync_done', () => {
+      syncInProgressSignal.value = false;
+      syncProgressTextSignal.value = '';
+      loadDashboardData(); // 瞬间更新页面
+    });
+
+    eventSource.addEventListener('sync_error', (e) => {
+      console.error('同步异常:', e.data);
+      syncInProgressSignal.value = false;
+      syncProgressTextSignal.value = '';
+    });
+
+    return () => {
+      eventSource.close();
+    };
   }, []);
 
   const m = metricsSignal.value;
@@ -173,7 +191,11 @@ export function App() {
               disabled={syncInProgressSignal.value}
               className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded transition shadow-sm"
             >
-              {syncInProgressSignal.value ? '同步中...' : '增量同步 (50)'}
+              {syncInProgressSignal.value
+                ? syncProgressTextSignal.value
+                  ? `同步中 ${syncProgressTextSignal.value}`
+                  : '同步中...'
+                : '增量同步 (50)'}
             </button>
           </div>
         </div>

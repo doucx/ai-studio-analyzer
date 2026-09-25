@@ -2,7 +2,7 @@
   "presets": {
     "full": {
       "format": "xml",
-      "extension": ["py", "toml", "ts", "tsx", "json", "css", "html"],
+      "extension": ["py", "toml", "js", "ts", "tsx", "json", "css", "html"],
       "paths": ["."],
       "ignore": ["*.test.ts", "*.test.tsx", "package-lock.json"]
     }

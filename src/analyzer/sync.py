@@ -2,11 +2,12 @@
 AI Studio 远程增量同步模块 (类 git fetch/pull 网络层)
 """
 
-from typing import Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 from tqdm import tqdm
 from .drive import DriveClient
 from .cache import SQLiteCache
-from .parser import is_valid_prompt_file
+from .models import PromptSession
+from .parser import is_valid_prompt_file, parse_prompt_json
 
 
 def fetch_remote_files(
@@ -14,7 +15,8 @@ def fetch_remote_files(
     cache: SQLiteCache,
     limit: Optional[int] = 50,
     all_files: bool = False,
-) -> Tuple[int, int, int]:
+    progress_callback: Optional[Callable[[int, int, int, int], None]] = None,
+) -> Tuple[int, int, List[PromptSession]]:
     """
     增量拉取云盘最近修改的文件并写入 SQLite 缓存。
 
@@ -40,9 +42,11 @@ def fetch_remote_files(
 
     download_count = 0
     cache_hit_count = 0
+    updated_sessions: List[PromptSession] = []
+    total_valid = len(valid_files)
 
     with tqdm(valid_files, desc="云盘增量同步", unit="file") as pbar:
-        for fmeta in pbar:
+        for idx, fmeta in enumerate(pbar, start=1):
             fid = fmeta["id"]
             mtime = fmeta.get("modifiedTime", "")
 
@@ -60,8 +64,16 @@ def fetch_remote_files(
                     cache.put(fid, mtime, raw_data)
                     download_count += 1
 
+                    # 仅解析这一个更新的文件对象，并直接写入二级索引表
+                    session = parse_prompt_json(fmeta, raw_data)
+                    if session:
+                        cache.upsert_session_index(session)
+                        updated_sessions.append(session)
+
             pbar.set_postfix(
                 {"命中(跳过)": cache_hit_count, "云端拉取": download_count}
             )
+            if progress_callback:
+                progress_callback(idx, total_valid, cache_hit_count, download_count)
 
-    return len(valid_files), cache_hit_count, download_count
+    return total_valid, cache_hit_count, updated_sessions
