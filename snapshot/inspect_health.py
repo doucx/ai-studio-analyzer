@@ -1,40 +1,3 @@
-我已为你编写了专门的离线诊断与假设验证探针脚本 `inspect_health.py`。该脚本以**纯只读模式 (`mode=ro`)** 接入 SQLite，完全不产生读锁，也不会导致 WAL 膨胀。它涵盖了数据库物理完整性、三表一致性、上下文与 Token 分位数梯队分布、思考链渗透率以及极端“毒丸”会话（Top 5 异常值）的定位。
-
-## [WIP] feat: 增加 cache.db 健康度诊断与上下文假设验证脚本
-
-### 用户需求
-需要一个离线探针脚本，用于全面检查 `cache.db` 的物理与逻辑健康度，并提取统计分布以验证核心假设（如上下文长度、轮次分布、思考链占比及异常长尾样本）。
-
-### 评论
-该脚本为架构演进提供了坚实的数据基准。通过量化真实交互中的 Token 梯队、Base64 膨胀度与分叉比例，可以精准指导前端虚拟滚动的内存上限、后端分页窗口与搜索策略，避免盲目重构。
-
-### 目标
-1. 在项目根目录创建 `inspect_health.py`。
-2. 检查 SQLite 原生完整性 (`integrity_check`)、碎片率与三表记录一致性。
-3. 统计全量会话的 Token、轮次、时长与用户字符的分位数阶梯（P10, P50, P75, P90, P99, Max）。
-4. 验证“上下文长度”与“心智梯队”假设切片，定位体积、轮次与能耗最高的前 5 个异常会话。
-
-### 基本原理
-1. 通过 SQLite URI 模式 (`file:cache.db?mode=ro`) 开启只读连接，保证零锁竞争与零 WAL 写入。
-2. 结合 `session_index` 快速聚合宏观分位数，并对 `file_cache` 的原始 JSON 载荷进行轻量探测，获取实际存储膨胀比。
-3. 采用 ASCII 表格化输出与分层色彩指引，直观展示统计假设的验证结论。
-
-### 标签
-#intent/tooling #flow/ready #priority/medium #comp/engine #concept/state #scope/dx #ai/instruct #task/domain/analytics #task/object/cache-health-inspector #task/action/build #task/state/begin #task/status/active
-
----
-
-### Script
-
-#### Acts 1: 创建 `inspect_health.py` 探针脚本
-
-我们将新建 `inspect_health.py`，实现纯只读的健康度审计与假设验证工具。
-
-~~~~~act
-write_file
-inspect_health.py
-~~~~~
-~~~~~python
 """
 AI Studio Cache 健康度诊断与上下文认知假设验证探针 (只读模式，无锁零侵入)
 
@@ -300,16 +263,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-~~~~~
-
-### 下一步建议
-
-1. **执行健康度与假设分析**：
-   在终端运行探针脚本：
-   ```bash
-   python inspect_health.py
-   ```
-2. **解读分析输出**：
-   - 关注 **[1. 物理层健康度]**：查看 `Freelist (空闲占比)`，若占比过高可在低峰期执行 `VACUUM` 整理；确认 `Quick Check` 为 `ok`。
-   - 关注 **[4. 上下文长度切片]**：查看你的长上下文真实占比，核验前期对上下文模型资源开销的预估。
-   - 关注 **[5. 极端长尾“毒丸”样本]**：检查是否有单体超过 10MB~50MB 的超大 JSON 会话，若有，它们往往包含大文本/内联文件，正是造成主库膨胀的核心来源。
