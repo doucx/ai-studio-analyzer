@@ -37,20 +37,6 @@ def notify_sync_event(event_type: str, payload: dict):
             pass
 
 
-def _ensure_index_bootstrapped():
-    """首次启动或缓存更新时，自动检查并构建二级索引"""
-    total_raw = cache.count()
-    total_idx = cache.count_indices()
-    if total_raw > 0 and total_idx < total_raw:
-        print(f"⚡ 正在增量补全 SQLite 会话索引 ({total_idx} -> {total_raw})...")
-        for fid, mtime, raw_data in cache.iter_all_data():
-            file_meta = {"id": fid, "modifiedTime": mtime, "name": raw_data.get("name", "Untitled")}
-            session = parse_prompt_json(file_meta, raw_data)
-            if session:
-                cache.upsert_session_index(session)
-        print("✅ SQLite 二级会话索引补全完成，后续所有冷启动将处于毫秒级！")
-
-
 def _get_range_start_iso(range_key: str) -> Optional[str]:
     if range_key == "all":
         return None
@@ -157,7 +143,6 @@ def get_metrics(range: str = "all"):
     """
     基于 session_index 表毫秒级聚合认知与交互指标（耗时 <10ms）。
     """
-    _ensure_index_bootstrapped()
     range_start = _get_range_start_iso(range)
     indices = cache.query_indices(range_start_iso=range_start)
     return calculate_session_metrics(indices)
@@ -168,7 +153,6 @@ def list_sessions(range: str = "all", limit: Optional[int] = None):
     """
     基于 session_index 极速返回会话列表，供前端 5000+ 虚拟滚动使用（耗时 <15ms）。
     """
-    _ensure_index_bootstrapped()
     range_start = _get_range_start_iso(range)
     indices = cache.query_indices(range_start_iso=range_start, limit=limit)
     return [
