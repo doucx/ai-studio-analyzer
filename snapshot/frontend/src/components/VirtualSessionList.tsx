@@ -1,8 +1,21 @@
-import { useMemo, useRef, useState } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
+import {
+  type DepthFilter,
+  type SortOption,
+  availableModelsSignal,
+  depthFilterSignal,
+  filteredSessionsSignal,
+  isFilterActiveSignal,
+  resetFilters,
+  searchKeywordSignal,
+  selectedModelSignal,
+  sessionsSignal,
+  sortBySignal,
+} from '../state/session';
 import type { SessionItem } from '../types/metrics';
 
 interface Props {
-  sessions: SessionItem[];
+  sessions?: SessionItem[];
   selectedId: string | null;
   onSelect: (session: SessionItem) => void;
 }
@@ -10,39 +23,28 @@ interface Props {
 const ITEM_HEIGHT = 86; // 每项固定高度 86px
 const BUFFER = 5; // 视口外缓冲项数
 
-export function VirtualSessionList({ sessions, selectedId, onSelect }: Props) {
+const DEPTH_OPTIONS: { key: DepthFilter; label: string; tip: string }[] = [
+  { key: 'all', label: '全部', tip: '全量轮次' },
+  { key: 'single', label: '快问 (1轮)', tip: '仅 1 轮轻量交互' },
+  { key: 'deep', label: '攻坚 (≥5轮)', tip: '5 轮以上深度攻坚' },
+  { key: 'branch', label: '分叉', tip: '发生过分支或编辑重试' },
+];
+
+export function VirtualSessionList({ selectedId, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState<'modified' | 'tokens' | 'turns'>('modified');
 
-  // 客户端毫秒级本地过滤与排序
-  const filteredSessions = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    let result = sessions;
-    if (term) {
-      result = result.filter(
-        (s) =>
-          s.name.toLowerCase().includes(term) ||
-          s.first_prompt.toLowerCase().includes(term) ||
-          s.model.toLowerCase().includes(term),
-      );
-    }
+  const totalSessionsCount = sessionsSignal.value.length;
+  const filteredSessions = filteredSessionsSignal.value;
+  const models = availableModelsSignal.value;
+  const isFilterActive = isFilterActiveSignal.value;
 
-    return [...result].sort((a, b) => {
-      if (sortBy === 'tokens') {
-        return b.total_tokens - a.total_tokens;
-      }
-      if (sortBy === 'turns') {
-        return b.turn_count - a.turn_count;
-      }
-      const timeA = a.modified_time ? new Date(a.modified_time).getTime() : 0;
-      const timeB = b.modified_time ? new Date(b.modified_time).getTime() : 0;
-      return timeB - timeA;
-    });
-  }, [sessions, searchTerm, sortBy]);
+  const currentKeyword = searchKeywordSignal.value;
+  const currentModel = selectedModelSignal.value;
+  const currentDepth = depthFilterSignal.value;
+  const currentSort = sortBySignal.value;
 
-  // 虚拟列表动态计算
+  // 虚拟滚动动态计算
   const totalHeight = filteredSessions.length * ITEM_HEIGHT;
   const containerHeight = containerRef.current?.clientHeight || 650;
 
@@ -54,18 +56,32 @@ export function VirtualSessionList({ sessions, selectedId, onSelect }: Props) {
   const visibleItems = filteredSessions.slice(startIndex, endIndex);
 
   return (
-    <div className="flex flex-col h-full bg-zinc-900/60 border border-zinc-800 rounded-lg overflow-hidden">
-      {/* 搜索与排序控制栏 */}
-      <div className="p-3 border-b border-zinc-800 space-y-2 bg-zinc-900/90">
+    <div className="flex flex-col h-full bg-zinc-900/60 border border-zinc-800 rounded-lg overflow-hidden shadow-sm">
+      {/* 搜索与复合过滤控制栏 */}
+      <div className="p-3 border-b border-zinc-800 space-y-2.5 bg-zinc-900/90 backdrop-blur">
+        {/* 第一行：状态指示与排序选择 */}
         <div className="flex items-center justify-between text-xs text-zinc-400">
-          <span className="font-semibold text-zinc-200">
-            会话历史 ({filteredSessions.length} / {sessions.length})
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="font-semibold text-zinc-200">
+              会话历史 ({filteredSessions.length} / {totalSessionsCount})
+            </span>
+            {isFilterActive && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="text-[10px] text-indigo-400 hover:text-indigo-300 underline font-mono cursor-pointer ml-1"
+                title="清空所有过滤条件"
+              >
+                [重置]
+              </button>
+            )}
+          </div>
+
           <select
-            value={sortBy}
-            onChange={(e) =>
-              setSortBy((e.target as HTMLSelectElement).value as 'modified' | 'tokens' | 'turns')
-            }
+            value={currentSort}
+            onChange={(e) => {
+              sortBySignal.value = (e.target as HTMLSelectElement).value as SortOption;
+            }}
             className="bg-zinc-950 border border-zinc-700 text-zinc-300 text-[11px] rounded px-1.5 py-0.5 outline-none focus:border-indigo-500"
           >
             <option value="modified">最近修改</option>
@@ -74,27 +90,74 @@ export function VirtualSessionList({ sessions, selectedId, onSelect }: Props) {
           </select>
         </div>
 
+        {/* 第二行：关键字模糊输入 */}
         <div className="relative">
           <input
             type="text"
             placeholder="搜索会话标题、首轮 Prompt、模型..."
-            value={searchTerm}
+            value={currentKeyword}
             onInput={(e) => {
-              setSearchTerm((e.target as HTMLInputElement).value);
+              searchKeywordSignal.value = (e.target as HTMLInputElement).value;
               setScrollTop(0);
               if (containerRef.current) containerRef.current.scrollTop = 0;
             }}
             className="w-full bg-zinc-950 border border-zinc-800 focus:border-indigo-500 rounded px-2.5 py-1 text-xs text-zinc-200 placeholder-zinc-500 outline-none transition"
           />
-          {searchTerm && (
+          {currentKeyword && (
             <button
               type="button"
-              onClick={() => setSearchTerm('')}
-              className="absolute right-2 top-1 text-xs text-zinc-500 hover:text-zinc-300"
+              onClick={() => {
+                searchKeywordSignal.value = '';
+              }}
+              className="absolute right-2 top-1 text-xs text-zinc-500 hover:text-zinc-300 cursor-pointer"
             >
               ✕
             </button>
           )}
+        </div>
+
+        {/* 第三行：模型下拉筛选 */}
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-zinc-400 shrink-0">模型:</span>
+          <select
+            value={currentModel}
+            onChange={(e) => {
+              selectedModelSignal.value = (e.target as HTMLSelectElement).value;
+              setScrollTop(0);
+              if (containerRef.current) containerRef.current.scrollTop = 0;
+            }}
+            className="flex-1 bg-zinc-950 border border-zinc-800 focus:border-indigo-500 text-zinc-300 text-[11px] rounded px-2 py-1 outline-none truncate"
+          >
+            <option value="all">全部模型 ({totalSessionsCount})</option>
+            {models.map(([modelName, count]) => (
+              <option key={modelName} value={modelName}>
+                {modelName} ({count})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* 第四行：轮次深度与摩擦力胶囊切换 */}
+        <div className="grid grid-cols-4 gap-1 p-0.5 bg-zinc-950 border border-zinc-800 rounded-md">
+          {DEPTH_OPTIONS.map(({ key, label, tip }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => {
+                depthFilterSignal.value = key;
+                setScrollTop(0);
+                if (containerRef.current) containerRef.current.scrollTop = 0;
+              }}
+              title={tip}
+              className={`text-[10px] py-1 rounded font-medium transition text-center truncate ${
+                currentDepth === key
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -105,7 +168,18 @@ export function VirtualSessionList({ sessions, selectedId, onSelect }: Props) {
         className="flex-1 overflow-y-auto relative w-full divide-y divide-zinc-800/40 select-none"
       >
         {filteredSessions.length === 0 ? (
-          <div className="p-8 text-center text-xs text-zinc-500">未检索到匹配的交互会话</div>
+          <div className="p-8 text-center text-xs text-zinc-500 space-y-2">
+            <div>未检索到匹配的交互会话</div>
+            {isFilterActive && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="text-indigo-400 hover:text-indigo-300 text-xs underline"
+              >
+                清空筛选条件
+              </button>
+            )}
+          </div>
         ) : (
           <div style={{ height: `${totalHeight}px`, width: '100%', position: 'relative' }}>
             <div
