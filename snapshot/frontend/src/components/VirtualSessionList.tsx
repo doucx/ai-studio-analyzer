@@ -121,25 +121,18 @@ export function VirtualSessionList({ sessions, selectedId, onSelect }: Props) {
               {visibleItems.map((s) => {
                 const isSelected = selectedId === s.file_id;
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={s.file_id}
                     onClick={() => onSelect(s)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        onSelect(s);
-                      }
-                    }}
-                    role="button"
-                    tabIndex={0}
                     style={{ height: `${ITEM_HEIGHT}px` }}
-                    className={`p-2.5 cursor-pointer transition flex flex-col justify-between border-b border-zinc-800/30 outline-none focus:bg-zinc-800/60 ${
+                    className={`w-full text-left p-2.5 cursor-pointer transition flex flex-col justify-between border-b border-zinc-800/30 outline-none focus:bg-zinc-800/60 ${
                       isSelected
                         ? 'bg-indigo-950/60 border-l-2 border-l-indigo-500 text-white'
                         : 'hover:bg-zinc-800/40 text-zinc-300'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-1.5">
+                    <div className="flex items-center justify-between gap-1.5 w-full">
                       <span
                         className="font-medium text-xs truncate flex-1 text-zinc-100"
                         title={s.name}
@@ -156,11 +149,11 @@ export function VirtualSessionList({ sessions, selectedId, onSelect }: Props) {
                       </span>
                     </div>
 
-                    <p className="text-[11px] text-zinc-400 truncate font-sans">
+                    <p className="text-[11px] text-zinc-400 truncate font-sans w-full">
                       {s.first_prompt || '(无首轮文本提示)'}
                     </p>
 
-                    <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono">
+                    <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono w-full">
                       <span className="bg-zinc-800/80 px-1 py-0.2 rounded text-zinc-400 max-w-[130px] truncate">
                         {s.model.replace('models/', '')}
                       </span>
@@ -168,7 +161,7 @@ export function VirtualSessionList({ sessions, selectedId, onSelect }: Props) {
                         {s.total_tokens.toLocaleString()} tok · {s.turn_count} 轮
                       </span>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>

@@ -139,9 +139,9 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
 
       {/* 消息正文：由外部 Markdown 渲染器全屏呈现 */}
       <div className="p-4 sm:p-5">
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: 用于渲染本地 SQLite 缓存中对话记录的 Markdown 解析输出 */}
         <div
           className="prose-chat max-w-none"
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: 用于渲染本地 SQLite 缓存中对话记录的 Markdown 解析输出
           dangerouslySetInnerHTML={{ __html: htmlContent as string }}
         />
       </div>
