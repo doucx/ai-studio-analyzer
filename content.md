@@ -4,6 +4,6 @@
 
 ### 📝 变更文件摘要:
 ```
-README.md | 164 ++++++++++++++++++++++++++++++++++++++++++++------------------
- 1 file changed, 117 insertions(+), 47 deletions(-)
+piconfig.json | 10 ++++++++++
+ 1 file changed, 10 insertions(+)
 ```
