@@ -5,7 +5,7 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Set
 from fastapi import APIRouter, BackgroundTasks, Request
-from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from src.analyzer.cache import SQLiteCache
 from src.analyzer.drive import DriveClient, PROXY_URL
 from src.analyzer.exporter import (

@@ -83,7 +83,9 @@ def parse_prompt_json(
             elif "inlineFile" in c:
                 file_info = c["inlineFile"]
                 mime = file_info.get("mimeType", "application/octet-stream")
-                display_name = file_info.get("displayName") or file_info.get("name") or ""
+                display_name = (
+                    file_info.get("displayName") or file_info.get("name") or ""
+                )
                 payload_type = "inlineFile"
                 raw_b64 = file_info.get("data", "")
                 raw_bytes = b""

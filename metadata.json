@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor: 全面优化内联文件 (inlineFile) 的解码、意图提取与前端交互展示", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790313477.946052, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "ruff Capture: M metrics.py, M parser.py, M api.py", "type": "capture", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790313569.7665036, "duration_ms": 0}}
