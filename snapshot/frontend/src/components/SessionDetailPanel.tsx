@@ -69,8 +69,9 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
     return (
       <div className="rounded-lg border border-emerald-900/30 bg-emerald-950/15 overflow-hidden">
         <div className="px-3.5 py-2 flex items-center justify-between bg-emerald-950/30 border-b border-emerald-900/20 text-xs text-emerald-400 font-mono">
-          <div
-            className="flex items-center gap-2 cursor-pointer select-none hover:text-emerald-300 transition"
+          <button
+            type="button"
+            className="flex items-center gap-2 cursor-pointer select-none hover:text-emerald-300 transition bg-transparent border-none p-0 text-emerald-400 font-mono"
             onClick={() => setIsThinkingOpen(!isThinkingOpen)}
           >
             <span>{isThinkingOpen ? '▼' : '▶'}</span>
@@ -80,7 +81,7 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
             <span className="text-[10px] text-emerald-500/80">
               {turn.token_count > 0 ? `${turn.token_count.toLocaleString()} tokens` : ''}
             </span>
-          </div>
+          </button>
           <CopyButton text={turn.text} />
         </div>
         {isThinkingOpen ? (
@@ -88,12 +89,13 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
             {turn.text}
           </div>
         ) : (
-          <div
-            className="px-4 py-2 text-xs text-emerald-400/60 font-mono truncate cursor-pointer hover:bg-emerald-900/10"
+          <button
+            type="button"
+            className="w-full text-left px-4 py-2 text-xs text-emerald-400/60 font-mono truncate cursor-pointer hover:bg-emerald-900/10 bg-transparent border-none"
             onClick={() => setIsThinkingOpen(true)}
           >
             {turn.text.slice(0, 140)}...
-          </div>
+          </button>
         )}
       </div>
     );
@@ -137,6 +139,7 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
 
       {/* 消息正文：由外部 Markdown 渲染器全屏呈现 */}
       <div className="p-4 sm:p-5">
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: 用于渲染本地 SQLite 缓存中对话记录的 Markdown 解析输出 */}
         <div
           className="prose-chat max-w-none"
           dangerouslySetInnerHTML={{ __html: htmlContent as string }}
@@ -282,7 +285,10 @@ export function SessionDetailPanel({ session, onClose }: Props) {
         ) : (
           <div className="flex-1 overflow-y-auto space-y-4 pr-1">
             {detail?.turns && detail.turns.length > 0 ? (
-              detail.turns.map((turn, idx) => <TurnMessage key={idx} turn={turn} index={idx} />)
+              detail.turns.map((turn, idx) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: 对话轮次流按时间严格保序，无需进行动态重排
+                <TurnMessage key={`turn-${idx}`} turn={turn} index={idx} />
+              ))
             ) : (
               <div className="py-16 text-center text-zinc-500 text-xs">
                 暂无对话内容或数据未同步

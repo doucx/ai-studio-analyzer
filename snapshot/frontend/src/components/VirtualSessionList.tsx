@@ -63,7 +63,9 @@ export function VirtualSessionList({ sessions, selectedId, onSelect }: Props) {
           </span>
           <select
             value={sortBy}
-            onChange={(e) => setSortBy((e.target as HTMLSelectElement).value as any)}
+            onChange={(e) =>
+              setSortBy((e.target as HTMLSelectElement).value as 'modified' | 'tokens' | 'turns')
+            }
             className="bg-zinc-950 border border-zinc-700 text-zinc-300 text-[11px] rounded px-1.5 py-0.5 outline-none focus:border-indigo-500"
           >
             <option value="modified">最近修改</option>
@@ -122,8 +124,16 @@ export function VirtualSessionList({ sessions, selectedId, onSelect }: Props) {
                   <div
                     key={s.file_id}
                     onClick={() => onSelect(s)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onSelect(s);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
                     style={{ height: `${ITEM_HEIGHT}px` }}
-                    className={`p-2.5 cursor-pointer transition flex flex-col justify-between border-b border-zinc-800/30 ${
+                    className={`p-2.5 cursor-pointer transition flex flex-col justify-between border-b border-zinc-800/30 outline-none focus:bg-zinc-800/60 ${
                       isSelected
                         ? 'bg-indigo-950/60 border-l-2 border-l-indigo-500 text-white'
                         : 'hover:bg-zinc-800/40 text-zinc-300'

@@ -91,26 +91,35 @@ export function App() {
         <div className="flex items-center gap-3">
           <button
             type="button"
-            onClick={() => (sidebarCollapsedSignal.value = !sidebarCollapsedSignal.value)}
+            onClick={() => {
+              sidebarCollapsedSignal.value = !sidebarCollapsedSignal.value;
+            }}
             className="p-1.5 text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded transition text-xs"
             title={isSidebarCollapsed ? '展开会话历史侧边栏' : '收起会话历史侧边栏'}
           >
             {isSidebarCollapsed ? '📂 展开' : '◀ 收起'}
           </button>
-          <span
-            className="text-2xl cursor-pointer"
-            onClick={() => (selectedSessionSignal.value = null)}
+          <button
+            type="button"
+            className="text-2xl cursor-pointer bg-transparent border-none p-0 leading-none"
+            onClick={() => {
+              selectedSessionSignal.value = null;
+            }}
+            title="回到概览看板"
           >
             🧠
-          </span>
+          </button>
           <div>
             <div className="flex items-center gap-2">
-              <h1
-                className="text-lg font-bold tracking-tight text-white cursor-pointer hover:text-indigo-400 transition"
-                onClick={() => (selectedSessionSignal.value = null)}
+              <button
+                type="button"
+                className="text-lg font-bold tracking-tight text-white cursor-pointer hover:text-indigo-400 transition bg-transparent border-none p-0 text-left"
+                onClick={() => {
+                  selectedSessionSignal.value = null;
+                }}
               >
                 AI Studio Analyzer
-              </h1>
+              </button>
               <span className="text-[10px] font-mono uppercase bg-indigo-950/80 text-indigo-400 border border-indigo-800/60 px-1.5 py-0.2 rounded">
                 v0.2 Workstation
               </span>
@@ -182,7 +191,9 @@ export function App() {
             <VirtualSessionList
               sessions={sessions}
               selectedId={selectedSession?.file_id ?? null}
-              onSelect={(s) => (selectedSessionSignal.value = s)}
+              onSelect={(s) => {
+                selectedSessionSignal.value = s;
+              }}
             />
           </aside>
         )}
@@ -198,7 +209,9 @@ export function App() {
           {!loadingSignal.value && selectedSession && (
             <SessionDetailPanel
               session={selectedSession}
-              onClose={() => (selectedSessionSignal.value = null)}
+              onClose={() => {
+                selectedSessionSignal.value = null;
+              }}
             />
           )}
 
