@@ -131,6 +131,7 @@ export const filteredSessionsSignal = computed(() => {
 });
 
 export async function fetchSessions(range = timeRangeSignal.value) {
+  refreshFtsSearch(range);
   if (sessionsSignal.value.length === 0) {
     sessionsLoadingSignal.value = true;
   }
@@ -158,21 +159,24 @@ export function toggleSidebar() {
 let activeSearchAbortController: AbortController | null = null;
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-export function handleSearchInput(keyword: string) {
-  searchKeywordSignal.value = keyword;
-  const term = keyword.trim();
-
-  if (searchDebounceTimer) {
-    clearTimeout(searchDebounceTimer);
-    searchDebounceTimer = null;
+function extractCleanTerm(keyword: string): string {
+  const fullTerm = keyword.trim().toLowerCase();
+  const chunkSyntaxMatch = fullTerm.match(/(?:chunks?|c)\s*(:|>=|<=|>|<|=)\s*(\d+)/i);
+  let cleanTerm = fullTerm;
+  if (chunkSyntaxMatch) {
+    cleanTerm = cleanTerm.replace(chunkSyntaxMatch[0], '').trim();
   }
+  return cleanTerm;
+}
 
+export function executeFtsSearch(keyword: string, range = timeRangeSignal.value) {
   if (activeSearchAbortController) {
     activeSearchAbortController.abort();
     activeSearchAbortController = null;
   }
 
-  if (term.length < 2) {
+  const cleanTerm = extractCleanTerm(keyword);
+  if (cleanTerm.length < 2) {
     ftsResultsSignal.value = null;
     isSearchingFtsSignal.value = false;
     if (sortBySignal.value === 'relevance') {
@@ -182,33 +186,73 @@ export function handleSearchInput(keyword: string) {
   }
 
   isSearchingFtsSignal.value = true;
-  searchDebounceTimer = setTimeout(async () => {
-    const controller = new AbortController();
-    activeSearchAbortController = controller;
+  const controller = new AbortController();
+  activeSearchAbortController = controller;
 
-    try {
-      const res = await fetch(`/api/sessions/search?q=${encodeURIComponent(term)}&limit=100`, {
-        signal: controller.signal,
-      });
+  fetch(`/api/sessions/search?q=${encodeURIComponent(cleanTerm)}&range=${range}&limit=100`, {
+    signal: controller.signal,
+  })
+    .then(async (res) => {
       if (res.ok) {
         const data = await res.json();
-        if (searchKeywordSignal.value.trim() === term) {
+        if (extractCleanTerm(searchKeywordSignal.value) === cleanTerm) {
           ftsResultsSignal.value = Array.isArray(data) ? data : [];
           if (sortBySignal.value === 'modified') {
             sortBySignal.value = 'relevance';
           }
         }
       }
-    } catch (err: unknown) {
+    })
+    .catch((err: unknown) => {
       if ((err as Error)?.name !== 'AbortError') {
         console.error('FTS 全文检索异常:', err);
       }
-    } finally {
+    })
+    .finally(() => {
       if (activeSearchAbortController === controller) {
         isSearchingFtsSignal.value = false;
         activeSearchAbortController = null;
       }
+    });
+}
+
+export function refreshFtsSearch(range = timeRangeSignal.value) {
+  const currentKeyword = searchKeywordSignal.value;
+  const cleanTerm = extractCleanTerm(currentKeyword);
+  if (cleanTerm.length >= 2) {
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = null;
     }
+    executeFtsSearch(currentKeyword, range);
+  }
+}
+
+export function handleSearchInput(keyword: string) {
+  searchKeywordSignal.value = keyword;
+  const cleanTerm = extractCleanTerm(keyword);
+
+  if (searchDebounceTimer) {
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = null;
+  }
+
+  if (cleanTerm.length < 2) {
+    if (activeSearchAbortController) {
+      activeSearchAbortController.abort();
+      activeSearchAbortController = null;
+    }
+    ftsResultsSignal.value = null;
+    isSearchingFtsSignal.value = false;
+    if (sortBySignal.value === 'relevance') {
+      sortBySignal.value = 'modified';
+    }
+    return;
+  }
+
+  isSearchingFtsSignal.value = true;
+  searchDebounceTimer = setTimeout(() => {
+    executeFtsSearch(keyword, timeRangeSignal.value);
   }, 300);
 }
 

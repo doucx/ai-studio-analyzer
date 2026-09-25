@@ -340,6 +340,7 @@ class SQLiteCache:
         query: str,
         limit: int = 50,
         offset: int = 0,
+        range_start_iso: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """基于 FTS5 Trigram 与 BM25 进行全文检索，并提取上下文命中片段 (Snippet)"""
         clean_query = query.strip().replace('"', '""')
@@ -347,8 +348,17 @@ class SQLiteCache:
             return []
 
         fts_match_expr = f'"{clean_query}"'
+        where_conditions = ["session_fts MATCH ?"]
+        params: List[Any] = [fts_match_expr]
+
+        if range_start_iso:
+            where_conditions.append("(s.modified_time >= ? OR s.created_time >= ?)")
+            params.extend([range_start_iso, range_start_iso])
+
+        where_sql = " AND ".join(where_conditions)
+
         # snippet 第二个参数限定为 3 (即 session_fts 的 content 列，避免遍历整表其他列产生极大 I/O)
-        sql = """
+        sql = f"""
             SELECT 
                 f.file_id,
                 bm25(session_fts) AS rank,
@@ -367,15 +377,17 @@ class SQLiteCache:
                 s.created_time
             FROM session_fts f
             JOIN session_index s ON f.file_id = s.file_id
-            WHERE session_fts MATCH ?
+            WHERE {where_sql}
             ORDER BY rank
             LIMIT ? OFFSET ?;
         """
+        params.extend([limit, offset])
+
         with self._get_connection() as conn:
             cursor = conn.cursor()
             try:
                 cursor.execute("PRAGMA busy_timeout = 3000;")
-                cursor.execute(sql, (fts_match_expr, limit, offset))
+                cursor.execute(sql, tuple(params))
                 rows = cursor.fetchall()
                 results = []
                 for r in rows:
