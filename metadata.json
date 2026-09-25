@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 重构左右分栏工作台并引入 5000+ 会话虚拟列表与会话面板", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790309397.587285, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 实现零依赖提示词 Markdown 对话流渲染器与思考链折叠器", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790309626.4387913, "duration_ms": 0}}
