@@ -1,65 +1,196 @@
-好的，我们将把已验证的所有修复与性能优化作为一个完整的逻辑单元提交到 Git 仓库中。
+好的，我将在会话详情面板的“在 AI Studio 打开”按钮旁添加一个“下载原始 JSON”按钮，并在后端新增对应的原始数据下载 API。
 
-## [COMMIT] fix(server): 移除接口层冗余索引补全并提交全链路性能优化
-
-### 错误分析
-
-在 `src/server/api.py` 的初始化逻辑中，`_ensure_index_bootstrapped()` 使用 `total_idx < total_raw`（索引数 < 原始缓存数）作为判断索引是否就绪的条件。然而由于 10 条空会话在解析为 `PromptSession` 时会被正确返回 `None` 且不写入索引表，导致索引总条目数恒等于 3636，条件 `3636 < 3646` 恒成立。这引发了每次刷新页面时并发全量扫描并解析 3646 条记录的性能瓶颈。
+## [WIP] feat(frontend): 会话详情面板新增下载原始会话 JSON 按钮
 
 ### 用户需求
-
-将移除冗余循环、引入 SQLite 二级索引表、接入 SSE 主动通知以及修复云盘大文档渲染等一系列已验证的优化改动正式固化并提交到 Git。
+在会话详情抽屉/面板顶部操作栏的“在 AI Studio 打开”按钮旁边，添加一个“下载原始会话 JSON”按钮，以便能够直接导出 Google AI Studio 原始缓存结构进行离线分析与调试。
 
 ### 评论
-
-这次提交涵盖了从存储层（二级轻量索引表）、网络层（SSE 流式推送）、解析层（云盘大文档防吞与优先解析）到 API 层的全链路性能重构，使整个工作台的冷启动与交互响应从数秒级压缩至毫秒级。
+这是一个非常实用且低风险的开发者调试功能。通过直接将本地 SQLite 缓存中存储的原始会话数据提供下载，能够极大地方便针对特定会话的 Schema 结构探测和问题排查，避免直接操作数据库。
 
 ### 目标
-
-1. 将所有已修改的文件暂存到 Git。
-2. 创建格式规范且详尽的 Git Commit 记录。
+1. 在后端 `src/server/api.py` 中增加 `GET /api/sessions/{file_id}/raw` 端点，支持带文件名下载附件。
+2. 在前端 `SessionDetailPanel.tsx` 的操作栏中加入对应的下载按钮与图标。
 
 ### 基本原理
-
-符合 `d3-constraint-quipu-plan-script-rules-D3-P2` 的操作隔离约束：仅在此独立的 `[COMMIT]` 计划中执行版本提交操作，不包含任何文件系统写入指令，确保代码库状态的清晰与可追溯。
+1. 后端直接利用 `cache.get(file_id)` 读取原始结构体，并以 `JSONResponse` 配合 `Content-Disposition: attachment` 头返回，确保浏览器能够直接触发下载。
+2. 前端复用现有的操作栏按钮样式规范（暗色调，含状态与图标），提供平滑一致的视觉体验。
 
 ### 标签
-
-#intent/fix #flow/ready #priority/high #comp/engine #comp/runtime #comp/interfaces #concept/state #concept/ui #scope/core #scope/perf #ai/instruct #task/domain/storage #task/object/session-index #task/action/bug-fix #task/state/end #task/status/completed
+#intent/build #flow/ready #priority/medium #scope/ux #scope/dx #ai/instruct #task/domain/ui #task/object/session-detail-raw-download #task/action/feature-add #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 暂存并提交变更
+#### Acts 1: 后端新增原始 JSON 下载路由
 
-我们将把已验证的文件添加到暂存区并创建提交。
+在 `src/server/api.py` 中导入 `JSONResponse` 并添加 `/sessions/{file_id}/raw` 端点。
 
 ~~~~~act
-git_add
-src/analyzer/cache.py
-src/analyzer/metrics.py
-src/analyzer/parser.py
-src/analyzer/sync.py
+patch_file
 src/server/api.py
-frontend/src/app.tsx
+~~~~~
+~~~~~old
+from fastapi import APIRouter, BackgroundTasks, Request
+from fastapi.responses import FileResponse, StreamingResponse
+from src.analyzer.cache import SQLiteCache
+~~~~~
+~~~~~new
+from fastapi import APIRouter, BackgroundTasks, Request
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from src.analyzer.cache import SQLiteCache
+~~~~~
+
+~~~~~act
+patch_file
+src/server/api.py
+~~~~~
+~~~~~old
+    return {
+        "file_id": target.file_id,
+        "name": target.name,
+        "model": target.model,
+        "created_time": target.created_time.isoformat()
+        if target.created_time
+        else None,
+        "modified_time": target.modified_time.isoformat()
+        if target.modified_time
+        else None,
+        "duration_human": target.duration_human,
+        "duration_seconds": target.duration_seconds,
+        "turn_count": target.turn_count,
+        "total_tokens": target.total_tokens,
+        "thought_tokens": target.thought_tokens,
+        "total_user_chars": target.total_user_chars,
+        "has_branching": target.has_branching,
+        "branch_count": target.branch_count,
+        "system_instruction": target.system_instruction,
+        "turns": [
+            {
+                "role": t.role,
+                "text": t.text,
+                "token_count": t.token_count,
+                "is_thought": t.is_thought,
+                "payload_type": t.payload_type,
+                "timestamp": t.timestamp.isoformat() if t.timestamp else None,
+                "is_edited": t.is_edited,
+            }
+            for t in target.turns
+        ],
+    }
+
+
+@router.post("/sync")
+~~~~~
+~~~~~new
+    return {
+        "file_id": target.file_id,
+        "name": target.name,
+        "model": target.model,
+        "created_time": target.created_time.isoformat()
+        if target.created_time
+        else None,
+        "modified_time": target.modified_time.isoformat()
+        if target.modified_time
+        else None,
+        "duration_human": target.duration_human,
+        "duration_seconds": target.duration_seconds,
+        "turn_count": target.turn_count,
+        "total_tokens": target.total_tokens,
+        "thought_tokens": target.thought_tokens,
+        "total_user_chars": target.total_user_chars,
+        "has_branching": target.has_branching,
+        "branch_count": target.branch_count,
+        "system_instruction": target.system_instruction,
+        "turns": [
+            {
+                "role": t.role,
+                "text": t.text,
+                "token_count": t.token_count,
+                "is_thought": t.is_thought,
+                "payload_type": t.payload_type,
+                "timestamp": t.timestamp.isoformat() if t.timestamp else None,
+                "is_edited": t.is_edited,
+            }
+            for t in target.turns
+        ],
+    }
+
+
+@router.get("/sessions/{file_id}/raw")
+def get_session_raw(file_id: str):
+    """
+    导出原始 Google AI Studio 缓存 JSON 格式数据便于调试
+    """
+    raw_data = cache.get(file_id)
+    if not raw_data:
+        return {"error": "未找到指定的会话记录"}
+    return JSONResponse(
+        content=raw_data,
+        headers={"Content-Disposition": f'attachment; filename="{file_id}.json"'},
+    )
+
+
+@router.post("/sync")
+~~~~~
+
+#### Acts 2: 前端详情面板加入下载按钮
+
+在 `SessionDetailPanel.tsx` 的头部操作条中加入“下载原始 JSON”按钮。
+
+~~~~~act
+patch_file
 frontend/src/components/SessionDetailPanel.tsx
 ~~~~~
-
-~~~~~act
-git_commit
+~~~~~old
+          <a
+            href={aiStudioUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded transition shadow-sm flex items-center gap-1.5"
+            title="在 Google AI Studio 原生工作台打开"
+          >
+            <span>🚀</span>
+            <span className="hidden sm:inline">在 AI Studio 打开</span>
+          </a>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-2.5 py-1 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition border border-zinc-700/80"
+          >
+            ✕ 关闭
+          </button>
 ~~~~~
-~~~~~text
-fix(server): remove redundant index bootstrap loop and optimize end-to-end performance
-
-- Remove _ensure_index_bootstrapped from API request path, resolving the redundant rescan caused by empty sessions
-- Implement SQLite session_index table for sub-20ms dashboard cold starts
-- Introduce SSE (Server-Sent Events) to replace 1s client polling with real-time push
-- Fix Google Drive document chunk parsing priority and Markdown link reference collision
-- Render dedicated interactive UI card for mounted Drive documents in session detail
+~~~~~new
+          <a
+            href={aiStudioUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded transition shadow-sm flex items-center gap-1.5"
+            title="在 Google AI Studio 原生工作台打开"
+          >
+            <span>🚀</span>
+            <span className="hidden sm:inline">在 AI Studio 打开</span>
+          </a>
+          <a
+            href={`/api/sessions/${session.file_id}/raw`}
+            download={`session_${session.file_id}.json`}
+            className="px-2.5 py-1 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded border border-zinc-700/80 transition flex items-center gap-1.5"
+            title="下载原始会话 JSON"
+          >
+            <span>💾</span>
+            <span className="hidden sm:inline">下载原始 JSON</span>
+          </a>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-2.5 py-1 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition border border-zinc-700/80"
+          >
+            ✕ 关闭
+          </button>
 ~~~~~
 
 ### 下一步建议
-
-- **生产构建验证**: 可在 `frontend` 目录下运行 `npm run check` 或 `npm run build`，确保 TypeScript 类型检查和 Biome 代码风格检查均完全通过。
-- **分支推送**: 若有远端仓库配置，可按需执行 `git push` 同步提交记录。
+1. 启动或刷新前端页面，点击任意会话进入详情，测试“下载原始 JSON”按钮是否能正常触发浏览器下载 `.json` 文件。
+2. 如果格式符合预期，可以在后续确认无误后提交该 Git 变更。

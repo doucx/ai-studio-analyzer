@@ -5,7 +5,7 @@ import tempfile
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Set
 from fastapi import APIRouter, BackgroundTasks, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from src.analyzer.cache import SQLiteCache
 from src.analyzer.drive import DriveClient, PROXY_URL
 from src.analyzer.exporter import (
@@ -221,6 +221,20 @@ def get_session_detail(file_id: str):
             for t in target.turns
         ],
     }
+
+
+@router.get("/sessions/{file_id}/raw")
+def get_session_raw(file_id: str):
+    """
+    导出原始 Google AI Studio 缓存 JSON 格式数据便于调试
+    """
+    raw_data = cache.get(file_id)
+    if not raw_data:
+        return {"error": "未找到指定的会话记录"}
+    return JSONResponse(
+        content=raw_data,
+        headers={"Content-Disposition": f'attachment; filename="{file_id}.json"'},
+    )
 
 
 @router.post("/sync")

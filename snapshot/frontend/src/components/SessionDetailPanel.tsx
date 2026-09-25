@@ -245,6 +245,15 @@ export function SessionDetailPanel({ session, onClose }: Props) {
             <span>🚀</span>
             <span className="hidden sm:inline">在 AI Studio 打开</span>
           </a>
+          <a
+            href={`/api/sessions/${session.file_id}/raw`}
+            download={`session_${session.file_id}.json`}
+            className="px-2.5 py-1 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded border border-zinc-700/80 transition flex items-center gap-1.5"
+            title="下载原始会话 JSON"
+          >
+            <span>💾</span>
+            <span className="hidden sm:inline">下载原始 JSON</span>
+          </a>
           <button
             type="button"
             onClick={onClose}
