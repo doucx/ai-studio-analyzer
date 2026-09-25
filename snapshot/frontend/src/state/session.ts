@@ -189,12 +189,9 @@ export function executeFtsSearch(keyword: string, range = timeRangeSignal.value)
   const controller = new AbortController();
   activeSearchAbortController = controller;
 
-  fetch(
-    `/api/sessions/search?q=${encodeURIComponent(cleanTerm)}&range=${range}&limit=100`,
-    {
-      signal: controller.signal,
-    },
-  )
+  fetch(`/api/sessions/search?q=${encodeURIComponent(cleanTerm)}&range=${range}&limit=100`, {
+    signal: controller.signal,
+  })
     .then(async (res) => {
       if (res.ok) {
         const data = await res.json();

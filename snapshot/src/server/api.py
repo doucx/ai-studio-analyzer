@@ -123,9 +123,7 @@ def list_sessions(range: str = "all", limit: Optional[int] = None):
 
 
 @router.get("/sessions/search")
-def search_sessions(
-    q: str, range: str = "all", limit: int = 50, offset: int = 0
-):
+def search_sessions(q: str, range: str = "all", limit: int = 50, offset: int = 0):
     """基于 SQLite FTS5 全文索引的高性能深度检索接口 (声明于 /sessions/{file_id} 前避免被拦截)"""
     range_start = _get_range_start_iso(range)
     return cache.search_fts(
