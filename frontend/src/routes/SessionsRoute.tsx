@@ -1,3 +1,4 @@
+import { MessagesSquare } from 'lucide-preact';
 import { useLocation, useRoute } from 'preact-iso';
 import { useMemo } from 'preact/hooks';
 import { SessionDetailPanel } from '../components/SessionDetailPanel';
@@ -55,7 +56,9 @@ export function SessionsRoute() {
           <SessionDetailPanel session={currentSession} onClose={handleCloseDetail} />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center p-12 text-center border border-zinc-800/80 bg-zinc-900/30 rounded-lg">
-            <div className="text-4xl mb-3">💬</div>
+            <div className="p-3.5 rounded-full bg-zinc-900 border border-zinc-800 text-indigo-400 mb-3">
+              <MessagesSquare size={28} />
+            </div>
             <h3 className="text-base font-semibold text-zinc-300">会话工作台已就绪</h3>
             <p className="text-xs text-zinc-500 mt-1 max-w-sm leading-relaxed">
               请在左侧列表中选择任意会话，查看包含完整 Markdown

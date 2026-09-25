@@ -1,50 +1,20 @@
-import {
-  CategoryScale,
-  Chart as ChartJS,
-  Filler,
-  Legend,
-  LineController,
-  LineElement,
-  LinearScale,
-  PointElement,
-  Title,
-  Tooltip,
-} from 'chart.js';
-import { useEffect, useRef } from 'preact/hooks';
+import type { ChartConfiguration } from 'chart.js';
+import { useMemo } from 'preact/hooks';
 import type { DailyTrendItem } from '../../types/metrics';
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  LineController,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-);
+import { BaseChart } from './base/BaseChart';
+import { CHART_PALETTE, defaultDarkScales, defaultDarkTooltipOptions } from './base/chartTheme';
 
 interface Props {
   data: DailyTrendItem[];
 }
 
 export function TokenTrendChart({ data }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const chartRef = useRef<ChartJS | null>(null);
-
-  useEffect(() => {
-    if (!canvasRef.current) return;
-
-    if (chartRef.current) {
-      chartRef.current.destroy();
-    }
-
+  const chartConfig = useMemo<ChartConfiguration<'line'>>(() => {
     const labels = data.map((d) => d.date);
     const totalTokens = data.map((d) => d.total_tokens);
     const thoughtTokens = data.map((d) => d.thought_tokens);
 
-    chartRef.current = new ChartJS(canvasRef.current, {
+    return {
       type: 'line',
       data: {
         labels,
@@ -52,8 +22,8 @@ export function TokenTrendChart({ data }: Props) {
           {
             label: '总 Token 消耗',
             data: totalTokens,
-            borderColor: '#818cf8', // indigo-400
-            backgroundColor: 'rgba(129, 140, 248, 0.12)',
+            borderColor: CHART_PALETTE.indigo,
+            backgroundColor: CHART_PALETTE.indigoBg,
             fill: true,
             tension: 0.3,
             borderWidth: 2,
@@ -63,8 +33,8 @@ export function TokenTrendChart({ data }: Props) {
           {
             label: '思考链 (Thinking) 消耗',
             data: thoughtTokens,
-            borderColor: '#34d399', // emerald-400
-            backgroundColor: 'rgba(52, 211, 153, 0.08)',
+            borderColor: CHART_PALETTE.emerald,
+            backgroundColor: CHART_PALETTE.emeraldBg,
             fill: true,
             tension: 0.3,
             borderWidth: 1.8,
@@ -84,19 +54,14 @@ export function TokenTrendChart({ data }: Props) {
           legend: {
             position: 'top',
             labels: {
-              color: '#a1a1aa',
+              color: CHART_PALETTE.textSecondary,
               font: { size: 11 },
               boxWidth: 12,
               usePointStyle: true,
             },
           },
           tooltip: {
-            backgroundColor: '#18181b',
-            titleColor: '#f4f4f5',
-            bodyColor: '#e4e4e7',
-            borderColor: '#27272a',
-            borderWidth: 1,
-            padding: 10,
+            ...defaultDarkTooltipOptions,
             callbacks: {
               label(context) {
                 const val = Number(context.raw) || 0;
@@ -107,20 +72,18 @@ export function TokenTrendChart({ data }: Props) {
         },
         scales: {
           x: {
-            grid: { color: 'rgba(63, 63, 70, 0.25)' },
+            ...defaultDarkScales.x,
             ticks: {
-              color: '#71717a',
-              font: { size: 10 },
+              ...defaultDarkScales.x.ticks,
               maxRotation: 0,
               autoSkip: true,
               maxTicksLimit: 12,
             },
           },
           y: {
-            grid: { color: 'rgba(63, 63, 70, 0.25)' },
+            ...defaultDarkScales.y,
             ticks: {
-              color: '#71717a',
-              font: { size: 10 },
+              ...defaultDarkScales.y.ticks,
               callback(value) {
                 const num = Number(value);
                 if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
@@ -131,19 +94,8 @@ export function TokenTrendChart({ data }: Props) {
           },
         },
       },
-    });
-
-    return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
     };
   }, [data]);
 
-  return (
-    <div className="relative w-full h-72">
-      <canvas ref={canvasRef} />
-    </div>
-  );
+  return <BaseChart config={chartConfig} heightClass="h-72" />;
 }

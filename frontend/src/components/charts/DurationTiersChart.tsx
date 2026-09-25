@@ -1,7 +1,7 @@
-import { ArcElement, Chart as ChartJS, DoughnutController, Legend, Tooltip } from 'chart.js';
-import { useEffect, useRef } from 'preact/hooks';
-
-ChartJS.register(ArcElement, Tooltip, Legend, DoughnutController);
+import type { ChartConfiguration } from 'chart.js';
+import { useMemo } from 'preact/hooks';
+import { BaseChart } from './base/BaseChart';
+import { CHART_PALETTE, defaultDarkTooltipOptions } from './base/chartTheme';
 
 interface Props {
   tiers: {
@@ -13,20 +13,11 @@ interface Props {
 }
 
 export function DurationTiersChart({ tiers }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const chartRef = useRef<ChartJS | null>(null);
-
-  useEffect(() => {
-    if (!canvasRef.current) return;
-
-    if (chartRef.current) {
-      chartRef.current.destroy();
-    }
-
+  const chartConfig = useMemo<ChartConfiguration<'doughnut'>>(() => {
     const labels = ['即时快问 (<10m)', '聚焦推进 (10~60m)', '深度攻坚 (1~6h)', '跨日长线 (>6h)'];
     const dataValues = [tiers.flash[0], tiers.focus[0], tiers.deep[0], tiers.epic[0]];
 
-    chartRef.current = new ChartJS(canvasRef.current, {
+    return {
       type: 'doughnut',
       data: {
         labels,
@@ -34,10 +25,10 @@ export function DurationTiersChart({ tiers }: Props) {
           {
             data: dataValues,
             backgroundColor: [
-              '#38bdf8', // sky-400
-              '#818cf8', // indigo-400
-              '#fbbf24', // amber-400
-              '#f87171', // red-400
+              CHART_PALETTE.sky,
+              CHART_PALETTE.indigo,
+              CHART_PALETTE.amber,
+              CHART_PALETTE.red,
             ],
             borderColor: '#18181b',
             borderWidth: 2,
@@ -53,7 +44,7 @@ export function DurationTiersChart({ tiers }: Props) {
           legend: {
             position: 'bottom',
             labels: {
-              color: '#a1a1aa',
+              color: CHART_PALETTE.textSecondary,
               font: { size: 10.5 },
               boxWidth: 10,
               padding: 12,
@@ -61,11 +52,7 @@ export function DurationTiersChart({ tiers }: Props) {
             },
           },
           tooltip: {
-            backgroundColor: '#18181b',
-            titleColor: '#f4f4f5',
-            bodyColor: '#e4e4e7',
-            borderColor: '#27272a',
-            borderWidth: 1,
+            ...defaultDarkTooltipOptions,
             callbacks: {
               label(context) {
                 const total = dataValues.reduce((a, b) => a + b, 0);
@@ -77,19 +64,8 @@ export function DurationTiersChart({ tiers }: Props) {
           },
         },
       },
-    });
-
-    return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
     };
   }, [tiers]);
 
-  return (
-    <div className="relative w-full h-64">
-      <canvas ref={canvasRef} />
-    </div>
-  );
+  return <BaseChart config={chartConfig} heightClass="h-64" />;
 }

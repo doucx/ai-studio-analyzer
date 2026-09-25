@@ -1,3 +1,19 @@
+import {
+  Bot,
+  Brain,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  Download,
+  ExternalLink,
+  FileCode,
+  FileText,
+  MessagesSquare,
+  Paperclip,
+  User,
+  X,
+} from 'lucide-preact';
 import { marked } from 'marked';
 import { useEffect, useMemo, useState } from 'preact/hooks';
 import type { ConversationTurnItem, SessionDetail, SessionItem } from '../types/metrics';
@@ -38,12 +54,12 @@ function CopyButton({ text }: { text: string }) {
     >
       {copied ? (
         <>
-          <span>✓</span>
+          <Check size={12} className="text-emerald-400" />
           <span>已复制</span>
         </>
       ) : (
         <>
-          <span>📋</span>
+          <Copy size={12} />
           <span>复制</span>
         </>
       )}
@@ -69,7 +85,7 @@ function DownloadButton({ text, filename }: { text: string; filename: string }) 
       className="px-2 py-1 text-[11px] rounded transition flex items-center gap-1 border bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 border-zinc-700/60 cursor-pointer"
       title="下载文件附件"
     >
-      <span>💾</span>
+      <Download size={12} />
       <span>下载</span>
     </button>
   );
@@ -106,9 +122,10 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
             className="flex items-center gap-2 cursor-pointer select-none hover:text-emerald-300 transition bg-transparent border-none p-0 text-emerald-400 font-mono"
             onClick={() => setIsThinkingOpen(!isThinkingOpen)}
           >
-            <span>{isThinkingOpen ? '▼' : '▶'}</span>
+            {isThinkingOpen ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
             <span className="font-semibold flex items-center gap-1">
-              <span>🧠</span> 思考链 (Thinking Process)
+              <Brain size={13} />
+              <span>思考链 (Thinking Process)</span>
             </span>
             <span className="text-[10px] text-emerald-500/80">
               {turn.token_count > 0 ? `${turn.token_count.toLocaleString()} tokens` : ''}
@@ -145,13 +162,14 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
       <div className="px-4 py-2.5 flex items-center justify-between border-b border-zinc-800/60 text-xs">
         <div className="flex items-center gap-2">
           <span
-            className={`font-semibold uppercase text-[11px] px-2 py-0.5 rounded font-mono ${
+            className={`font-semibold uppercase text-[11px] px-2 py-0.5 rounded font-mono flex items-center gap-1 ${
               isUser
                 ? 'bg-indigo-950 text-indigo-300 border border-indigo-800/60'
                 : 'bg-zinc-800 text-zinc-300 border border-zinc-700/60'
             }`}
           >
-            {isUser ? '👤 User' : '🤖 Model'}
+            {isUser ? <User size={11} /> : <Bot size={11} />}
+            <span>{isUser ? 'User' : 'Model'}</span>
           </span>
           <span className="text-zinc-500 text-[11px] font-mono">#{index + 1}</span>
           {turn.token_count > 0 && (
@@ -174,7 +192,7 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
         {turn.payload_type === 'driveDocument' ? (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-indigo-950/30 border border-indigo-800/40 rounded-lg">
             <div className="flex items-center gap-2.5 min-w-0">
-              <span className="text-xl">📄</span>
+              <FileText size={20} className="text-indigo-400 shrink-0" />
               <div className="min-w-0">
                 <div className="text-xs font-semibold text-indigo-300">挂载云盘大文档</div>
                 <div className="text-[11px] text-zinc-400 font-mono truncate">
@@ -191,7 +209,7 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
                   rel="noopener noreferrer"
                   className="px-2.5 py-1 text-[11px] font-medium bg-indigo-600/80 hover:bg-indigo-600 text-white rounded transition flex items-center gap-1"
                 >
-                  <span>🔗</span>
+                  <ExternalLink size={12} />
                   <span>在云盘查看</span>
                 </a>
               </div>
@@ -201,7 +219,7 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
           <div className="rounded-lg border border-cyan-900/40 bg-cyan-950/20 overflow-hidden">
             <div className="px-3.5 py-2.5 flex items-center justify-between bg-cyan-950/40 border-b border-cyan-900/30 text-xs">
               <div className="flex items-center gap-2 min-w-0">
-                <span className="text-base">📎</span>
+                <Paperclip size={14} className="text-cyan-400 shrink-0" />
                 <div className="min-w-0">
                   <span className="font-semibold text-cyan-300 truncate">
                     {turn.extra_metadata?.display_name || '内联上下文文件 (inlineFile)'}
@@ -217,9 +235,10 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
                 <button
                   type="button"
                   onClick={() => setIsAttachmentOpen(!isAttachmentOpen)}
-                  className="px-2 py-1 text-[11px] font-mono rounded bg-cyan-900/40 hover:bg-cyan-900/60 text-cyan-200 border border-cyan-800/50 transition cursor-pointer"
+                  className="px-2 py-1 text-[11px] font-mono rounded bg-cyan-900/40 hover:bg-cyan-900/60 text-cyan-200 border border-cyan-800/50 transition cursor-pointer flex items-center gap-1"
                 >
-                  {isAttachmentOpen ? '▲ 收起内容' : '▼ 展开预览'}
+                  {isAttachmentOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                  <span>{isAttachmentOpen ? '收起内容' : '展开预览'}</span>
                 </button>
                 <CopyButton text={turn.text} />
                 <DownloadButton
@@ -312,7 +331,7 @@ export function SessionDetailPanel({ session, onClose }: Props) {
             className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded transition shadow-sm flex items-center gap-1.5"
             title="在 Google AI Studio 原生工作台打开"
           >
-            <span>🚀</span>
+            <ExternalLink size={13} />
             <span className="hidden sm:inline">在 AI Studio 打开</span>
           </a>
           <a
@@ -321,15 +340,17 @@ export function SessionDetailPanel({ session, onClose }: Props) {
             className="px-2.5 py-1 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded border border-zinc-700/80 transition flex items-center gap-1.5"
             title="下载原始会话 JSON"
           >
-            <span>💾</span>
+            <FileCode size={13} />
             <span className="hidden sm:inline">下载原始 JSON</span>
           </a>
           <button
             type="button"
             onClick={onClose}
-            className="px-2.5 py-1 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition border border-zinc-700/80"
+            className="px-2 py-1 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded transition border border-zinc-700/80 flex items-center gap-1"
+            title="关闭详情"
           >
-            ✕ 关闭
+            <X size={13} />
+            <span className="hidden sm:inline">关闭</span>
           </button>
         </div>
       </div>
@@ -384,7 +405,8 @@ export function SessionDetailPanel({ session, onClose }: Props) {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-1.5">
-              <span>💬</span> 交互轮次流
+              <MessagesSquare size={15} className="text-indigo-400" />
+              <span>交互轮次流</span>
             </h3>
             <span className="text-xs font-mono text-zinc-400 bg-zinc-800 px-2 py-0.5 rounded">
               {detail?.turns?.length ?? session.turn_count} 个 Chunks

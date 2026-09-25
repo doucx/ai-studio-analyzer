@@ -1,3 +1,13 @@
+import {
+  Brain,
+  FileSpreadsheet,
+  FileText,
+  LayoutDashboard,
+  MessagesSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
+  RefreshCw,
+} from 'lucide-preact';
 import { LocationProvider, Route, Router, useLocation } from 'preact-iso';
 import { useEffect } from 'preact/hooks';
 import { NotFoundRoute } from './routes/NotFoundRoute';
@@ -40,19 +50,20 @@ function HeaderBar() {
           <button
             type="button"
             onClick={toggleSidebar}
-            className="p-1.5 text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded transition text-xs"
+            className="p-1.5 text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded transition text-xs flex items-center gap-1"
             title={isSidebarCollapsed ? '展开会话历史侧边栏' : '收起会话历史侧边栏'}
           >
-            {isSidebarCollapsed ? '📂 展开' : '◀ 收起'}
+            {isSidebarCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+            <span className="text-[11px]">{isSidebarCollapsed ? '展开' : '收起'}</span>
           </button>
         )}
         <button
           type="button"
-          className="text-2xl cursor-pointer bg-transparent border-none p-0 leading-none"
+          className="p-1.5 rounded-lg bg-indigo-950/60 border border-indigo-800/40 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-900/40 transition cursor-pointer flex items-center justify-center"
           onClick={() => route('/')}
-          title="回到概览看板"
+          title="回到全景大盘"
         >
-          🧠
+          <Brain size={18} />
         </button>
         <div>
           <div className="flex items-center gap-2">
@@ -74,24 +85,26 @@ function HeaderBar() {
           <button
             type="button"
             onClick={() => route('/')}
-            className={`px-3 py-1 rounded-md font-medium transition ${
+            className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
               path === '/'
                 ? 'bg-indigo-600 text-white shadow-sm'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
             }`}
           >
-            📊 全景大盘
+            <LayoutDashboard size={13} />
+            <span>全景大盘</span>
           </button>
           <button
             type="button"
             onClick={() => route('/sessions')}
-            className={`px-3 py-1 rounded-md font-medium transition ${
+            className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
               isSessionsView
                 ? 'bg-indigo-600 text-white shadow-sm'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
             }`}
           >
-            💬 会话工作台
+            <MessagesSquare size={13} />
+            <span>会话工作台</span>
           </button>
         </nav>
       </div>
@@ -122,28 +135,35 @@ function HeaderBar() {
           <a
             href={`/api/export/csv?range=${currentRange}`}
             download
-            className="px-2.5 py-1 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 rounded transition"
+            className="px-2.5 py-1 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 rounded transition flex items-center gap-1"
+            title="导出概览 CSV"
           >
-            📥 CSV
+            <FileSpreadsheet size={13} />
+            <span>CSV</span>
           </a>
           <a
             href={`/api/export/jsonl?range=${currentRange}`}
             download
-            className="px-2.5 py-1 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 rounded transition"
+            className="px-2.5 py-1 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 rounded transition flex items-center gap-1"
+            title="导出提问聚类 JSONL"
           >
-            📑 JSONL
+            <FileText size={13} />
+            <span>JSONL</span>
           </a>
           <button
             type="button"
             onClick={() => triggerSync(50)}
             disabled={syncInProgressSignal.value}
-            className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded transition shadow-sm"
+            className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded transition shadow-sm flex items-center gap-1.5"
           >
-            {syncInProgressSignal.value
-              ? syncProgressTextSignal.value
-                ? `同步中 ${syncProgressTextSignal.value}`
-                : '同步中...'
-              : '增量同步 (50)'}
+            <RefreshCw size={13} className={syncInProgressSignal.value ? 'animate-spin' : ''} />
+            <span>
+              {syncInProgressSignal.value
+                ? syncProgressTextSignal.value
+                  ? `同步中 ${syncProgressTextSignal.value}`
+                  : '同步中...'
+                : '增量同步 (50)'}
+            </span>
           </button>
         </div>
       </div>
