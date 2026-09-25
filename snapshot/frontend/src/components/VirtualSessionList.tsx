@@ -89,9 +89,7 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
             }}
             className="bg-zinc-950 border border-zinc-700 text-zinc-300 text-[11px] rounded px-1.5 py-0.5 outline-none focus:border-indigo-500"
           >
-            {ftsResultsSignal.value !== null && (
-              <option value="relevance">相关度</option>
-            )}
+            {ftsResultsSignal.value !== null && <option value="relevance">相关度</option>}
             <option value="modified">最近修改</option>
             <option value="tokens">Token 能耗</option>
             <option value="chunks">Chunk 数量</option>
