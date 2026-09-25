@@ -7,3 +7,116 @@ body {
   min-height: 100vh;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
+
+/* 沉浸式只读对话流 Markdown 排版规范 */
+.prose-chat {
+  color: #d4d4d8;
+  font-size: 0.875rem;
+  line-height: 1.625;
+  word-break: break-word;
+}
+
+.prose-chat p {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose-chat p:first-child {
+  margin-top: 0;
+}
+
+.prose-chat p:last-child {
+  margin-bottom: 0;
+}
+
+.prose-chat h1,
+.prose-chat h2,
+.prose-chat h3,
+.prose-chat h4 {
+  color: #f4f4f5;
+  font-weight: 600;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose-chat h1 { font-size: 1.25rem; }
+.prose-chat h2 { font-size: 1.125rem; }
+.prose-chat h3 { font-size: 1rem; }
+
+.prose-chat ul,
+.prose-chat ol {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding-left: 1.25rem;
+}
+
+.prose-chat ul { list-style-type: disc; }
+.prose-chat ol { list-style-type: decimal; }
+
+.prose-chat li {
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.prose-chat blockquote {
+  border-left: 3px solid #6366f1;
+  padding-left: 0.75rem;
+  color: #a1a1aa;
+  font-style: italic;
+  margin: 0.75rem 0;
+}
+
+.prose-chat code:not(pre code) {
+  background-color: rgba(39, 39, 42, 0.8);
+  border: 1px solid rgba(63, 63, 70, 0.4);
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8125rem;
+  color: #e4e4e7;
+}
+
+.prose-chat pre {
+  background-color: #09090b !important;
+  border: 1px solid #27272a;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+}
+
+.prose-chat pre code {
+  background: transparent;
+  padding: 0;
+  border: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8125rem;
+  color: #f4f4f5;
+  line-height: 1.5;
+}
+
+.prose-chat table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  font-size: 0.8125rem;
+}
+
+.prose-chat th,
+.prose-chat td {
+  border: 1px solid #27272a;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+}
+
+.prose-chat th {
+  background-color: #18181b;
+  color: #e4e4e7;
+  font-weight: 600;
+}
+
+.prose-chat hr {
+  border: 0;
+  border-top: 1px solid #27272a;
+  margin: 1rem 0;
+}

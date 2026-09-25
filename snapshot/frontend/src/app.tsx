@@ -15,6 +15,7 @@ const sessionsSignal = signal<SessionItem[]>([]);
 const selectedSessionSignal = signal<SessionItem | null>(null);
 const loadingSignal = signal<boolean>(true);
 const syncInProgressSignal = signal<boolean>(false);
+const sidebarCollapsedSignal = signal<boolean>(false);
 
 const TIME_RANGE_OPTIONS: { key: TimeRange; label: string }[] = [
   { key: '7d', label: '7天' },
@@ -81,12 +82,21 @@ export function App() {
   const currentRange = timeRangeSignal.value;
   const activeRangeLabel = TIME_RANGE_OPTIONS.find((o) => o.key === currentRange)?.label || '全部';
   const selectedSession = selectedSessionSignal.value;
+  const isSidebarCollapsed = sidebarCollapsedSignal.value;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans">
       {/* 顶部全局控制栏 */}
       <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur px-6 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-0 z-20">
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => (sidebarCollapsedSignal.value = !sidebarCollapsedSignal.value)}
+            className="p-1.5 text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded transition text-xs"
+            title={isSidebarCollapsed ? '展开会话历史侧边栏' : '收起会话历史侧边栏'}
+          >
+            {isSidebarCollapsed ? '📂 展开' : '◀ 收起'}
+          </button>
           <span className="text-2xl cursor-pointer" onClick={() => (selectedSessionSignal.value = null)}>
             🧠
           </span>
@@ -157,19 +167,25 @@ export function App() {
         </div>
       </header>
 
-      {/* 工作台主视口：Master-Detail 布局 */}
-      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden p-4 md:p-6 gap-6 max-w-7xl w-full mx-auto">
-        {/* 左侧栏：5000+ 虚拟列表会话查看器 (固定宽 360px ~ 380px) */}
-        <aside className="w-full lg:w-[380px] h-[520px] lg:h-[calc(100vh-120px)] flex-shrink-0">
-          <VirtualSessionList
-            sessions={sessions}
-            selectedId={selectedSession?.file_id ?? null}
-            onSelect={(s) => (selectedSessionSignal.value = s)}
-          />
-        </aside>
+      {/* 工作台主视口：Master-Detail 布局（支持全宽展开） */}
+      <div
+        className={`flex-1 flex flex-col lg:flex-row overflow-hidden p-4 md:p-6 gap-6 w-full mx-auto transition-all duration-300 ${
+          isSidebarCollapsed ? 'max-w-full px-6' : 'max-w-7xl'
+        }`}
+      >
+        {/* 左侧栏：5000+ 虚拟列表会话查看器 (支持按需折叠) */}
+        {!isSidebarCollapsed && (
+          <aside className="w-full lg:w-[380px] h-[520px] lg:h-[calc(100vh-120px)] flex-shrink-0">
+            <VirtualSessionList
+              sessions={sessions}
+              selectedId={selectedSession?.file_id ?? null}
+              onSelect={(s) => (selectedSessionSignal.value = s)}
+            />
+          </aside>
+        )}
 
         {/* 右侧主视口：全景审计图表 或 单会话沉浸详情 */}
-        <main className="flex-1 overflow-y-auto lg:h-[calc(100vh-120px)] pr-1 space-y-6">
+        <main className="flex-1 overflow-y-auto lg:h-[calc(100vh-120px)] pr-1 space-y-6 w-full">
           {loadingSignal.value && (
             <div className="py-24 text-center text-zinc-500 text-sm animate-pulse">
               正在从本地 SQLite WAL 数据库加载全景认知指标与会话索引...
@@ -180,6 +196,8 @@ export function App() {
             <SessionDetailPanel
               session={selectedSession}
               onClose={() => (selectedSessionSignal.value = null)}
+              isSidebarCollapsed={isSidebarCollapsed}
+              onToggleSidebar={() => (sidebarCollapsedSignal.value = !sidebarCollapsedSignal.value)}
             />
           )}
 
