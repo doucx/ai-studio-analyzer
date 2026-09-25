@@ -77,7 +77,7 @@ class SQLiteCache:
             # 全文检索虚表：采用 trigram 分词器支持中文、英文及代码子串匹配
             cursor.execute("""
                 CREATE VIRTUAL TABLE IF NOT EXISTS session_fts USING fts5(
-                    file_id UNINDEXED,
+                    file_id,
                     title,
                     system_instruction,
                     content,
@@ -154,6 +154,14 @@ class SQLiteCache:
         """整理并压缩数据库碎片"""
         with self._get_connection() as conn:
             conn.execute("VACUUM;")
+
+    def clear_indices(self):
+        """清空二级索引与 FTS 虚表并重新初始化结构（重建前调用）"""
+        with self._get_connection() as conn:
+            conn.execute("DROP TABLE IF EXISTS session_fts;")
+            conn.execute("DELETE FROM session_index;")
+            conn.commit()
+        self._init_db()
 
     def iter_all_data(self) -> Iterator[Tuple[str, str, Dict[str, Any]]]:
         """流式迭代全量缓存记录，避免一次性消耗过多内存"""

@@ -226,12 +226,26 @@ def get_session_detail(file_id: str):
 
 @router.post("/reindex")
 def reindex_cache():
-    """基于本地 SQLite file_cache 增量重新生成并同步 session_index 及 session_fts（耗时 <2s）"""
+    """基于本地 SQLite file_cache 极速重建 session_index 及 session_fts"""
+    # 1. 一次性获取所有 file_id 并立即释放读锁，保证后续 WAL 可被截断
+    file_ids = []
+    with cache._get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT file_id FROM file_cache;")
+        file_ids = [row["file_id"] for row in cursor.fetchall()]
+
+    # 2. 清空旧索引表与 FTS 虚表，避免循环中触发单条全表扫描与巨量 DELETE 操作
+    cache.clear_indices()
+
     count = 0
-    for file_id, mtime, raw_data in cache.iter_all_data():
+    for file_id in file_ids:
+        raw_data = cache.get(file_id)
+        if not raw_data:
+            continue
+
         file_meta = {
             "id": file_id,
-            "modifiedTime": mtime,
+            "modifiedTime": raw_data.get("modifiedTime"),
             "name": raw_data.get("name", "Untitled"),
         }
         session = parse_prompt_json(file_meta, raw_data)
@@ -240,11 +254,19 @@ def reindex_cache():
             cache.upsert_session_fts(session)
             count += 1
 
-    # 批量建立索引结束后，立即截断 WAL 日志文件
+            # 3. 每处理 500 条主动触发一次 Checkpoint，平抑 WAL 体积
+            if count % 500 == 0:
+                try:
+                    cache.checkpoint(truncate=False)
+                except Exception:
+                    pass
+
+    # 4. 彻底合并 WAL 并进行磁盘空间整理
     try:
         cache.checkpoint(truncate=True)
+        cache.vacuum()
     except Exception as exc:
-        print(f"⚠️ Reindex Checkpoint 异常: {exc}")
+        print(f"⚠️ Reindex Checkpoint/Vacuum 异常: {exc}")
 
     return {"status": "success", "reindexed_count": count}
 
