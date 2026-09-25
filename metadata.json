@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "ruff Capture: M api.py", "type": "capture", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790340026.0317292, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 分离搜索相关度与修改时间排序逻辑以修复最近修改失效问题", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790340247.215757, "duration_ms": 0}}

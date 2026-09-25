@@ -3,7 +3,7 @@ import type { SessionItem } from '../types/metrics';
 import { timeRangeSignal } from './metrics';
 
 export type DepthFilter = 'all' | 'single' | 'few' | 'many' | 'branch';
-export type SortOption = 'modified' | 'tokens' | 'chunks';
+export type SortOption = 'relevance' | 'modified' | 'tokens' | 'chunks';
 
 // 基础源数据状态
 export const sessionsSignal = signal<SessionItem[]>([]);
@@ -112,8 +112,8 @@ export const filteredSessionsSignal = computed(() => {
       return true;
     })
     .sort((a, b) => {
-      // FTS 模式下默认保持 BM25 相关度排序
-      if (cleanTerm.length >= 2 && ftsResultsSignal.value !== null && sort === 'modified') {
+      // 保持 FTS 默认的 BM25 相关度排序
+      if (sort === 'relevance') {
         return 0;
       }
       if (sort === 'tokens') {
@@ -175,6 +175,9 @@ export function handleSearchInput(keyword: string) {
   if (term.length < 2) {
     ftsResultsSignal.value = null;
     isSearchingFtsSignal.value = false;
+    if (sortBySignal.value === 'relevance') {
+      sortBySignal.value = 'modified';
+    }
     return;
   }
 
@@ -191,6 +194,9 @@ export function handleSearchInput(keyword: string) {
         const data = await res.json();
         if (searchKeywordSignal.value.trim() === term) {
           ftsResultsSignal.value = Array.isArray(data) ? data : [];
+          if (sortBySignal.value === 'modified') {
+            sortBySignal.value = 'relevance';
+          }
         }
       }
     } catch (err: unknown) {
