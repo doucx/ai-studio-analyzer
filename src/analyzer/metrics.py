@@ -67,14 +67,15 @@ def calculate_session_metrics(sessions: List[Any]) -> Dict[str, Any]:
     first_item = sessions[0]
     if isinstance(first_item, dict):
         for d in sessions:
-            dur_sec = d.get("duration_seconds", 0.0)
+            dur_sec = d.get("duration_seconds")
+            dur_min = round(dur_sec / 60, 2) if dur_sec is not None else None
             records.append(
                 {
                     "file_id": d["file_id"],
                     "date": d.get("date"),
                     "turn_count": d.get("turn_count", 0),
                     "duration_seconds": dur_sec,
-                    "duration_minutes": round(dur_sec / 60, 2),
+                    "duration_minutes": dur_min,
                     "total_tokens": d.get("total_tokens", 0),
                     "thought_tokens": d.get("thought_tokens", 0),
                     "user_chars": d.get("user_char_count", 0),
@@ -88,13 +89,15 @@ def calculate_session_metrics(sessions: List[Any]) -> Dict[str, Any]:
         for s in sessions:
             st = s.start_time or s.modified_time
             date_str = st.strftime("%Y-%m-%d") if st else None
+            dur_sec = s.duration_seconds
+            dur_min = round(dur_sec / 60, 2) if dur_sec is not None else None
             records.append(
                 {
                     "file_id": s.file_id,
                     "date": date_str,
                     "turn_count": s.turn_count,
-                    "duration_seconds": s.duration_seconds,
-                    "duration_minutes": round(s.duration_seconds / 60, 2),
+                    "duration_seconds": dur_sec,
+                    "duration_minutes": dur_min,
                     "total_tokens": s.total_tokens,
                     "thought_tokens": s.thought_tokens,
                     "user_chars": s.total_user_chars,
@@ -118,8 +121,8 @@ def calculate_session_metrics(sessions: List[Any]) -> Dict[str, Any]:
         "deep_ratio": f"{round(float((turn_s >= 5).mean()) * 100, 1)}%",
     }
 
-    # 3. 会话时长 (Duration) 分位数与长尾过滤 (仅统计有效交互时长 >= 10 秒的会话)
-    meaningful_df = df[df["duration_seconds"] >= 10]
+    # 3. 会话时长 (Duration) 分位数与长尾过滤 (仅统计有效交互时长 >= 10 秒的非空会话)
+    meaningful_df = df[df["duration_seconds"].notna() & (df["duration_seconds"] >= 10)]
     if not meaningful_df.empty:
         dur_s = meaningful_df["duration_minutes"]
         dur_stats = {
@@ -141,11 +144,13 @@ def calculate_session_metrics(sessions: List[Any]) -> Dict[str, Any]:
         }
 
     # 多轮深入会话 (≥2 轮) 专属时长统计
-    multi_turn_df = df[df["turn_count"] >= 2]
-    if not multi_turn_df.empty and (multi_turn_df["duration_seconds"] > 0).any():
-        m_dur_s = multi_turn_df[multi_turn_df["duration_seconds"] > 0][
-            "duration_minutes"
-        ]
+    multi_turn_df = df[
+        (df["turn_count"] >= 2)
+        & df["duration_seconds"].notna()
+        & (df["duration_seconds"] >= 10)
+    ]
+    if not multi_turn_df.empty:
+        m_dur_s = multi_turn_df["duration_minutes"]
         multi_dur_stats = {
             "mean": round(float(m_dur_s.mean()), 1),
             "median": round(float(m_dur_s.median()), 1),
@@ -155,21 +160,31 @@ def calculate_session_metrics(sessions: List[Any]) -> Dict[str, Any]:
     else:
         multi_dur_stats = {"mean": 0.0, "median": 0.0, "p75": 0.0, "p90": 0.0}
 
-    # 时长心智梯队划分
-    tier_flash = int((df["duration_minutes"] < 10).sum())  # 即时快问 (<10m)
+    # 时长心智梯队划分 (仅基于具有有效时长的样本，避免未知样本充当即时快问)
+    valid_dur_df = df[df["duration_minutes"].notna()]
+    valid_dur_total = len(valid_dur_df) if not valid_dur_df.empty else total_sessions
+    denom = valid_dur_total if valid_dur_total > 0 else 1
+
+    tier_flash = int((valid_dur_df["duration_minutes"] < 10).sum())  # 即时快问 (<10m)
     tier_focus = int(
-        ((df["duration_minutes"] >= 10) & (df["duration_minutes"] < 60)).sum()
+        (
+            (valid_dur_df["duration_minutes"] >= 10)
+            & (valid_dur_df["duration_minutes"] < 60)
+        ).sum()
     )  # 聚焦推进 (10~60m)
     tier_deep = int(
-        ((df["duration_minutes"] >= 60) & (df["duration_minutes"] < 360)).sum()
+        (
+            (valid_dur_df["duration_minutes"] >= 60)
+            & (valid_dur_df["duration_minutes"] < 360)
+        ).sum()
     )  # 深度攻坚 (1~6h)
-    tier_epic = int((df["duration_minutes"] >= 360).sum())  # 跨日长线 (>6h)
+    tier_epic = int((valid_dur_df["duration_minutes"] >= 360).sum())  # 跨日长线 (>6h)
 
     duration_tiers = {
-        "flash": (tier_flash, f"{round(tier_flash / total_sessions * 100, 1)}%"),
-        "focus": (tier_focus, f"{round(tier_focus / total_sessions * 100, 1)}%"),
-        "deep": (tier_deep, f"{round(tier_deep / total_sessions * 100, 1)}%"),
-        "epic": (tier_epic, f"{round(tier_epic / total_sessions * 100, 1)}%"),
+        "flash": (tier_flash, f"{round(tier_flash / denom * 100, 1)}%"),
+        "focus": (tier_focus, f"{round(tier_focus / denom * 100, 1)}%"),
+        "deep": (tier_deep, f"{round(tier_deep / denom * 100, 1)}%"),
+        "epic": (tier_epic, f"{round(tier_epic / denom * 100, 1)}%"),
     }
 
     # 4. Token 消耗分位数

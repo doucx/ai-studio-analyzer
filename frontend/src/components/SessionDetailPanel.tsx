@@ -451,7 +451,11 @@ export function SessionDetailPanel({ session, onClose }: Props) {
             <div className="text-base font-bold text-indigo-400 font-mono mt-0.5">
               {session.duration_human}
             </div>
-            <div className="text-[10px] text-zinc-500">{session.duration_seconds} 秒</div>
+            <div className="text-[10px] text-zinc-500">
+              {session.duration_seconds !== null && session.duration_seconds !== undefined
+                ? `${session.duration_seconds} 秒`
+                : '持续时间未记录'}
+            </div>
           </div>
 
           <div className="bg-zinc-900/80 border border-zinc-800/60 rounded p-2.5">

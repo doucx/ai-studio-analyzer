@@ -139,7 +139,10 @@ def main():
             turn_count, 
             total_tokens, 
             thought_tokens, 
-            duration_seconds / 60.0 AS duration_min,
+            CASE 
+                WHEN duration_seconds IS NOT NULL THEN duration_seconds / 60.0 
+                ELSE NULL 
+            END AS duration_min,
             user_char_count,
             has_branching,
             branch_count,
@@ -151,7 +154,11 @@ def main():
     turn_counts = [r["turn_count"] for r in rows]
     total_tokens = [r["total_tokens"] for r in rows]
     thought_tokens = [r["thought_tokens"] for r in rows]
-    durations = [r["duration_min"] for r in rows]
+    durations = [
+        r["duration_min"]
+        for r in rows
+        if r["duration_min"] is not None and r["duration_min"] > 0
+    ]
     user_chars = [r["user_char_count"] for r in rows]
 
     q_turns = get_quantiles(turn_counts)
