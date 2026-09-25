@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "checkf Capture: M VirtualSessionList.tsx", "type": "capture", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790340388.0780451, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复切换时间范围时未联动重新触发全文检索的问题", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790340588.8178654, "duration_ms": 0}}
