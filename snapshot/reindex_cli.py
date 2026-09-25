@@ -1,39 +1,3 @@
-我为你编写了一个独立的终端诊断与索引重建工具 `reindex_cli.py`。它配备了彩色 `tqdm` 细粒度进度条，能在执行过程中实时展示处理进度（会话数/秒、耗时推算、成功/失败数），并动态监控 `.wal` 日志文件的体积变化与 Checkpoint 状态，让你清楚地看到底层的每一项执行进展。
-
-## [WIP] feat: 增加带实时进度条与 WAL 监控的离线重建索引脚本
-
-### 用户需求
-需要一个带有控制台进度条的独立执行脚本来运行 `reindex`，实时查看底层解析、写入速度、进度百分比以及是否存在卡死或异常情况。
-
-### 评论
-通过 HTTP 接口执行大体量（数万条对话）的长任务容易因超时、无法感知进度而给开发者带来“假死”的不确定性。提供专用的 CLI 脚本不仅能进行可视化观测，还能在终端直接诊断数据库 I/O 吞吐和 WAL 实时水位。
-
-### 目标
-1. 新建根目录脚本 `reindex_cli.py`。
-2. 使用 `tqdm` 渲染美观的进度条，并在状态栏动态刷新成功数、跳过数及实时 `cache.db-wal` 文件体积。
-3. 支持参数配置批次 Checkpoint 阈值（默认每 300 条），在构建结束后自动执行 WAL 截断与 VACUUM 磁盘回收，并打印最终磁盘空间对比。
-
-### 基本原理
-1. 利用已在项目中安装的 `tqdm` 库追踪批处理过程。
-2. 通过快速提取 `file_id` 集合后迭代，每一步独立完成反序列化、指标写入与 FTS 索引写入，规避大游标长读锁。
-3. 在进度更新周期中读取 `.cache/cache.db-wal` 的实际字节数，直观呈现 WAL 写入与合并的动态平衡。
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/engine #concept/state #concept/ui #scope/dx #ai/instruct #task/domain/storage #task/object/sqlite-reindex-tool #task/action/build #task/state/begin #task/status/active
-
----
-
-### Script
-
-#### Acts 1: 创建 `reindex_cli.py` 脚本
-
-我们将新建 `reindex_cli.py` 文件，提供交互式索引重建与实时性能监控。
-
-~~~~~act
-write_file
-reindex_cli.py
-~~~~~
-~~~~~python
 """
 AI Studio 离线索引重建与诊断探针工具 (带 tqdm 细粒度进度条与 WAL 实时监控)
 
@@ -207,18 +171,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-~~~~~
-
-### 下一步建议
-
-1. **执行离线重建**:
-   在终端运行：
-   ```bash
-   python reindex_cli.py
-   ```
-2. **观察终端进度条输出**:
-   你将能够直观看到：
-   - 当前处理到了第几条会话，速度是多少 `会话/s`。
-   - 右侧后缀中的 `WAL体积` 是否稳定（随着定期 Checkpoint 保持在几 MB 内，不会再膨胀至数百 MB）。
-3. **完成验证**:
-   重建完成后直接重启后端服务 `python main.py`，进入前端即可享受秒级响应的高亮全文搜索。
