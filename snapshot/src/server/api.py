@@ -1,9 +1,11 @@
+import asyncio
+import json
 import os
 import tempfile
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List
-from fastapi import APIRouter, BackgroundTasks
-from fastapi.responses import FileResponse
+from typing import Optional, List, Set
+from fastapi import APIRouter, BackgroundTasks, Request
+from fastapi.responses import FileResponse, StreamingResponse
 from src.analyzer.cache import SQLiteCache
 from src.analyzer.drive import DriveClient, PROXY_URL
 from src.analyzer.exporter import (
@@ -21,8 +23,20 @@ cache = SQLiteCache(cache_dir=".cache")
 # 全局后台增量同步状态
 sync_status = {"is_syncing": False, "last_result": None, "error": None}
 
+# SSE 订阅客户端队列池
+_sync_event_queues: Set[asyncio.Queue] = set()
+
 # 内存常驻已反序列化的全量会话对象池
 _ALL_SESSIONS: Optional[List[PromptSession]] = None
+
+
+def notify_sync_event(event_type: str, payload: dict):
+    """向所有在线前端推送 SSE 事件"""
+    for q in list(_sync_event_queues):
+        try:
+            q.put_nowait({"event": event_type, "data": payload})
+        except Exception:
+            pass
 
 
 def _ensure_sessions_loaded() -> List[PromptSession]:
@@ -75,22 +89,48 @@ def _run_sync_task(limit: Optional[int], all_files: bool):
     global _ALL_SESSIONS
     sync_status["is_syncing"] = True
     sync_status["error"] = None
+
+    def on_progress(current: int, total: int, hits: int, downloaded: int):
+        notify_sync_event(
+            "sync_progress",
+            {
+                "current": current,
+                "total": total,
+                "cache_hits": hits,
+                "downloaded": downloaded,
+            },
+        )
+
     try:
         client = DriveClient(proxy_url=PROXY_URL)
-        total, hits, downloaded = fetch_remote_files(
-            client=client, cache=cache, limit=limit, all_files=all_files
+        total, hits, updated_sessions = fetch_remote_files(
+            client=client,
+            cache=cache,
+            limit=limit,
+            all_files=all_files,
+            progress_callback=on_progress,
         )
+        downloaded = len(updated_sessions)
         sync_status["last_result"] = {
             "total_scanned": total,
             "cache_hits": hits,
             "downloaded": downloaded,
             "cache_total": cache.count(),
         }
-        # 如果有新下载内容，重新加载内存常驻会话池
-        if downloaded > 0 or _ALL_SESSIONS is None:
+
+        # 增量原地合并：杜绝全量 5000+ 个重新反序列化的性能灾难
+        if _ALL_SESSIONS is None:
             _ALL_SESSIONS = load_cached_sessions(cache, limit=0, show_progress=False)
+        elif updated_sessions:
+            updated_ids = {s.file_id for s in updated_sessions}
+            _ALL_SESSIONS = updated_sessions + [
+                s for s in _ALL_SESSIONS if s.file_id not in updated_ids
+            ]
+
+        notify_sync_event("sync_done", sync_status["last_result"])
     except Exception as exc:
         sync_status["error"] = str(exc)
+        notify_sync_event("sync_error", {"error": str(exc)})
     finally:
         sync_status["is_syncing"] = False
 
@@ -195,6 +235,37 @@ def trigger_sync(
 def get_sync_status():
     """查询后台同步进度状态"""
     return sync_status
+
+
+@router.get("/sync/events")
+async def sync_events(request: Request):
+    """SSE 事件流通道：实时下发同步进度与完成广播"""
+    queue: asyncio.Queue = asyncio.Queue()
+    _sync_event_queues.add(queue)
+
+    async def event_generator():
+        try:
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    msg = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    yield f"event: {msg['event']}\ndata: {json.dumps(msg['data'], ensure_ascii=False)}\n\n"
+                except asyncio.TimeoutError:
+                    # 心跳保持
+                    yield ": ping\n\n"
+        finally:
+            _sync_event_queues.discard(queue)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/export/csv")
