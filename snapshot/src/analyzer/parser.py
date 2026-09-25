@@ -53,12 +53,15 @@ def parse_prompt_json(
 
             text = ""
             payload_type = "text"
+            extra_meta = {}
 
-            # 分支 A: 纯文本交互
-            if "text" in c:
-                text = c.get("text", "")
-                payload_type = "text"
-            # 分支 B: 内联 Base64 编码文件
+            # 优先分支 1: 外部云盘大文档引用 (Insert from Drive)
+            if "driveDocument" in c:
+                doc_id = c["driveDocument"].get("id", "unknown")
+                payload_type = "driveDocument"
+                text = f"📄 挂载云盘大文档 (ID: {doc_id})"
+                extra_meta["doc_id"] = doc_id
+            # 优先分支 2: 内联 Base64 编码文件
             elif "inlineFile" in c:
                 file_info = c["inlineFile"]
                 mime = file_info.get("mimeType", "")
@@ -74,11 +77,10 @@ def parse_prompt_json(
                         text = "[无法解码的文本附件]"
                 else:
                     text = f"[{mime} 媒体附件]"
-            # 分支 C: 外部云盘大文档引用 (Insert from Drive)
-            elif "driveDocument" in c:
-                doc_id = c["driveDocument"].get("id", "unknown")
-                payload_type = "driveDocument"
-                text = f"[挂载云盘大文档 ID: {doc_id}]"
+            # 分支 3: 常规纯文本交互
+            elif "text" in c:
+                text = c.get("text", "")
+                payload_type = "text"
 
             if text or is_thought or token_count > 0:
                 turns.append(
@@ -92,6 +94,7 @@ def parse_prompt_json(
                         branch_parent=branch_parent,
                         branch_children=branch_children,
                         is_edited=is_edited,
+                        extra_metadata=extra_meta,
                     )
                 )
 

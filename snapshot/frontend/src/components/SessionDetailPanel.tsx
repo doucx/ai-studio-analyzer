@@ -54,6 +54,13 @@ function CopyButton({ text }: { text: string }) {
 function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: number }) {
   const [isThinkingOpen, setIsThinkingOpen] = useState(false);
 
+  // 提取可能的 Drive 文件 ID (支持格式: "ID: xxx" 或 "[挂载云盘大文档 ID: xxx]")
+  const driveDocId = useMemo(() => {
+    if (turn.payload_type !== 'driveDocument') return null;
+    const match = turn.text.match(/ID:\s*([a-zA-Z0-9_-]+)/);
+    return match ? match[1] : null;
+  }, [turn.payload_type, turn.text]);
+
   const htmlContent = useMemo(() => {
     try {
       return marked.parse(turn.text || '');
@@ -137,13 +144,41 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
         <CopyButton text={turn.text} />
       </div>
 
-      {/* 消息正文：由外部 Markdown 渲染器全屏呈现 */}
+      {/* 消息正文：云盘大文档专属卡片 或 Markdown 正文呈现 */}
       <div className="p-4 sm:p-5">
-        <div
-          className="prose-chat max-w-none"
-          // biome-ignore lint/security/noDangerouslySetInnerHtml: 用于渲染本地 SQLite 缓存中对话记录的 Markdown 解析输出
-          dangerouslySetInnerHTML={{ __html: htmlContent as string }}
-        />
+        {turn.payload_type === 'driveDocument' ? (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-indigo-950/30 border border-indigo-800/40 rounded-lg">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="text-xl">📄</span>
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-indigo-300">挂载云盘大文档</div>
+                <div className="text-[11px] text-zinc-400 font-mono truncate">
+                  ID: <span className="text-zinc-200 select-all">{driveDocId || turn.text}</span>
+                </div>
+              </div>
+            </div>
+
+            {driveDocId && (
+              <div className="flex items-center gap-2 shrink-0">
+                <a
+                  href={`https://drive.google.com/file/d/${driveDocId}/view`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2.5 py-1 text-[11px] font-medium bg-indigo-600/80 hover:bg-indigo-600 text-white rounded transition flex items-center gap-1"
+                >
+                  <span>🔗</span>
+                  <span>在云盘查看</span>
+                </a>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div
+            className="prose-chat max-w-none"
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: 用于渲染本地 SQLite 缓存中对话记录的 Markdown 解析输出
+            dangerouslySetInnerHTML={{ __html: htmlContent as string }}
+          />
+        )}
       </div>
     </div>
   );
