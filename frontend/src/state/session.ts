@@ -2,8 +2,8 @@ import { computed, signal } from '@preact/signals';
 import type { SessionItem } from '../types/metrics';
 import { timeRangeSignal } from './metrics';
 
-export type DepthFilter = 'all' | 'single' | 'deep' | 'branch';
-export type SortOption = 'modified' | 'tokens' | 'turns';
+export type DepthFilter = 'all' | 'single' | 'few' | 'many' | 'branch';
+export type SortOption = 'modified' | 'tokens' | 'chunks';
 
 // 基础源数据状态
 export const sessionsSignal = signal<SessionItem[]>([]);
@@ -44,10 +44,23 @@ export const isFilterActiveSignal = computed(() => {
 
 // 核心多维复合过滤计算管道 (响应式原子派生)
 export const filteredSessionsSignal = computed(() => {
-  const term = searchKeywordSignal.value.trim().toLowerCase();
+  const fullTerm = searchKeywordSignal.value.trim().toLowerCase();
+
+  // 提取关键词中可能携带的 Chunk 语法指令 (如: "chunk:2", "chunks:>5", "c:<=3", "c:1")
+  const chunkSyntaxMatch = fullTerm.match(/(?:chunks?|c)\s*(:|>=|<=|>|<|=)\s*(\d+)/i);
+  let targetChunkOp: string | null = null;
+  let targetChunkNum: number | null = null;
+  let cleanTerm = fullTerm;
+
+  if (chunkSyntaxMatch) {
+    targetChunkOp = chunkSyntaxMatch[1];
+    targetChunkNum = Number.parseInt(chunkSyntaxMatch[2], 10);
+    cleanTerm = cleanTerm.replace(chunkSyntaxMatch[0], '').trim();
+  }
+
   // 当开启 FTS 全文搜索且命中结果集时，直接接入 FTS 倒排结果
   const rawList =
-    term.length >= 2 && ftsResultsSignal.value !== null
+    cleanTerm.length >= 2 && ftsResultsSignal.value !== null
       ? ftsResultsSignal.value
       : sessionsSignal.value;
 
@@ -59,22 +72,40 @@ export const filteredSessionsSignal = computed(() => {
 
   return list
     .filter((s) => {
-      // 1. 模型筛选
+      const chunks = s.chunk_count ?? s.turn_count;
+
+      // 1. Chunk 显式语法过滤
+      if (targetChunkOp && targetChunkNum !== null) {
+        if (targetChunkOp === ':' || targetChunkOp === '=') {
+          if (chunks !== targetChunkNum) return false;
+        } else if (targetChunkOp === '>') {
+          if (chunks <= targetChunkNum) return false;
+        } else if (targetChunkOp === '>=') {
+          if (chunks < targetChunkNum) return false;
+        } else if (targetChunkOp === '<') {
+          if (chunks >= targetChunkNum) return false;
+        } else if (targetChunkOp === '<=') {
+          if (chunks > targetChunkNum) return false;
+        }
+      }
+
+      // 2. 模型筛选
       if (model !== 'all') {
         const rawModel = s.model.replace('models/', '');
         if (rawModel !== model) return false;
       }
 
-      // 2. 轮次深度与摩擦力筛选
-      if (depth === 'single' && s.turn_count !== 1) return false;
-      if (depth === 'deep' && s.turn_count < 5) return false;
+      // 3. Chunk 梯队胶囊与摩擦力筛选
+      if (depth === 'single' && chunks > 2) return false;
+      if (depth === 'few' && (chunks < 3 || chunks > 6)) return false;
+      if (depth === 'many' && chunks < 7) return false;
       if (depth === 'branch' && !s.has_branching) return false;
 
-      // 3. 非 FTS 检索状态下的首轮轻量模糊过滤
-      if (term && ftsResultsSignal.value === null) {
-        const matchName = s.name.toLowerCase().includes(term);
-        const matchPrompt = (s.first_prompt || '').toLowerCase().includes(term);
-        const matchModel = s.model.toLowerCase().includes(term);
+      // 4. 文本模糊过滤
+      if (cleanTerm && ftsResultsSignal.value === null) {
+        const matchName = s.name.toLowerCase().includes(cleanTerm);
+        const matchPrompt = (s.first_prompt || '').toLowerCase().includes(cleanTerm);
+        const matchModel = s.model.toLowerCase().includes(cleanTerm);
         if (!matchName && !matchPrompt && !matchModel) return false;
       }
 
@@ -82,14 +113,16 @@ export const filteredSessionsSignal = computed(() => {
     })
     .sort((a, b) => {
       // FTS 模式下默认保持 BM25 相关度排序
-      if (term.length >= 2 && ftsResultsSignal.value !== null && sort === 'modified') {
+      if (cleanTerm.length >= 2 && ftsResultsSignal.value !== null && sort === 'modified') {
         return 0;
       }
       if (sort === 'tokens') {
         return b.total_tokens - a.total_tokens;
       }
-      if (sort === 'turns') {
-        return b.turn_count - a.turn_count;
+      if (sort === 'chunks' || (sort as string) === 'turns') {
+        const chunksA = a.chunk_count ?? a.turn_count;
+        const chunksB = b.chunk_count ?? b.turn_count;
+        return chunksB - chunksA;
       }
       const timeA = a.modified_time ? new Date(a.modified_time).getTime() : 0;
       const timeB = b.modified_time ? new Date(b.modified_time).getTime() : 0;

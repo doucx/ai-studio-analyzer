@@ -71,6 +71,7 @@ export interface SessionItem {
   name: string;
   model: string;
   turn_count: number;
+  chunk_count?: number;
   total_tokens: number;
   thought_tokens: number;
   duration_human: string;

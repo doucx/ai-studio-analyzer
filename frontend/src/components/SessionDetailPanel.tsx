@@ -465,12 +465,14 @@ export function SessionDetailPanel({ session, onClose }: Props) {
           </div>
 
           <div className="bg-zinc-900/80 border border-zinc-800/60 rounded p-2.5">
-            <div className="text-[10px] text-zinc-400">有效交互轮次</div>
+            <div className="text-[10px] text-zinc-400">交互 Chunks 总数</div>
             <div className="text-base font-bold text-white font-mono mt-0.5">
-              {session.turn_count} 轮
+              {detail?.turns?.length ?? session.chunk_count ?? session.turn_count} 块
             </div>
             <div className="text-[10px] text-zinc-500">
-              {session.turn_count >= 5 ? '深度多轮' : '轻量快问'}
+              {(detail?.turns?.length ?? session.chunk_count ?? session.turn_count) >= 7
+                ? '深度攻坚'
+                : '轻量快问'}
             </div>
           </div>
 

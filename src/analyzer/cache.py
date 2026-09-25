@@ -267,27 +267,61 @@ class SQLiteCache:
             rows = cursor.fetchall()
             return [dict(r) for r in rows]
 
-    def upsert_session_fts(self, s: Any):
-        """将单个会话的全部对话正文物化写入 FTS5 虚拟表"""
+    def upsert_session_fts(
+        self,
+        s: Any,
+        max_total_chars: int = 40_000,
+        head_chars: int = 25_000,
+        tail_chars: int = 15_000,
+    ):
+        """
+        将单个会话的全部对话正文物化写入 FTS5 虚拟表。
+        配置安全护栏：
+        1. 排除二进制与巨型附件全文，严格截取短元数据预览；
+        2. 单轮消息截断限制，防止单轮巨型日志/代码击穿分词器；
+        3. 单会话总字符硬上限截断 (默认 40,000 字符，取首尾保留关键上下文)，阻断 Trigram 倒排膨胀。
+        """
         turn_texts = []
         for idx, t in enumerate(getattr(s, "turns", []), start=1):
+            p_type = getattr(t, "payload_type", "text")
+            text = (getattr(t, "text", "") or "").strip()
+
             if getattr(t, "is_thought", False):
-                turn_texts.append(f"[Thinking #{idx}]: {t.text}")
-            elif getattr(t, "payload_type", "text") == "text" and t.text:
+                snippet = text[:3000] if len(text) > 3000 else text
+                if snippet:
+                    turn_texts.append(f"[Thinking #{idx}]: {snippet}")
+            elif p_type == "text" and text:
                 role_label = "User" if t.role == "user" else "Model"
-                turn_texts.append(f"[{role_label} #{idx}]: {t.text}")
-            elif getattr(t, "payload_type", "text") == "inlineFile":
+                snippet = text[:6000] if len(text) > 6000 else text
+                turn_texts.append(f"[{role_label} #{idx}]: {snippet}")
+            elif p_type == "inlineFile":
                 dname = (
                     t.extra_metadata.get("display_name", "")
                     if getattr(t, "extra_metadata", None)
                     else ""
                 )
-                turn_texts.append(f"[附件: {dname}] {t.text[:500]}")
-            elif getattr(t, "payload_type", "text") == "driveDocument":
-                turn_texts.append(f"[挂载云盘: {t.text}]")
+                mime = (
+                    t.extra_metadata.get("mime_type", "")
+                    if getattr(t, "extra_metadata", None)
+                    else ""
+                )
+                label = dname or mime or "inlineFile"
+                preview = text[:200].replace("\n", " ").strip() if text else ""
+                turn_texts.append(f"[附件: {label}] {preview}")
+            elif p_type == "driveDocument":
+                turn_texts.append(f"[挂载云盘: {text[:200]}]")
 
         full_content = "\n".join(turn_texts)
-        sys_inst = getattr(s, "system_instruction", "") or ""
+        if len(full_content) > max_total_chars:
+            full_content = (
+                full_content[:head_chars]
+                + f"\n...[已截断 {len(full_content) - max_total_chars} 字符以保护 FTS 索引]...\n"
+                + full_content[-tail_chars:]
+            )
+
+        sys_inst = (getattr(s, "system_instruction", "") or "").strip()
+        if len(sys_inst) > 10_000:
+            sys_inst = sys_inst[:10_000]
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
