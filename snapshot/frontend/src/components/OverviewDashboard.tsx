@@ -1,3 +1,4 @@
+import { Bot, Clock, LineChart, Sparkles } from 'lucide-preact';
 import type { MetricsSummary } from '../types/metrics';
 import { DurationTiersChart } from './charts/DurationTiersChart';
 import { ModelDistributionChart } from './charts/ModelDistributionChart';
@@ -73,8 +74,9 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
         <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-sm font-semibold text-zinc-200">
-                📈 每日 Token 能耗趋势 (按时间序列)
+              <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-1.5">
+                <LineChart size={15} className="text-indigo-400" />
+                <span>每日 Token 能耗趋势 (按时间序列)</span>
               </h2>
               <p className="text-xs text-zinc-500 mt-0.5">
                 展示【{activeRangeLabel}】周期内的总 Token 与思考链能耗
@@ -93,7 +95,10 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
           {metrics.duration_tiers && (
             <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5">
-              <h2 className="text-sm font-semibold text-zinc-200 mb-1">⏱️ 心智时长梯队切片</h2>
+              <h2 className="text-sm font-semibold text-zinc-200 mb-1 flex items-center gap-1.5">
+                <Clock size={15} className="text-sky-400" />
+                <span>心智时长梯队切片</span>
+              </h2>
               <p className="text-xs text-zinc-500 mb-3">
                 单次任务从首轮交互到最后收尾的时间窗口跨度
               </p>
@@ -103,7 +108,10 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
 
           {metrics.model_distribution && Object.keys(metrics.model_distribution).length > 0 && (
             <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5">
-              <h2 className="text-sm font-semibold text-zinc-200 mb-1">🤖 模型偏好分布</h2>
+              <h2 className="text-sm font-semibold text-zinc-200 mb-1 flex items-center gap-1.5">
+                <Bot size={15} className="text-indigo-400" />
+                <span>模型偏好分布</span>
+              </h2>
               <p className="text-xs text-zinc-500 mb-3">各 Gemini 模型在所选周期内的调用场次</p>
               <ModelDistributionChart distribution={metrics.model_distribution} />
             </section>

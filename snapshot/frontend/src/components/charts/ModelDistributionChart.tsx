@@ -1,37 +1,19 @@
-import {
-  BarController,
-  BarElement,
-  CategoryScale,
-  Chart as ChartJS,
-  Legend,
-  LinearScale,
-  Tooltip,
-} from 'chart.js';
-import { useEffect, useRef } from 'preact/hooks';
-
-ChartJS.register(CategoryScale, LinearScale, BarElement, BarController, Tooltip, Legend);
+import type { ChartConfiguration } from 'chart.js';
+import { useMemo } from 'preact/hooks';
+import { BaseChart } from './base/BaseChart';
+import { CHART_PALETTE, defaultDarkScales, defaultDarkTooltipOptions } from './base/chartTheme';
 
 interface Props {
   distribution: Record<string, number>;
 }
 
 export function ModelDistributionChart({ distribution }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const chartRef = useRef<ChartJS | null>(null);
-
-  useEffect(() => {
-    if (!canvasRef.current) return;
-
-    if (chartRef.current) {
-      chartRef.current.destroy();
-    }
-
-    // 按会话数从多到少排序，并格式化模型名
+  const chartConfig = useMemo<ChartConfiguration<'bar'>>(() => {
     const entries = Object.entries(distribution).sort((a, b) => b[1] - a[1]);
     const labels = entries.map(([m]) => m.replace('models/', ''));
     const dataValues = entries.map(([, count]) => count);
 
-    chartRef.current = new ChartJS(canvasRef.current, {
+    return {
       type: 'bar',
       data: {
         labels,
@@ -39,8 +21,8 @@ export function ModelDistributionChart({ distribution }: Props) {
           {
             label: '会话场数',
             data: dataValues,
-            backgroundColor: 'rgba(99, 102, 241, 0.7)', // indigo-500
-            hoverBackgroundColor: '#818cf8',
+            backgroundColor: 'rgba(99, 102, 241, 0.7)',
+            hoverBackgroundColor: CHART_PALETTE.indigo,
             borderRadius: 4,
             borderSkipped: false,
           },
@@ -53,11 +35,7 @@ export function ModelDistributionChart({ distribution }: Props) {
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#18181b',
-            titleColor: '#f4f4f5',
-            bodyColor: '#e4e4e7',
-            borderColor: '#27272a',
-            borderWidth: 1,
+            ...defaultDarkTooltipOptions,
             callbacks: {
               label(context) {
                 return ` 会话数: ${context.raw} 场`;
@@ -67,10 +45,9 @@ export function ModelDistributionChart({ distribution }: Props) {
         },
         scales: {
           x: {
-            grid: { color: 'rgba(63, 63, 70, 0.25)' },
+            ...defaultDarkScales.x,
             ticks: {
-              color: '#71717a',
-              font: { size: 10 },
+              ...defaultDarkScales.x.ticks,
               precision: 0,
             },
           },
@@ -83,19 +60,8 @@ export function ModelDistributionChart({ distribution }: Props) {
           },
         },
       },
-    });
-
-    return () => {
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
-      }
     };
   }, [distribution]);
 
-  return (
-    <div className="relative w-full h-64">
-      <canvas ref={canvasRef} />
-    </div>
-  );
+  return <BaseChart config={chartConfig} heightClass="h-64" />;
 }
