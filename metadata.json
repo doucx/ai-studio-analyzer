@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor: 移除旧版 CSV 与 JSONL 导出功能及相关实现", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790339970.899493, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "ruff Capture: M api.py", "type": "capture", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790340026.0317292, "duration_ms": 0}}

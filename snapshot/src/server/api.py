@@ -1,7 +1,7 @@
 import asyncio
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List, Set
+from typing import Optional, Set
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 from src.analyzer.cache import SQLiteCache
