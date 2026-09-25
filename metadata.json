@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 修复后端搜索路由冲突及前端 FTS 结果类型安全", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790336385.7670293, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] fix: 修复会话详情生命周期依赖与全文检索路由冲突", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790336534.5414977, "duration_ms": 0}}
