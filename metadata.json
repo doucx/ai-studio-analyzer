@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 优化虚拟列表项语义元素并修正 Biome 忽略注释位置", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790310736.8276784, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] feat(ui): 升级会话交互流并支持 Markdown 渲染与沉浸式折叠侧栏", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790310840.604379, "duration_ms": 0}}
