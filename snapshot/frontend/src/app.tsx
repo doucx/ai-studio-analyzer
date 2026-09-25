@@ -1,6 +1,5 @@
 import {
   Brain,
-  Download,
   FileSpreadsheet,
   FileText,
   LayoutDashboard,
@@ -157,10 +156,7 @@ function HeaderBar() {
             disabled={syncInProgressSignal.value}
             className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded transition shadow-sm flex items-center gap-1.5"
           >
-            <RefreshCw
-              size={13}
-              className={syncInProgressSignal.value ? 'animate-spin' : ''}
-            />
+            <RefreshCw size={13} className={syncInProgressSignal.value ? 'animate-spin' : ''} />
             <span>
               {syncInProgressSignal.value
                 ? syncProgressTextSignal.value

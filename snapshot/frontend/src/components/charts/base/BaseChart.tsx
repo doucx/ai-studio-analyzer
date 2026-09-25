@@ -1,4 +1,4 @@
-import { Chart as ChartJS, type ChartConfiguration } from 'chart.js';
+import { type ChartConfiguration, Chart as ChartJS } from 'chart.js';
 import { useEffect, useRef } from 'preact/hooks';
 
 interface BaseChartProps {
