@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] perf: 引入 SQLite 会话索引表实现毫秒级秒开冷启动", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790312158.55857, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M cache.py", "type": "capture", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790312179.6384704, "duration_ms": 0}}

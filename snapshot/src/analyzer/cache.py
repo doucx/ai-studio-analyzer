@@ -1,7 +1,7 @@
 import json
 import os
 import sqlite3
-from typing import Dict, Any, Optional, Iterator, Tuple
+from typing import Dict, Any, Optional, Iterator, Tuple, List
 from contextlib import contextmanager
 
 
