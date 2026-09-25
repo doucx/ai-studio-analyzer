@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 增量同步完成后自动刷新当前会话的交互轮次流", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790332412.6245363, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refine: 移除 `SessionDetailPanel` 中的手动刷新按钮", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790332480.3785758, "duration_ms": 0}}

@@ -336,16 +336,6 @@ export function SessionDetailPanel({ session, onClose }: Props) {
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
-            onClick={() => fetchSessionDetail(true)}
-            disabled={loading || refreshing}
-            className="px-2.5 py-1 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 rounded border border-zinc-700/80 transition flex items-center gap-1"
-            title="刷新当前会话内容"
-          >
-            <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
-            <span className="hidden sm:inline">刷新</span>
-          </button>
-          <button
-            type="button"
             onClick={() => setShowMetadata(!showMetadata)}
             className="px-2.5 py-1 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded border border-zinc-700/80 transition"
             title="切换元数据卡片可见性"
