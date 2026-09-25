@@ -4,6 +4,6 @@
 
 ### 📝 变更文件摘要:
 ```
-piconfig.json | 10 ++++++++++
- 1 file changed, 10 insertions(+)
+piconfig.json | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
 ```
