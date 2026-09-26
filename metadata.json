@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 修复 Quipu 意图写入目标列并支持强制刷新", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790420039.2884772, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M sync_intents_to_quipu.py", "type": "capture", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790420706.3600292, "duration_ms": 0}}
