@@ -159,7 +159,10 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
 
   if (isThought) {
     return (
-      <div className="rounded-lg border border-emerald-900/30 bg-emerald-950/15 overflow-hidden">
+      <div
+        id={`turn-${index + 1}`}
+        className="rounded-lg border border-emerald-900/30 bg-emerald-950/15 overflow-hidden scroll-mt-4"
+      >
         <div className="px-3.5 py-2 flex items-center justify-between bg-emerald-950/30 border-b border-emerald-900/20 text-xs text-emerald-400 font-mono">
           <button
             type="button"
@@ -196,7 +199,8 @@ function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: numbe
 
   return (
     <div
-      className={`rounded-lg border transition shadow-sm ${
+      id={`turn-${index + 1}`}
+      className={`rounded-lg border transition shadow-sm scroll-mt-4 ${
         isUser
           ? 'bg-zinc-900/90 border-indigo-900/40 pl-1 border-l-4 border-l-indigo-500'
           : 'bg-zinc-900/50 border-zinc-800'
@@ -382,6 +386,31 @@ export function SessionDetailPanel({ session, onClose }: Props) {
       };
     }
   }, [syncVersion, fetchSessionDetail]);
+
+  // 3. 处理 URL 锚点定位与平滑滚动高亮聚焦 (#turn-X)
+  useEffect(() => {
+    if (!loading && detail?.turns && detail.turns.length > 0) {
+      const hash = window.location.hash;
+      if (hash && hash.startsWith('#turn-')) {
+        const timer = setTimeout(() => {
+          const targetEl = document.querySelector(hash);
+          if (targetEl) {
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            targetEl.classList.add(
+              'ring-2',
+              'ring-indigo-500',
+              'transition-all',
+              'duration-500'
+            );
+            setTimeout(() => {
+              targetEl.classList.remove('ring-2', 'ring-indigo-500');
+            }, 2500);
+          }
+        }, 150);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [loading, detail]);
 
   return (
     <div className="bg-zinc-900/40 border border-zinc-800 rounded-lg flex flex-col h-full min-h-[calc(100vh-140px)]">
