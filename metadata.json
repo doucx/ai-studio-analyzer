@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(quipu): 为认知对齐与回填脚本引入 Git content.md 惰性兜底读取与缓存回填", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790421394.6907198, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(quipu): 构建统一 CLI 桥接工具箱并形成全流程生命周期闭环", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790421756.2742305, "duration_ms": 0}}
