@@ -395,7 +395,7 @@ export function SessionDetailPanel({ session, onClose }: Props) {
         const timer = setTimeout(() => {
           const targetEl = document.querySelector(hash);
           if (targetEl) {
-            targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
             targetEl.classList.add(
               'ring-2',
               'ring-indigo-500',

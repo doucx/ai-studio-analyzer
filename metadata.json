@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(quipu): 构建统一 CLI 桥接工具箱并形成全流程生命周期闭环", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790421756.2742305, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 调整 SessionDetailPanel 中锚点跳转的滚动对齐方式", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790422125.604707, "duration_ms": 0}}
