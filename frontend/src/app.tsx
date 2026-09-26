@@ -1,5 +1,4 @@
 import {
-  Brain,
   LayoutDashboard,
   MessagesSquare,
   PanelLeftClose,
@@ -58,31 +57,9 @@ function HeaderBar() {
             <span className="text-[11px]">{isSidebarCollapsed ? '展开' : '收起'}</span>
           </button>
         )}
-        <button
-          type="button"
-          className="p-1.5 rounded-lg bg-indigo-950/60 border border-indigo-800/40 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-900/40 transition cursor-pointer flex items-center justify-center"
-          onClick={() => route('/')}
-          title="回到全景大盘"
-        >
-          <Brain size={18} />
-        </button>
-        <div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="text-base font-bold tracking-tight text-white cursor-pointer hover:text-indigo-400 transition bg-transparent border-none p-0 text-left"
-              onClick={() => route('/')}
-            >
-              AI Studio Analyzer
-            </button>
-            <span className="text-[10px] font-mono uppercase bg-indigo-950/80 text-indigo-400 border border-indigo-800/60 px-1.5 py-0.2 rounded">
-              v0.2 Workstation
-            </span>
-          </div>
-        </div>
 
         {/* 页面主视图切换 Tab */}
-        <nav className="flex items-center gap-1 ml-4 bg-zinc-900 border border-zinc-800 p-0.5 rounded-lg text-xs">
+        <nav className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 p-0.5 rounded-lg text-xs">
           <button
             type="button"
             onClick={() => route('/')}

@@ -55,6 +55,9 @@ export function SettingsRoute() {
           <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
             <Sliders size={20} className="text-indigo-400" />
             <span>系统与控制中心</span>
+            <span className="text-[10px] font-mono uppercase bg-indigo-950/80 text-indigo-400 border border-indigo-800/60 px-1.5 py-0.5 rounded font-normal">
+              v0.2 Workstation
+            </span>
           </h1>
           <p className="text-xs text-zinc-400 mt-1">
             管理代理网络、同步策略与度量超参数；查看存储重整与底层诊断规划
