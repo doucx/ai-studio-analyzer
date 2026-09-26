@@ -5,8 +5,8 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 
-PROXY_PORT = 7890
-PROXY_URL = f"http://127.0.0.1:{PROXY_PORT}"
+from .config import load_config
+
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
 
@@ -15,13 +15,14 @@ class DriveClient:
 
     def __init__(
         self,
-        proxy_url: str = PROXY_URL,
-        token_path: str = "token.json",
-        creds_path: str = "credentials.json",
+        proxy_url: Optional[str] = None,
+        token_path: Optional[str] = None,
+        creds_path: Optional[str] = None,
     ):
-        self.proxy_url = proxy_url
-        self.token_path = token_path
-        self.creds_path = creds_path
+        cfg = load_config()
+        self.proxy_url = proxy_url if proxy_url is not None else cfg.get("proxy_url", "")
+        self.token_path = token_path if token_path is not None else cfg.get("token_path", "token.json")
+        self.creds_path = creds_path if creds_path is not None else cfg.get("creds_path", "credentials.json")
         self.session = requests.Session()
         if self.proxy_url:
             self.session.proxies = {"http": self.proxy_url, "https": self.proxy_url}

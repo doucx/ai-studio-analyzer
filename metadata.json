@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(frontend): 实现基于窗口焦点与可见性的智能自动同步", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790397044.7063637, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(system): 实现统一系统设置面板与维护骨架", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790397432.5396395, "duration_ms": 0}}

@@ -5,12 +5,14 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   RefreshCw,
+  Settings as SettingsIcon,
 } from 'lucide-preact';
 import { LocationProvider, Route, Router, useLocation } from 'preact-iso';
 import { useEffect } from 'preact/hooks';
 import { NotFoundRoute } from './routes/NotFoundRoute';
 import { OverviewRoute } from './routes/OverviewRoute';
 import { SessionsRoute } from './routes/SessionsRoute';
+import { SettingsRoute } from './routes/SettingsRoute';
 import {
   TIME_RANGE_OPTIONS,
   type TimeRange,
@@ -105,6 +107,18 @@ function HeaderBar() {
             <MessagesSquare size={13} />
             <span>会话工作台</span>
           </button>
+          <button
+            type="button"
+            onClick={() => route('/settings')}
+            className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
+              path.startsWith('/settings')
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+            }`}
+          >
+            <SettingsIcon size={13} />
+            <span>系统控制台</span>
+          </button>
         </nav>
       </div>
 
@@ -173,6 +187,7 @@ export function App() {
           <Route path="/" component={OverviewRoute} />
           <Route path="/sessions" component={SessionsRoute} />
           <Route path="/sessions/:id" component={SessionsRoute} />
+          <Route path="/settings" component={SettingsRoute} />
           <Route default component={NotFoundRoute} />
         </Router>
       </div>
