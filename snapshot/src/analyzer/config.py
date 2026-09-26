@@ -4,7 +4,9 @@ import time
 from typing import Any, Dict
 import requests
 
-CONFIG_FILE_PATH = "config.json"
+CACHE_DIR = ".cache"
+CONFIG_FILE_PATH = os.path.join(CACHE_DIR, "config.json")
+LEGACY_CONFIG_FILE_PATH = "config.json"
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "proxy_url": "http://127.0.0.1:7890",
@@ -21,10 +23,28 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 }
 
 
+def _write_config_to_disk(cfg: Dict[str, Any]) -> None:
+    os.makedirs(os.path.dirname(CONFIG_FILE_PATH), exist_ok=True)
+    with open(CONFIG_FILE_PATH, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2, ensure_ascii=False)
+
+
 def load_config() -> Dict[str, Any]:
-    """读取本地配置，若不存在则使用默认配置初始化"""
+    """读取本地配置，若不存在则使用默认配置初始化，并迁移根目录旧配置"""
+    # 优先平滑兼容旧位置配置
+    if not os.path.exists(CONFIG_FILE_PATH) and os.path.exists(LEGACY_CONFIG_FILE_PATH):
+        try:
+            with open(LEGACY_CONFIG_FILE_PATH, "r", encoding="utf-8") as f:
+                legacy_cfg = json.load(f)
+                merged = dict(DEFAULT_CONFIG)
+                merged.update(legacy_cfg)
+                _write_config_to_disk(merged)
+                return merged
+        except Exception:
+            pass
+
     if not os.path.exists(CONFIG_FILE_PATH):
-        save_config(DEFAULT_CONFIG)
+        _write_config_to_disk(DEFAULT_CONFIG)
         return dict(DEFAULT_CONFIG)
 
     try:
@@ -39,11 +59,27 @@ def load_config() -> Dict[str, Any]:
 
 
 def save_config(new_config: Dict[str, Any]) -> Dict[str, Any]:
-    """持久化保存配置到 config.json"""
-    current = load_config()
+    """持久化保存配置到 .cache/config.json"""
+    current = dict(DEFAULT_CONFIG)
+    target_path = (
+        CONFIG_FILE_PATH
+        if os.path.exists(CONFIG_FILE_PATH)
+        else (
+            LEGACY_CONFIG_FILE_PATH
+            if os.path.exists(LEGACY_CONFIG_FILE_PATH)
+            else None
+        )
+    )
+
+    if target_path:
+        try:
+            with open(target_path, "r", encoding="utf-8") as f:
+                current.update(json.load(f))
+        except Exception:
+            pass
+
     current.update(new_config)
-    with open(CONFIG_FILE_PATH, "w", encoding="utf-8") as f:
-        json.dump(current, f, indent=2, ensure_ascii=False)
+    _write_config_to_disk(current)
     return current
 
 
