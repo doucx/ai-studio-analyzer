@@ -424,8 +424,8 @@ export function SettingsRoute() {
                 </span>
               </div>
               <p className="text-xs text-zinc-500 leading-relaxed">
-                迁移整合 <code>reindex_cli.py</code>，支持分批 Checkpoint 进度条广播与 FTS5
-                Trigram 倒排重建。
+                迁移整合 <code>reindex_cli.py</code>，支持分批 Checkpoint 进度条广播与 FTS5 Trigram
+                倒排重建。
               </p>
               <button
                 type="button"
@@ -510,7 +510,9 @@ export function SettingsRoute() {
 
             <div className="bg-zinc-900/30 border border-zinc-800/80 rounded-lg p-5 space-y-3 opacity-90">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-zinc-200">缓存数据 Schema 骨架探针</span>
+                <span className="text-sm font-semibold text-zinc-200">
+                  缓存数据 Schema 骨架探针
+                </span>
                 <span className="text-[10px] text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800/50">
                   对应 inspect_schema.py
                 </span>

@@ -20,9 +20,19 @@ class DriveClient:
         creds_path: Optional[str] = None,
     ):
         cfg = load_config()
-        self.proxy_url = proxy_url if proxy_url is not None else cfg.get("proxy_url", "")
-        self.token_path = token_path if token_path is not None else cfg.get("token_path", "token.json")
-        self.creds_path = creds_path if creds_path is not None else cfg.get("creds_path", "credentials.json")
+        self.proxy_url = (
+            proxy_url if proxy_url is not None else cfg.get("proxy_url", "")
+        )
+        self.token_path = (
+            token_path
+            if token_path is not None
+            else cfg.get("token_path", "token.json")
+        )
+        self.creds_path = (
+            creds_path
+            if creds_path is not None
+            else cfg.get("creds_path", "credentials.json")
+        )
         self.session = requests.Session()
         if self.proxy_url:
             self.session.proxies = {"http": self.proxy_url, "https": self.proxy_url}
