@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+import subprocess
 import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -105,6 +106,21 @@ def resolve_effective_user_prompt(
     return immediate_prompt, False
 
 
+def read_git_plan_content(quipu_dir: str, commit_hash: str) -> Optional[str]:
+    """通过 Git 原生对象库从快照 commit 提取 content.md 正文"""
+    try:
+        res = subprocess.run(
+            ["git", "show", f"{commit_hash}:content.md"],
+            cwd=quipu_dir,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return res.stdout
+    except Exception:
+        return None
+
+
 def load_quipu_plan_nodes(
     quipu_dir: str, limit: Optional[int] = None
 ) -> List[Dict[str, Any]]:
@@ -121,7 +137,7 @@ def load_quipu_plan_nodes(
     query = """
         SELECT commit_hash, output_tree, timestamp, summary, plan_md_cache
         FROM nodes 
-        WHERE node_type = 'plan' AND plan_md_cache IS NOT NULL AND length(plan_md_cache) > 20
+        WHERE node_type = 'plan'
         ORDER BY timestamp DESC
     """
     if limit and limit > 0:
@@ -129,7 +145,16 @@ def load_quipu_plan_nodes(
 
     cursor.execute(query)
     rows = cursor.fetchall()
-    nodes = [dict(r) for r in rows]
+    nodes = []
+    for r in rows:
+        item = dict(r)
+        content = item.get("plan_md_cache")
+        if not content or len(content) < 20:
+            content = read_git_plan_content(quipu_dir, item["commit_hash"])
+            item["plan_md_cache"] = content
+        if item["plan_md_cache"] and len(item["plan_md_cache"]) >= 20:
+            nodes.append(item)
+
     conn.close()
     return nodes
 

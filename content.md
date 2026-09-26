@@ -1,72 +1,47 @@
-好的，我将把 `inspect_quipu_alignment.py` 和 `sync_intents_to_quipu.py` 这两个认知对齐与回填脚本收拢至独立的 `scripts/quipu/` 专用目录，并为其配置路径寻址防护与平滑进度条。
+好的，根据 Quipu 源码中各快照 commit 将正文存储在 `content.md` blob 的机制，以及 `CacheProjector` 默认不预填 `plan_md_cache` 的惰性策略，我将为 `inspect_quipu_alignment.py` 与 `sync_intents_to_quipu.py` 引入 Git 原生读取兜底与 SQLite 自动回填能力。
 
-## [WIP] refactor(quipu): 将 Quipu 认知对齐与回填脚本归类至专用脚本目录
+## [WIP] fix(quipu): 为认知对齐与回填脚本引入 Git content.md 惰性兜底读取与缓存回填
+
+### 错误分析
+在先前实现中，认知对齐探针与回填工具在 SQL 中使用了强过滤条件 `AND n.plan_md_cache IS NOT NULL AND length(n.plan_md_cache) > 20`。
+然而根据 Quipu 核心模块 `quipu.engine.projector` 的实现，当仓库通过 clone、pull 或投影载入历史时，为了避免重型 I/O，`nodes.plan_md_cache` 默认被置为 `None`，真正的 Plan Markdown 保存在底层 Git 快照 commit 树根目录下的 `content.md` 中。
+这导致任何投影生成的有效 Quipu 仓库（如 FormSight 中的 818 个 Plan 节点）都会在初次检索时被误判为空节点而全部过滤，检索结果为 0。
 
 ### 用户需求
-开辟一个独立清晰的目录存放与 Quipu 相关的两个脚本（`inspect_quipu_alignment.py` 与 `sync_intents_to_quipu.py`），避免根目录结构混乱，同时集成上一轮所要求的静默进度条改造，并遵循 Quipu 规范完成归档。
+修复 `scripts/quipu/` 下的对齐与回填脚本，使其支持从 Git 原生存储（`<commit_hash>:content.md`）按需加载 Plan 正文，并在获取后自动补写回目标仓库的 `nodes.plan_md_cache`，使历史投影节点能够正常参与认知回填。
 
 ### 评论
-随着分析器功能从只读审计扩展到与外部工作区（如 Quipu）双向回填，根目录下零散的诊断与同步脚本需要按照职责清晰划分。收拢至 `scripts/quipu/` 能够让工具链更加模块化，便于后续版本维护与外部集成。
+该修复严格遵循了 Quipu 自身在 `quipu.engine.sqlite_storage:get_node_content` 中的官方设计模式（即本地热缓存优先，缺失则 fallback 到 Git blob，读取后回填缓存）。这不仅解决了历史节点的对齐盲区，还能顺手为目标 Quipu 仓库完成热缓存水合。
 
 ### 目标
-1. 创建专用脚本目录 `scripts/quipu/`。
-2. 将 `inspect_quipu_alignment.py` 和 `sync_intents_to_quipu.py` 移动至该目录下。
-3. 注入 `sys.path` 项目根目录自动解析逻辑，确保从任何目录启动脚本均能无缝加载 `src.analyzer`。
-4. 将此前设计的 `tqdm` 进度条与实时状态统计完整落地到 `sync_intents_to_quipu.py` 中。
+1. 在 `inspect_quipu_alignment.py` 与 `sync_intents_to_quipu.py` 中放宽 SQL 查询条件，移除对 `plan_md_cache` 非空的硬性限制。
+2. 增加 `read_git_plan_content` 函数，使用 `git show <commit_hash>:content.md` 提取正文。
+3. 在 `sync_intents_to_quipu.py` 中，将从 Git 懒加载的内容自动 `UPDATE` 回填到 SQLite `nodes.plan_md_cache` 中。
+4. 修正空状态提示信息，避免误导为“全部已回填”。
 
 ### 基本原理
-将两个脚本集中存放后，脚本执行时的 `sys.path[0]` 会变为 `scripts/quipu/`。为了确保 `src.analyzer` 相关的包依然能够被 Python 解释器正确导入，通过 `pathlib.Path(__file__).resolve().parents[2]` 动态定位项目根目录并安全注入 `sys.path`。同时，两个脚本在同一目录下依然保持相互直接引用，确保调用关系干净透明。
+Quipu 快照提交的 Tree 结构规范为：
+```
+100444 blob <meta_hash>    metadata.json
+100444 blob <content_hash> content.md
+040000 tree <output_hash>  snapshot
+```
+当 SQLite 缺少缓存时，直接通过 `git show <commit_hash>:content.md` 可在数毫秒内解出文本。在处理流程中对正文为空的节点动态拉取并回填数据库，兼顾了首次对齐的完整性与后续执行的高速命中。
 
 ### 标签
-#intent/refine #flow/ready #priority/medium #comp/cli #concept/sync #scope/dx #ai/instruct #task/domain/cli #task/object/quipu-scripts #task/action/refactor #task/state/begin
+#intent/fix #flow/ready #priority/high #comp/cli #concept/sync #scope/core #scope/dx #ai/instruct #task/domain/cli #task/object/quipu-scripts #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建目录并迁移脚本文件
+#### Acts 1: 为 `inspect_quipu_alignment.py` 增加 Git 读取兜底
 
-创建 `scripts/quipu/` 目录并将两个脚本移动至新目录。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~
-mkdir -p scripts/quipu
-~~~~~
-
-~~~~~act
-move_file
-inspect_quipu_alignment.py
-scripts/quipu/inspect_quipu_alignment.py
-~~~~~
-
-~~~~~act
-move_file
-sync_intents_to_quipu.py
-scripts/quipu/sync_intents_to_quipu.py
-~~~~~
-
-#### Acts 2: 为 `inspect_quipu_alignment.py` 补充项目根路径解析
-
-在脚本导入区前注入项目根目录路径，确保在子目录执行时依然能正确导入 `src.analyzer`。
+放宽节点拉取 SQL，并在缺少 `plan_md_cache` 时回退至 Git blob 读取。
 
 ~~~~~act
 patch_file
 scripts/quipu/inspect_quipu_alignment.py
-~~~~~
-~~~~~python
-import argparse
-import difflib
-import os
-import re
-import sqlite3
-import sys
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple
-from tqdm import tqdm
-
-from src.analyzer.cache import SQLiteCache
 ~~~~~
 ~~~~~python
 import argparse
@@ -79,41 +54,115 @@ import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 from tqdm import tqdm
-
-# 将项目根目录注入 sys.path，保证无论在何处执行均能定位 src 模块
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from src.analyzer.cache import SQLiteCache
+~~~~~
+~~~~~python
+import argparse
+import difflib
+import os
+from pathlib import Path
+import re
+import sqlite3
+import subprocess
+import sys
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Set, Tuple
+from tqdm import tqdm
 ~~~~~
 
-#### Acts 3: 优化 `sync_intents_to_quipu.py` 路径解析并接入进度条
+~~~~~act
+patch_file
+scripts/quipu/inspect_quipu_alignment.py
+~~~~~
+~~~~~python
+def load_quipu_plan_nodes(
+    quipu_dir: str, limit: Optional[int] = None
+) -> List[Dict[str, Any]]:
+    db_path = os.path.join(quipu_dir, ".quipu", "history.sqlite")
+    if not os.path.exists(db_path):
+        print(f"❌ 未找到 Quipu 数据库: {db_path}")
+        sys.exit(1)
 
-补全路径注入，同时集成 `tqdm` 进度条与状态显示，替换滚屏输出并支持 `-v / --verbose` 参数。
+    uri = f"file:{os.path.abspath(db_path)}?mode=ro"
+    conn = sqlite3.connect(uri, uri=True)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    query = """
+        SELECT commit_hash, output_tree, timestamp, summary, plan_md_cache
+        FROM nodes 
+        WHERE node_type = 'plan' AND plan_md_cache IS NOT NULL AND length(plan_md_cache) > 20
+        ORDER BY timestamp DESC
+    """
+    if limit and limit > 0:
+        query += f" LIMIT {limit}"
+
+    cursor.execute(query)
+    rows = cursor.fetchall()
+    nodes = [dict(r) for r in rows]
+    conn.close()
+    return nodes
+~~~~~
+~~~~~python
+def read_git_plan_content(quipu_dir: str, commit_hash: str) -> Optional[str]:
+    """通过 Git 原生对象库从快照 commit 提取 content.md 正文"""
+    try:
+        res = subprocess.run(
+            ["git", "show", f"{commit_hash}:content.md"],
+            cwd=quipu_dir,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return res.stdout
+    except Exception:
+        return None
+
+
+def load_quipu_plan_nodes(
+    quipu_dir: str, limit: Optional[int] = None
+) -> List[Dict[str, Any]]:
+    db_path = os.path.join(quipu_dir, ".quipu", "history.sqlite")
+    if not os.path.exists(db_path):
+        print(f"❌ 未找到 Quipu 数据库: {db_path}")
+        sys.exit(1)
+
+    uri = f"file:{os.path.abspath(db_path)}?mode=ro"
+    conn = sqlite3.connect(uri, uri=True)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    query = """
+        SELECT commit_hash, output_tree, timestamp, summary, plan_md_cache
+        FROM nodes 
+        WHERE node_type = 'plan'
+        ORDER BY timestamp DESC
+    """
+    if limit and limit > 0:
+        query += f" LIMIT {limit}"
+
+    cursor.execute(query)
+    rows = cursor.fetchall()
+    nodes = []
+    for r in rows:
+        item = dict(r)
+        content = item.get("plan_md_cache")
+        if not content or len(content) < 20:
+            content = read_git_plan_content(quipu_dir, item["commit_hash"])
+            item["plan_md_cache"] = content
+        if item["plan_md_cache"] and len(item["plan_md_cache"]) >= 20:
+            nodes.append(item)
+
+    conn.close()
+    return nodes
+~~~~~
+
+#### Acts 2: 改造 `sync_intents_to_quipu.py` 支持 Git 兜底与数据库热回填
+
+放宽 SQL，对无缓存节点从 Git 提取正文，并顺手 `UPDATE` 回填到目标仓库的 `nodes.plan_md_cache`。
 
 ~~~~~act
 patch_file
 scripts/quipu/sync_intents_to_quipu.py
-~~~~~
-~~~~~python
-import argparse
-import os
-import sqlite3
-import sys
-
-from inspect_quipu_alignment import AlignmentProbe
-from src.analyzer.cache import SQLiteCache
-
-
-def sync_intents(
-    quipu_dir: str,
-    analyzer_port: int = 5173,
-    min_score: float = 0.45,
-    window_hours: float = 24.0,
-    force: bool = False,
-    dry_run: bool = False,
-):
 ~~~~~
 ~~~~~python
 import argparse
@@ -122,25 +171,16 @@ from pathlib import Path
 import sqlite3
 import sys
 from tqdm import tqdm
-
-# 将项目根目录注入 sys.path，保证无论在何处执行均能定位 src 模块
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from inspect_quipu_alignment import AlignmentProbe
-from src.analyzer.cache import SQLiteCache
-
-
-def sync_intents(
-    quipu_dir: str,
-    analyzer_port: int = 5173,
-    min_score: float = 0.45,
-    window_hours: float = 24.0,
-    force: bool = False,
-    dry_run: bool = False,
-    verbose: bool = False,
-):
+~~~~~
+~~~~~python
+import argparse
+import os
+from pathlib import Path
+import sqlite3
+import subprocess
+import sys
+from typing import Optional
+from tqdm import tqdm
 ~~~~~
 
 ~~~~~act
@@ -148,75 +188,58 @@ patch_file
 scripts/quipu/sync_intents_to_quipu.py
 ~~~~~
 ~~~~~python
-    print(f"🔍 检索到 {len(nodes_to_sync)} 个待对齐/刷新的 Quipu 节点 (force={force})。")
-    if not nodes_to_sync:
-        print("✅ 所有 Plan 节点均已包含意图内容，无需处理。如需全量重新对齐请添加 --force 参数。")
-        conn.close()
-        return
+from inspect_quipu_alignment import AlignmentProbe
+from src.analyzer.cache import SQLiteCache
 
-    success_count = 0
-    skipped_count = 0
 
-    for node in nodes_to_sync:
-        best = probe.match_node(node)
-        if not best or best["total_score"] < min_score:
-            skipped_count += 1
-            continue
-
-        commit_hash = node["commit_hash"]
-        file_id = best["ai_file_id"]
-        turn_idx = best["turn_index"]
-        model = best["model"].replace("models/", "")
-        time_gap = best["time_diff_minutes"]
-
-        # 构建轻量级 Markdown 引用卡片
-        analyzer_url = (
-            f"http://localhost:{analyzer_port}/sessions/{file_id}#turn-{turn_idx}"
-        )
-        google_url = f"https://aistudio.google.com/prompts/{file_id}"
-
-        thinking_section = ""
-        if best.get("thinking_process"):
-            t_snippet = best["thinking_process"].strip()
-            if len(t_snippet) > 400:
-                t_snippet = t_snippet[:400] + "..."
-            thinking_lines = t_snippet.replace("\n", "\n> ")
-            thinking_section = (
-                f"\n\n> 💭 **思考链摘要 (Thinking Process)**:\n> {thinking_lines}"
-            )
-
-        ai_context_md = (
-            f"🔗 **AI 认知上下文溯源 (匹配度: {best['total_score']:.2f})**:\n"
-            f"* 🖥️ **本地工作台**: [{best['session_name']} (Turn #{turn_idx})]({analyzer_url})\n"
-            f"* 🌐 **Google AI Studio**: [在原生工作台打开]({google_url})\n"
-            f"* 🤖 **模型**: `{model}` (时序相隔: {time_gap} 分钟)"
-            f"{thinking_section}"
-        )
-
-        # 【核心修复】：同时将精炼内容写入 intent_md 与 ai_context
-        # 满足 Quipu 的 sqlite_index.py 仅 SELECT intent_md 的设计
-        if not dry_run:
-            cursor.execute(
-                """
-                INSERT OR REPLACE INTO private_data (node_hash, intent_md, ai_context)
-                VALUES (?, ?, ?)
-                """,
-                (commit_hash, ai_context_md, ai_context_md),
-            )
-
-        success_count += 1
-        prefix = "[DRY-RUN] " if dry_run else ""
-        print(
-            f"  ✅ {prefix}成功回填: [{commit_hash[:8]}] -> {best['session_name']} (Turn #{turn_idx}, 得分: {best['total_score']:.3f})"
-        )
-
-    if not dry_run:
-        conn.commit()
-        print(f"\n🎉 写入完成: 成功回填 {success_count} 个节点至 intent_md (跳过/未达阈值: {skipped_count})。")
-    else:
-        print(f"\n💡 [DRY-RUN] 预演完成: 可对齐 {success_count} 个节点 (跳过: {skipped_count})。")
+def sync_intents(
 ~~~~~
 ~~~~~python
+from inspect_quipu_alignment import AlignmentProbe
+from src.analyzer.cache import SQLiteCache
+
+
+def read_git_plan_content(quipu_dir: str, commit_hash: str) -> Optional[str]:
+    """通过 Git 从快照 commit 中提取 content.md 正文"""
+    try:
+        res = subprocess.run(
+            ["git", "show", f"{commit_hash}:content.md"],
+            cwd=quipu_dir,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return res.stdout
+    except Exception:
+        return None
+
+
+def sync_intents(
+~~~~~
+
+~~~~~act
+patch_file
+scripts/quipu/sync_intents_to_quipu.py
+~~~~~
+~~~~~python
+    # 根据 force 参数决定是全量重刷还是仅补全缺失
+    filter_sql = ""
+    if not force:
+        filter_sql = "AND (p.intent_md IS NULL OR p.intent_md = '')"
+
+    query = f"""
+        SELECT n.commit_hash, n.output_tree, n.timestamp, n.summary, n.plan_md_cache
+        FROM nodes n
+        LEFT JOIN private_data p ON n.commit_hash = p.node_hash
+        WHERE n.node_type = 'plan' 
+          AND n.plan_md_cache IS NOT NULL 
+          AND length(n.plan_md_cache) > 20
+          {filter_sql}
+        ORDER BY n.timestamp DESC
+    """
+    cursor.execute(query)
+    nodes_to_sync = [dict(r) for r in cursor.fetchall()]
+
     total_nodes = len(nodes_to_sync)
     print(f"🔍 检索到 {total_nodes} 个待对齐/刷新的 Quipu 节点 (force={force})。")
     if not nodes_to_sync:
@@ -241,63 +264,76 @@ scripts/quipu/sync_intents_to_quipu.py
                 pbar.set_postfix({"成功": success_count, "跳过": skipped_count})
                 pbar.update(1)
                 continue
+~~~~~
+~~~~~python
+    # 根据 force 参数决定是全量重刷还是仅补全缺失
+    filter_sql = ""
+    if not force:
+        filter_sql = "AND (p.intent_md IS NULL OR p.intent_md = '')"
 
-            commit_hash = node["commit_hash"]
-            file_id = best["ai_file_id"]
-            turn_idx = best["turn_index"]
-            model = best["model"].replace("models/", "")
-            time_gap = best["time_diff_minutes"]
+    query = f"""
+        SELECT n.commit_hash, n.output_tree, n.timestamp, n.summary, n.plan_md_cache
+        FROM nodes n
+        LEFT JOIN private_data p ON n.commit_hash = p.node_hash
+        WHERE n.node_type = 'plan' 
+          {filter_sql}
+        ORDER BY n.timestamp DESC
+    """
+    cursor.execute(query)
+    nodes_to_sync = [dict(r) for r in cursor.fetchall()]
 
-            # 构建轻量级 Markdown 引用卡片
-            analyzer_url = (
-                f"http://localhost:{analyzer_port}/sessions/{file_id}#turn-{turn_idx}"
-            )
-            google_url = f"https://aistudio.google.com/prompts/{file_id}"
+    total_nodes = len(nodes_to_sync)
+    print(f"🔍 检索到 {total_nodes} 个待对齐/刷新的 Quipu 节点 (force={force})。")
+    if not nodes_to_sync:
+        if not force:
+            print("✅ 检索到的所有 Plan 节点均已包含意图内容，无需处理。如需全量重新对齐请添加 --force 参数。")
+        else:
+            print("⚠️ 未检索到任何 Plan 节点。")
+        conn.close()
+        return
 
-            thinking_section = ""
-            if best.get("thinking_process"):
-                t_snippet = best["thinking_process"].strip()
-                if len(t_snippet) > 400:
-                    t_snippet = t_snippet[:400] + "..."
-                thinking_lines = t_snippet.replace("\n", "\n> ")
-                thinking_section = (
-                    f"\n\n> 💭 **思考链摘要 (Thinking Process)**:\n> {thinking_lines}"
-                )
+    success_count = 0
+    skipped_count = 0
+    hydrated_cache_count = 0
 
-            ai_context_md = (
-                f"🔗 **AI 认知上下文溯源 (匹配度: {best['total_score']:.2f})**:\n"
-                f"* 🖥️ **本地工作台**: [{best['session_name']} (Turn #{turn_idx})]({analyzer_url})\n"
-                f"* 🌐 **Google AI Studio**: [在原生工作台打开]({google_url})\n"
-                f"* 🤖 **模型**: `{model}` (时序相隔: {time_gap} 分钟)"
-                f"{thinking_section}"
-            )
+    with tqdm(
+        total=total_nodes,
+        desc="⚡ 回填意图",
+        unit="node",
+        bar_format="{l_bar}{bar:30}{r_bar}",
+        colour="cyan",
+    ) as pbar:
+        for node in nodes_to_sync:
+            # 1. 若 plan_md_cache 缺失，从底层 Git 的 content.md 提取
+            plan_content = node.get("plan_md_cache")
+            if not plan_content or len(plan_content) < 20:
+                git_content = read_git_plan_content(quipu_dir_abs, node["commit_hash"])
+                if git_content:
+                    node["plan_md_cache"] = git_content
+                    plan_content = git_content
+                    # 顺手回填到目标仓库 SQLite 的 plan_md_cache
+                    if not dry_run:
+                        try:
+                            cursor.execute(
+                                "UPDATE nodes SET plan_md_cache = ? WHERE commit_hash = ?",
+                                (git_content, node["commit_hash"]),
+                            )
+                            hydrated_cache_count += 1
+                        except Exception:
+                            pass
 
-            # 同时将精炼内容写入 intent_md 与 ai_context
-            if not dry_run:
-                cursor.execute(
-                    """
-                    INSERT OR REPLACE INTO private_data (node_hash, intent_md, ai_context)
-                    VALUES (?, ?, ?)
-                    """,
-                    (commit_hash, ai_context_md, ai_context_md),
-                )
+            if not plan_content or len(plan_content) < 20:
+                skipped_count += 1
+                pbar.set_postfix({"成功": success_count, "跳过": skipped_count})
+                pbar.update(1)
+                continue
 
-            success_count += 1
-            pbar.set_postfix({"成功": success_count, "跳过": skipped_count})
-
-            if verbose:
-                prefix = "[DRY-RUN] " if dry_run else ""
-                tqdm.write(
-                    f"  ✅ {prefix}成功回填: [{commit_hash[:8]}] -> {best['session_name']} (Turn #{turn_idx}, 得分: {best['total_score']:.3f})"
-                )
-
-            pbar.update(1)
-
-    if not dry_run:
-        conn.commit()
-        print(f"\n🎉 写入完成: 成功回填 {success_count} 个节点至 intent_md (跳过/未达阈值: {skipped_count})。")
-    else:
-        print(f"\n💡 [DRY-RUN] 预演完成: 可对齐 {success_count} 个节点 (跳过: {skipped_count})。")
+            best = probe.match_node(node)
+            if not best or best["total_score"] < min_score:
+                skipped_count += 1
+                pbar.set_postfix({"成功": success_count, "跳过": skipped_count})
+                pbar.update(1)
+                continue
 ~~~~~
 
 ~~~~~act
@@ -305,47 +341,21 @@ patch_file
 scripts/quipu/sync_intents_to_quipu.py
 ~~~~~
 ~~~~~python
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="演练模式，仅打印对齐计划，不写入 Quipu 数据库",
-    )
-
-    args = parser.parse_args()
-    sync_intents(
-        quipu_dir=args.quipu_dir,
-        analyzer_port=args.port,
-        min_score=args.min_score,
-        window_hours=args.window_hours,
-        force=args.force,
-        dry_run=args.dry_run,
-    )
+    if not dry_run:
+        conn.commit()
+        print(f"\n🎉 写入完成: 成功回填 {success_count} 个节点至 intent_md (跳过/未达阈值: {skipped_count})。")
+    else:
+        print(f"\n💡 [DRY-RUN] 预演完成: 可对齐 {success_count} 个节点 (跳过: {skipped_count})。")
 ~~~~~
 ~~~~~python
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="演练模式，仅打印对齐计划，不写入 Quipu 数据库",
-    )
-    parser.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="详细日志模式，显示每条成功回填的详细信息",
-    )
-
-    args = parser.parse_args()
-    sync_intents(
-        quipu_dir=args.quipu_dir,
-        analyzer_port=args.port,
-        min_score=args.min_score,
-        window_hours=args.window_hours,
-        force=args.force,
-        dry_run=args.dry_run,
-        verbose=args.verbose,
-    )
+    if not dry_run:
+        conn.commit()
+        hydrate_msg = f"，同时补水激活了 {hydrated_cache_count} 个节点的 plan_md_cache" if hydrated_cache_count > 0 else ""
+        print(f"\n🎉 写入完成: 成功回填 {success_count} 个节点至 intent_md (跳过/未达阈值: {skipped_count}{hydrate_msg})。")
+    else:
+        print(f"\n💡 [DRY-RUN] 预演完成: 可对齐 {success_count} 个节点 (跳过: {skipped_count})。")
 ~~~~~
 
 ### 下一步建议
-1. **测试执行**：在命令行尝试运行 `python scripts/quipu/sync_intents_to_quipu.py --dry-run --quipu-dir <path>` 验证路径导入和进度条效果。
-2. **文档更新**：在 `README.md` 的工具指引部分更新执行路径为 `python scripts/quipu/sync_intents_to_quipu.py`。
+1. **执行验证**：运行 `python scripts/quipu/sync_intents_to_quipu.py --verbose --quipu-dir ../FormSight/`，观察是否成功扫描出 818 个节点并开始对齐。
+2. **探针验证**：若需要查看对齐命中率分布，可先运行 `python scripts/quipu/inspect_quipu_alignment.py --quipu-dir ../FormSight/ --limit 50`。

@@ -11,7 +11,9 @@ import argparse
 import os
 from pathlib import Path
 import sqlite3
+import subprocess
 import sys
+from typing import Optional
 from tqdm import tqdm
 
 # 将项目根目录注入 sys.path，保证无论在何处执行均能定位 src 模块
@@ -21,6 +23,21 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from inspect_quipu_alignment import AlignmentProbe
 from src.analyzer.cache import SQLiteCache
+
+
+def read_git_plan_content(quipu_dir: str, commit_hash: str) -> Optional[str]:
+    """通过 Git 从快照 commit 中提取 content.md 正文"""
+    try:
+        res = subprocess.run(
+            ["git", "show", f"{commit_hash}:content.md"],
+            cwd=quipu_dir,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return res.stdout
+    except Exception:
+        return None
 
 
 def sync_intents(
@@ -65,8 +82,6 @@ def sync_intents(
         FROM nodes n
         LEFT JOIN private_data p ON n.commit_hash = p.node_hash
         WHERE n.node_type = 'plan' 
-          AND n.plan_md_cache IS NOT NULL 
-          AND length(n.plan_md_cache) > 20
           {filter_sql}
         ORDER BY n.timestamp DESC
     """
@@ -76,12 +91,16 @@ def sync_intents(
     total_nodes = len(nodes_to_sync)
     print(f"🔍 检索到 {total_nodes} 个待对齐/刷新的 Quipu 节点 (force={force})。")
     if not nodes_to_sync:
-        print("✅ 所有 Plan 节点均已包含意图内容，无需处理。如需全量重新对齐请添加 --force 参数。")
+        if not force:
+            print("✅ 检索到的所有 Plan 节点均已包含意图内容，无需处理。如需全量重新对齐请添加 --force 参数。")
+        else:
+            print("⚠️ 未检索到任何 Plan 节点。")
         conn.close()
         return
 
     success_count = 0
     skipped_count = 0
+    hydrated_cache_count = 0
 
     with tqdm(
         total=total_nodes,
@@ -91,6 +110,30 @@ def sync_intents(
         colour="cyan",
     ) as pbar:
         for node in nodes_to_sync:
+            # 1. 若 plan_md_cache 缺失，从底层 Git 的 content.md 提取
+            plan_content = node.get("plan_md_cache")
+            if not plan_content or len(plan_content) < 20:
+                git_content = read_git_plan_content(quipu_dir_abs, node["commit_hash"])
+                if git_content:
+                    node["plan_md_cache"] = git_content
+                    plan_content = git_content
+                    # 顺手回填到目标仓库 SQLite 的 plan_md_cache
+                    if not dry_run:
+                        try:
+                            cursor.execute(
+                                "UPDATE nodes SET plan_md_cache = ? WHERE commit_hash = ?",
+                                (git_content, node["commit_hash"]),
+                            )
+                            hydrated_cache_count += 1
+                        except Exception:
+                            pass
+
+            if not plan_content or len(plan_content) < 20:
+                skipped_count += 1
+                pbar.set_postfix({"成功": success_count, "跳过": skipped_count})
+                pbar.update(1)
+                continue
+
             best = probe.match_node(node)
             if not best or best["total_score"] < min_score:
                 skipped_count += 1
@@ -151,7 +194,8 @@ def sync_intents(
 
     if not dry_run:
         conn.commit()
-        print(f"\n🎉 写入完成: 成功回填 {success_count} 个节点至 intent_md (跳过/未达阈值: {skipped_count})。")
+        hydrate_msg = f"，同时补水激活了 {hydrated_cache_count} 个节点的 plan_md_cache" if hydrated_cache_count > 0 else ""
+        print(f"\n🎉 写入完成: 成功回填 {success_count} 个节点至 intent_md (跳过/未达阈值: {skipped_count}{hydrate_msg})。")
     else:
         print(f"\n💡 [DRY-RUN] 预演完成: 可对齐 {success_count} 个节点 (跳过: {skipped_count})。")
 
