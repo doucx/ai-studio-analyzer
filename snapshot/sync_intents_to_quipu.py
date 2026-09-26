@@ -1,10 +1,10 @@
 """
-Quipu ↔ AI Studio 认知溯源轻量级回填工具
+Quipu ↔ AI Studio 认知溯源轻量级回填工具 (修复 intent_md 写入目标列版)
 
 功能:
-1. 扫描目标 Quipu 仓库中未关联 ai_context 的 plan 节点。
+1. 扫描目标 Quipu 仓库中的 plan 节点。
 2. 基于时钟因果窗口与多维模糊特征，精准匹配 AI Studio 对应的 Model Turn。
-3. 提取轻量级指针链接（包含前端 Chunk 锚点）、原生链接与思考链摘要，写入 Quipu 的 private_data 表。
+3. 提取轻量级指针链接（包含前端 Chunk 锚点）、原生链接与思考链摘要，写入 Quipu 的 intent_md 与 ai_context。
 """
 
 import argparse
@@ -21,6 +21,7 @@ def sync_intents(
     analyzer_port: int = 5173,
     min_score: float = 0.45,
     window_hours: float = 24.0,
+    force: bool = False,
     dry_run: bool = False,
 ):
     quipu_dir_abs = os.path.abspath(quipu_dir)
@@ -36,7 +37,6 @@ def sync_intents(
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    # 确保 private_data 表存在
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS private_data (
             node_hash TEXT(40) PRIMARY KEY,
@@ -47,21 +47,27 @@ def sync_intents(
         );
     """)
 
-    cursor.execute("""
+    # 根据 force 参数决定是全量重刷还是仅补全缺失
+    filter_sql = ""
+    if not force:
+        filter_sql = "AND (p.intent_md IS NULL OR p.intent_md = '')"
+
+    query = f"""
         SELECT n.commit_hash, n.output_tree, n.timestamp, n.summary, n.plan_md_cache
         FROM nodes n
         LEFT JOIN private_data p ON n.commit_hash = p.node_hash
         WHERE n.node_type = 'plan' 
           AND n.plan_md_cache IS NOT NULL 
           AND length(n.plan_md_cache) > 20
-          AND (p.ai_context IS NULL OR p.ai_context = '')
+          {filter_sql}
         ORDER BY n.timestamp DESC
-    """)
+    """
+    cursor.execute(query)
     nodes_to_sync = [dict(r) for r in cursor.fetchall()]
 
-    print(f"🔍 检索到 {len(nodes_to_sync)} 个尚未关联 AI 认知的 Quipu 节点。")
+    print(f"🔍 检索到 {len(nodes_to_sync)} 个待对齐/刷新的 Quipu 节点 (force={force})。")
     if not nodes_to_sync:
-        print("✅ 所有 Plan 节点均已对齐，无需处理。")
+        print("✅ 所有 Plan 节点均已包含意图内容，无需处理。如需全量重新对齐请添加 --force 参数。")
         conn.close()
         return
 
@@ -104,24 +110,26 @@ def sync_intents(
             f"{thinking_section}"
         )
 
+        # 【核心修复】：同时将精炼内容写入 intent_md 与 ai_context
+        # 满足 Quipu 的 sqlite_index.py 仅 SELECT intent_md 的设计
         if not dry_run:
             cursor.execute(
                 """
                 INSERT OR REPLACE INTO private_data (node_hash, intent_md, ai_context)
-                VALUES (?, COALESCE((SELECT intent_md FROM private_data WHERE node_hash = ?), ''), ?)
+                VALUES (?, ?, ?)
                 """,
-                (commit_hash, commit_hash, ai_context_md),
+                (commit_hash, ai_context_md, ai_context_md),
             )
 
         success_count += 1
         prefix = "[DRY-RUN] " if dry_run else ""
         print(
-            f"  ✅ {prefix}成功对齐: [{commit_hash[:8]}] -> {best['session_name']} (Turn #{turn_idx}, 得分: {best['total_score']:.3f})"
+            f"  ✅ {prefix}成功回填: [{commit_hash[:8]}] -> {best['session_name']} (Turn #{turn_idx}, 得分: {best['total_score']:.3f})"
         )
 
     if not dry_run:
         conn.commit()
-        print(f"\n🎉 写入完成: 成功回填 {success_count} 个节点 (跳过/未达阈值: {skipped_count})。")
+        print(f"\n🎉 写入完成: 成功回填 {success_count} 个节点至 intent_md (跳过/未达阈值: {skipped_count})。")
     else:
         print(f"\n💡 [DRY-RUN] 预演完成: 可对齐 {success_count} 个节点 (跳过: {skipped_count})。")
 
@@ -156,6 +164,12 @@ if __name__ == "__main__":
         help="时间因果窗口大小/小时 (默认: 24.0)",
     )
     parser.add_argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="强制重新覆盖已有 private_data 内容",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="演练模式，仅打印对齐计划，不写入 Quipu 数据库",
@@ -167,5 +181,6 @@ if __name__ == "__main__":
         analyzer_port=args.port,
         min_score=args.min_score,
         window_hours=args.window_hours,
+        force=args.force,
         dry_run=args.dry_run,
     )
