@@ -5,7 +5,8 @@ from typing import Optional, Set
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
 from src.analyzer.cache import SQLiteCache
-from src.analyzer.drive import DriveClient, PROXY_URL
+from src.analyzer.config import load_config, save_config, test_proxy_connection
+from src.analyzer.drive import DriveClient
 from src.analyzer.metrics import calculate_session_metrics
 from src.analyzer.parser import parse_prompt_json
 from src.analyzer.sync import fetch_remote_files
@@ -60,7 +61,7 @@ def _run_sync_task(limit: Optional[int], all_files: bool):
         )
 
     try:
-        client = DriveClient(proxy_url=PROXY_URL)
+        client = DriveClient()
         total, hits, updated_sessions = fetch_remote_files(
             client=client,
             cache=cache,
@@ -226,6 +227,26 @@ def reindex_cache():
         print(f"⚠️ Reindex Checkpoint/Vacuum 异常: {exc}")
 
     return {"status": "success", "reindexed_count": count}
+
+
+@router.get("/settings")
+def get_settings():
+    """获取当前系统运行配置"""
+    return load_config()
+
+
+@router.post("/settings")
+def update_settings(payload: dict):
+    """更新并持久化系统运行配置"""
+    updated = save_config(payload)
+    return {"status": "success", "config": updated}
+
+
+@router.post("/settings/test-proxy")
+def test_proxy(payload: dict):
+    """测试指定代理与 Google 服务的连通性"""
+    proxy_url = payload.get("proxy_url", "")
+    return test_proxy_connection(proxy_url)
 
 
 @router.get("/sessions/{file_id}/raw")
