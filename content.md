@@ -1,183 +1,154 @@
-这个问题定位清晰且容易解决。
+好的，我已经完成了针对顶部导航栏精简与版本信息迁移的计划。通过移除左上角冗余的 Brain 图标及主标题，可以直接为多标签切换及右侧操作栏释放更多水平视口空间；同时将版本号徽章迁移至“系统与控制中心”标题旁，更加契合其元信息属性。
 
-首先回答你的两个问题：
-1. **当前 config 储存在哪里？**：此前硬编码在项目根目录下的 `config.json`（`CONFIG_FILE_PATH = "config.json"`）。将配置文件统一收纳进 `.cache/` 目录（即 `.cache/config.json`）非常合理，不仅能让根目录保持整洁，也能让缓存与本地持久化配置一同受 `.gitignore` 保护。
-2. **这个问题怎么解决？**：
-   - **根本原因**：`load_config()` 检测到文件不存在时调用了 `save_config(DEFAULT_CONFIG)`；而 `save_config()` 开头第一行又调用了 `current = load_config()`。在文件尚未落盘前，两者形成了无终止条件的相互递归调用，瞬间打满调用栈触发了 `RecursionError`。
-   - **解决方案**：解耦底层落盘逻辑 `_write_config_to_disk`。`load_config` 在文件不存在时直接落盘并返回默认值；`save_config` 则直接读取已有文件或以 `DEFAULT_CONFIG` 为基底进行合并落盘，切断两者的环形调用链，同时将路径迁移至 `.cache/config.json` 并兼容已有配置的平滑过渡。
-
-## [WIP] fix(config): 修复 load_config 与 save_config 循环递归并将配置迁移至 .cache
-
-### 错误分析
-
-当首次启动或配置文件不存在时：
-1. `load_config()` 检查 `if not os.path.exists(CONFIG_FILE_PATH)` 为真，触发 `save_config(DEFAULT_CONFIG)`。
-2. `save_config()` 尚未写入文件，其首行执行 `current = load_config()`。
-3. `load_config()` 再次判断文件不存在，再次调用 `save_config()`，形成无限递归死循环，抛出 `RecursionError: maximum recursion depth exceeded`。
+## [WIP] refactor(frontend): 精简顶部导航栏并迁移版本号徽章至系统设置
 
 ### 用户需求
 
-1. 确认配置当前存放位置，并赞同迁移至 `.cache/` 目录下。
-2. 分析并彻底消除该 `RecursionError` 递归死锁问题。
+1. 移除全局头部 `HeaderBar` 左上角的 Brain 图标按钮以及应用标题/版本号区块。
+2. 将版本标识（`v0.2 Workstation`）迁移至系统设置页面（`SettingsRoute`）中呈现。
 
 ### 评论
 
-配置模块的初始化死锁是常见的“未初始状态自引”问题。将配置存放路径移入 `.cache/config.json` 能够有效保持工程根目录的纯粹性，同时通过拆分落盘函数与断开互调链路，可一次性稳固解决该隐患。
+原左上角的 Brain 按钮与“全景大盘” Tab 功能重叠，而固定标题在小屏或窄屏下会挤压导航 Tab 与同步状态栏的展示空间。去除冗余元素后能够大幅提升 HeaderBar 的信息密度与紧凑度；将版本号置于系统设置页属于标准的控制台设计范式。
 
 ### 目标
 
-1. 在 `src/analyzer/config.py` 中将目标配置路径调整为 `.cache/config.json`，并支持如果根目录已有 `config.json` 时自动读取迁移。
-2. 提取原子化的内部写盘函数 `_write_config_to_disk`，确保目录存在并执行 JSON 序列化。
-3. 重构 `load_config` 和 `save_config`，打破循环依赖。
+1. 在 `frontend/src/app.tsx` 中移除 Brain 图标按钮及标题容器，清理未引用的 `Brain` 图标导入，并移除 `<nav>` 多余的左侧外边距。
+2. 在 `frontend/src/routes/SettingsRoute.tsx` 的头部标题右侧嵌入版本号徽章。
 
 ### 基本原理
 
-通过单向依赖设计替代双向循环依赖：
-- 读操作与写操作共享底层的默认参数字典与原子写盘能力，而非互相调用对方的对外业务函数。
-- `save_config` 在文件缺失时直接以 `DEFAULT_CONFIG` 为基础副本做 `update`，不调用 `load_config`。
-- `load_config` 发现文件缺失时直接使用底层写盘写入 `DEFAULT_CONFIG`，不再跳转进 `save_config`。
+通过纯前端组件结构微调完成布局优化：
+- 清理 `HeaderBar` 左侧冗余的 DOM 节点，使导航菜单能够直接在侧边栏折叠按钮之后紧凑排布。
+- 利用 Biome/TypeScript 检查要求，移除未引用的 `Brain` 图标组件以避免编译或 Lint 警告。
+- 在 `SettingsRoute` 的 `h1` 标题旁内嵌原有样式的微型徽章，既保留版本提示，又不抢占核心工作台空间。
 
 ### 标签
 
-#intent/fix #flow/ready #priority/high #comp/engine #concept/config #scope/core #ai/instruct #task/domain/storage #task/object/configuration #task/action/bug-fix #task/state/begin #task/status/active
+#intent/refine #flow/ready #priority/medium #comp/cli #concept/ui #scope/ux #ai/instruct #task/domain/ui #task/object/header-bar #task/action/refactor #task/state/continue #task/status/active
 
 ---
 
 ### Script
 
-#### Acts 1: 重构 `src/analyzer/config.py` 修复递归并迁移路径
-
-我们将重构 `src/analyzer/config.py` 中的路径定义与配置存取函数。
+#### Acts 1: 精简 `HeaderBar` 布局并清理未使用的图标
 
 ~~~~~act
 patch_file
-src/analyzer/config.py
+frontend/src/app.tsx
 ~~~~~
-~~~~~python.old
-CONFIG_FILE_PATH = "config.json"
-
-DEFAULT_CONFIG: Dict[str, Any] = {
-    "proxy_url": "http://127.0.0.1:7890",
-    "token_path": "token.json",
-    "creds_path": "credentials.json",
-    "target_folder_name": "Google AI Studio",
-    "auto_sync_enabled": True,
-    "auto_sync_interval": 90,
-    "auto_sync_limit": 20,
-    "idle_timeout_minutes": 30,
-    "typing_chars_per_sec": 5.0,
-    "reading_tokens_per_sec": 8.0,
-    "base_chunk_seconds": 15.0,
-}
-
-
-def load_config() -> Dict[str, Any]:
-    """读取本地配置，若不存在则使用默认配置初始化"""
-    if not os.path.exists(CONFIG_FILE_PATH):
-        save_config(DEFAULT_CONFIG)
-        return dict(DEFAULT_CONFIG)
-
-    try:
-        with open(CONFIG_FILE_PATH, "r", encoding="utf-8") as f:
-            user_config = json.load(f)
-            merged = dict(DEFAULT_CONFIG)
-            merged.update(user_config)
-            return merged
-    except Exception as exc:
-        print(f"⚠️ 读取配置文件异常，回退至默认配置: {exc}")
-        return dict(DEFAULT_CONFIG)
-
-
-def save_config(new_config: Dict[str, Any]) -> Dict[str, Any]:
-    """持久化保存配置到 config.json"""
-    current = load_config()
-    current.update(new_config)
-    with open(CONFIG_FILE_PATH, "w", encoding="utf-8") as f:
-        json.dump(current, f, indent=2, ensure_ascii=False)
-    return current
+~~~~~typescript.old
+import {
+  Brain,
+  LayoutDashboard,
+  MessagesSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
+  RefreshCw,
+  Settings as SettingsIcon,
+} from 'lucide-preact';
 ~~~~~
-~~~~~python.new
-CACHE_DIR = ".cache"
-CONFIG_FILE_PATH = os.path.join(CACHE_DIR, "config.json")
-LEGACY_CONFIG_FILE_PATH = "config.json"
+~~~~~typescript.new
+import {
+  LayoutDashboard,
+  MessagesSquare,
+  PanelLeftClose,
+  PanelLeftOpen,
+  RefreshCw,
+  Settings as SettingsIcon,
+} from 'lucide-preact';
+~~~~~
 
-DEFAULT_CONFIG: Dict[str, Any] = {
-    "proxy_url": "http://127.0.0.1:7890",
-    "token_path": "token.json",
-    "creds_path": "credentials.json",
-    "target_folder_name": "Google AI Studio",
-    "auto_sync_enabled": True,
-    "auto_sync_interval": 90,
-    "auto_sync_limit": 20,
-    "idle_timeout_minutes": 30,
-    "typing_chars_per_sec": 5.0,
-    "reading_tokens_per_sec": 8.0,
-    "base_chunk_seconds": 15.0,
-}
+~~~~~act
+patch_file
+frontend/src/app.tsx
+~~~~~
+~~~~~typescript.old
+        {isSessionsView && (
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="p-1.5 text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded transition text-xs flex items-center gap-1"
+            title={isSidebarCollapsed ? '展开会话历史侧边栏' : '收起会话历史侧边栏'}
+          >
+            {isSidebarCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+            <span className="text-[11px]">{isSidebarCollapsed ? '展开' : '收起'}</span>
+          </button>
+        )}
+        <button
+          type="button"
+          className="p-1.5 rounded-lg bg-indigo-950/60 border border-indigo-800/40 text-indigo-400 hover:text-indigo-300 hover:bg-indigo-900/40 transition cursor-pointer flex items-center justify-center"
+          onClick={() => route('/')}
+          title="回到全景大盘"
+        >
+          <Brain size={18} />
+        </button>
+        <div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="text-base font-bold tracking-tight text-white cursor-pointer hover:text-indigo-400 transition bg-transparent border-none p-0 text-left"
+              onClick={() => route('/')}
+            >
+              AI Studio Analyzer
+            </button>
+            <span className="text-[10px] font-mono uppercase bg-indigo-950/80 text-indigo-400 border border-indigo-800/60 px-1.5 py-0.2 rounded">
+              v0.2 Workstation
+            </span>
+          </div>
+        </div>
 
+        {/* 页面主视图切换 Tab */}
+        <nav className="flex items-center gap-1 ml-4 bg-zinc-900 border border-zinc-800 p-0.5 rounded-lg text-xs">
+~~~~~
+~~~~~typescript.new
+        {isSessionsView && (
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            className="p-1.5 text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded transition text-xs flex items-center gap-1"
+            title={isSidebarCollapsed ? '展开会话历史侧边栏' : '收起会话历史侧边栏'}
+          >
+            {isSidebarCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+            <span className="text-[11px]">{isSidebarCollapsed ? '展开' : '收起'}</span>
+          </button>
+        )}
 
-def _write_config_to_disk(cfg: Dict[str, Any]) -> None:
-    os.makedirs(os.path.dirname(CONFIG_FILE_PATH), exist_ok=True)
-    with open(CONFIG_FILE_PATH, "w", encoding="utf-8") as f:
-        json.dump(cfg, f, indent=2, ensure_ascii=False)
+        {/* 页面主视图切换 Tab */}
+        <nav className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 p-0.5 rounded-lg text-xs">
+~~~~~
 
+#### Acts 2: 将版本号徽章添加到系统设置页标题
 
-def load_config() -> Dict[str, Any]:
-    """读取本地配置，若不存在则使用默认配置初始化，并迁移根目录旧配置"""
-    # 优先平滑兼容旧位置配置
-    if not os.path.exists(CONFIG_FILE_PATH) and os.path.exists(LEGACY_CONFIG_FILE_PATH):
-        try:
-            with open(LEGACY_CONFIG_FILE_PATH, "r", encoding="utf-8") as f:
-                legacy_cfg = json.load(f)
-                merged = dict(DEFAULT_CONFIG)
-                merged.update(legacy_cfg)
-                _write_config_to_disk(merged)
-                return merged
-        except Exception:
-            pass
-
-    if not os.path.exists(CONFIG_FILE_PATH):
-        _write_config_to_disk(DEFAULT_CONFIG)
-        return dict(DEFAULT_CONFIG)
-
-    try:
-        with open(CONFIG_FILE_PATH, "r", encoding="utf-8") as f:
-            user_config = json.load(f)
-            merged = dict(DEFAULT_CONFIG)
-            merged.update(user_config)
-            return merged
-    except Exception as exc:
-        print(f"⚠️ 读取配置文件异常，回退至默认配置: {exc}")
-        return dict(DEFAULT_CONFIG)
-
-
-def save_config(new_config: Dict[str, Any]) -> Dict[str, Any]:
-    """持久化保存配置到 .cache/config.json"""
-    current = dict(DEFAULT_CONFIG)
-    target_path = (
-        CONFIG_FILE_PATH
-        if os.path.exists(CONFIG_FILE_PATH)
-        else (
-            LEGACY_CONFIG_FILE_PATH
-            if os.path.exists(LEGACY_CONFIG_FILE_PATH)
-            else None
-        )
-    )
-
-    if target_path:
-        try:
-            with open(target_path, "r", encoding="utf-8") as f:
-                current.update(json.load(f))
-        except Exception:
-            pass
-
-    current.update(new_config)
-    _write_config_to_disk(current)
-    return current
+~~~~~act
+patch_file
+frontend/src/routes/SettingsRoute.tsx
+~~~~~
+~~~~~typescript.old
+      {/* 头部标题与保存指示条 */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
+        <div>
+          <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+            <Sliders size={20} className="text-indigo-400" />
+            <span>系统与控制中心</span>
+          </h1>
+          <p className="text-xs text-zinc-400 mt-1">
+~~~~~
+~~~~~typescript.new
+      {/* 头部标题与保存指示条 */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
+        <div>
+          <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+            <Sliders size={20} className="text-indigo-400" />
+            <span>系统与控制中心</span>
+            <span className="text-[10px] font-mono uppercase bg-indigo-950/80 text-indigo-400 border border-indigo-800/60 px-1.5 py-0.5 rounded font-normal">
+              v0.2 Workstation
+            </span>
+          </h1>
+          <p className="text-xs text-zinc-400 mt-1">
 ~~~~~
 
 ### 下一步建议
 
-1. 执行本计划修复 `src/analyzer/config.py`。
-2. 运行 `python main.py` 验证服务是否能够正常初始化并成功生成 `.cache/config.json`。
-3. 验证无误后，如需提交版本控制，可生成独立的 `[COMMIT]` 计划。
+1. 在前端开发服务器或构建中测试查看顶部栏渲染效果（可在 `frontend` 目录运行 `npm run check` 验证类型与规范）。
+2. 确认界面交互满意后，若无需其他样式微调，可生成 `[COMMIT]` 计划将此次 UI 精简提交至版本控制。
