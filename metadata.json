@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(system): 实现统一系统设置面板与维护骨架", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790397432.5396395, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(config): 优化代理连通性探测端点以稳定返回 HTTP 200", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790397582.9112926, "duration_ms": 0}}

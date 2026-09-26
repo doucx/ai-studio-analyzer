@@ -48,24 +48,30 @@ def save_config(new_config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def test_proxy_connection(proxy_url: str) -> Dict[str, Any]:
-    """测试指定代理访问 Google API 的连通性与往返延迟"""
-    target_url = "https://www.googleapis.com/discovery/v1/apis"
+    """测试指定代理访问 Google 服务的连通性与往返延迟 (稳定返回 HTTP 200)"""
+    target_url = "https://www.google.com/robots.txt"
     proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
     t0 = time.time()
     try:
-        resp = requests.head(target_url, proxies=proxies, timeout=10)
-        elapsed_ms = round((time.time() - t0) * 1000)
-        if resp.status_code < 400 or resp.status_code == 404:
+        with requests.get(target_url, proxies=proxies, timeout=10, stream=True) as resp:
+            elapsed_ms = round((time.time() - t0) * 1000)
+            if resp.status_code == 200:
+                return {
+                    "ok": True,
+                    "latency_ms": elapsed_ms,
+                    "message": f"连接成功 (HTTP 200 OK, 延迟: {elapsed_ms}ms)",
+                }
+            if resp.status_code < 400:
+                return {
+                    "ok": True,
+                    "latency_ms": elapsed_ms,
+                    "message": f"连接成功 (HTTP {resp.status_code}, 延迟: {elapsed_ms}ms)",
+                }
             return {
-                "ok": True,
+                "ok": False,
                 "latency_ms": elapsed_ms,
-                "message": f"连接成功 (HTTP {resp.status_code}, 延迟: {elapsed_ms}ms)",
+                "message": f"返回非预期状态码: HTTP {resp.status_code}",
             }
-        return {
-            "ok": False,
-            "latency_ms": elapsed_ms,
-            "message": f"返回异常状态码: HTTP {resp.status_code}",
-        }
     except Exception as exc:
         elapsed_ms = round((time.time() - t0) * 1000)
         return {
