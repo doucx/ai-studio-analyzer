@@ -5,12 +5,18 @@ AI Studio & Quipu 认知对齐探针脚本 (v0.3 - 时区基准诊断与 Chunk �
 import argparse
 import difflib
 import os
+from pathlib import Path
 import re
 import sqlite3
 import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 from tqdm import tqdm
+
+# 将项目根目录注入 sys.path，保证无论在何处执行均能定位 src 模块
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.analyzer.cache import SQLiteCache
 from src.analyzer.models import PromptSession

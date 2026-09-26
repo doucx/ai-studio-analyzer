@@ -9,8 +9,15 @@ Quipu ↔ AI Studio 认知溯源轻量级回填工具 (修复 intent_md 写入�
 
 import argparse
 import os
+from pathlib import Path
 import sqlite3
 import sys
+from tqdm import tqdm
+
+# 将项目根目录注入 sys.path，保证无论在何处执行均能定位 src 模块
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from inspect_quipu_alignment import AlignmentProbe
 from src.analyzer.cache import SQLiteCache
@@ -23,6 +30,7 @@ def sync_intents(
     window_hours: float = 24.0,
     force: bool = False,
     dry_run: bool = False,
+    verbose: bool = False,
 ):
     quipu_dir_abs = os.path.abspath(quipu_dir)
     db_path = os.path.join(quipu_dir_abs, ".quipu", "history.sqlite")
@@ -65,7 +73,8 @@ def sync_intents(
     cursor.execute(query)
     nodes_to_sync = [dict(r) for r in cursor.fetchall()]
 
-    print(f"🔍 检索到 {len(nodes_to_sync)} 个待对齐/刷新的 Quipu 节点 (force={force})。")
+    total_nodes = len(nodes_to_sync)
+    print(f"🔍 检索到 {total_nodes} 个待对齐/刷新的 Quipu 节点 (force={force})。")
     if not nodes_to_sync:
         print("✅ 所有 Plan 节点均已包含意图内容，无需处理。如需全量重新对齐请添加 --force 参数。")
         conn.close()
@@ -74,58 +83,71 @@ def sync_intents(
     success_count = 0
     skipped_count = 0
 
-    for node in nodes_to_sync:
-        best = probe.match_node(node)
-        if not best or best["total_score"] < min_score:
-            skipped_count += 1
-            continue
+    with tqdm(
+        total=total_nodes,
+        desc="⚡ 回填意图",
+        unit="node",
+        bar_format="{l_bar}{bar:30}{r_bar}",
+        colour="cyan",
+    ) as pbar:
+        for node in nodes_to_sync:
+            best = probe.match_node(node)
+            if not best or best["total_score"] < min_score:
+                skipped_count += 1
+                pbar.set_postfix({"成功": success_count, "跳过": skipped_count})
+                pbar.update(1)
+                continue
 
-        commit_hash = node["commit_hash"]
-        file_id = best["ai_file_id"]
-        turn_idx = best["turn_index"]
-        model = best["model"].replace("models/", "")
-        time_gap = best["time_diff_minutes"]
+            commit_hash = node["commit_hash"]
+            file_id = best["ai_file_id"]
+            turn_idx = best["turn_index"]
+            model = best["model"].replace("models/", "")
+            time_gap = best["time_diff_minutes"]
 
-        # 构建轻量级 Markdown 引用卡片
-        analyzer_url = (
-            f"http://localhost:{analyzer_port}/sessions/{file_id}#turn-{turn_idx}"
-        )
-        google_url = f"https://aistudio.google.com/prompts/{file_id}"
+            # 构建轻量级 Markdown 引用卡片
+            analyzer_url = (
+                f"http://localhost:{analyzer_port}/sessions/{file_id}#turn-{turn_idx}"
+            )
+            google_url = f"https://aistudio.google.com/prompts/{file_id}"
 
-        thinking_section = ""
-        if best.get("thinking_process"):
-            t_snippet = best["thinking_process"].strip()
-            if len(t_snippet) > 400:
-                t_snippet = t_snippet[:400] + "..."
-            thinking_lines = t_snippet.replace("\n", "\n> ")
-            thinking_section = (
-                f"\n\n> 💭 **思考链摘要 (Thinking Process)**:\n> {thinking_lines}"
+            thinking_section = ""
+            if best.get("thinking_process"):
+                t_snippet = best["thinking_process"].strip()
+                if len(t_snippet) > 400:
+                    t_snippet = t_snippet[:400] + "..."
+                thinking_lines = t_snippet.replace("\n", "\n> ")
+                thinking_section = (
+                    f"\n\n> 💭 **思考链摘要 (Thinking Process)**:\n> {thinking_lines}"
+                )
+
+            ai_context_md = (
+                f"🔗 **AI 认知上下文溯源 (匹配度: {best['total_score']:.2f})**:\n"
+                f"* 🖥️ **本地工作台**: [{best['session_name']} (Turn #{turn_idx})]({analyzer_url})\n"
+                f"* 🌐 **Google AI Studio**: [在原生工作台打开]({google_url})\n"
+                f"* 🤖 **模型**: `{model}` (时序相隔: {time_gap} 分钟)"
+                f"{thinking_section}"
             )
 
-        ai_context_md = (
-            f"🔗 **AI 认知上下文溯源 (匹配度: {best['total_score']:.2f})**:\n"
-            f"* 🖥️ **本地工作台**: [{best['session_name']} (Turn #{turn_idx})]({analyzer_url})\n"
-            f"* 🌐 **Google AI Studio**: [在原生工作台打开]({google_url})\n"
-            f"* 🤖 **模型**: `{model}` (时序相隔: {time_gap} 分钟)"
-            f"{thinking_section}"
-        )
+            # 同时将精炼内容写入 intent_md 与 ai_context
+            if not dry_run:
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO private_data (node_hash, intent_md, ai_context)
+                    VALUES (?, ?, ?)
+                    """,
+                    (commit_hash, ai_context_md, ai_context_md),
+                )
 
-        # 【核心修复】：同时将精炼内容写入 intent_md 与 ai_context
-        # 满足 Quipu 的 sqlite_index.py 仅 SELECT intent_md 的设计
-        if not dry_run:
-            cursor.execute(
-                """
-                INSERT OR REPLACE INTO private_data (node_hash, intent_md, ai_context)
-                VALUES (?, ?, ?)
-                """,
-                (commit_hash, ai_context_md, ai_context_md),
-            )
+            success_count += 1
+            pbar.set_postfix({"成功": success_count, "跳过": skipped_count})
 
-        success_count += 1
-        prefix = "[DRY-RUN] " if dry_run else ""
-        print(
-            f"  ✅ {prefix}成功回填: [{commit_hash[:8]}] -> {best['session_name']} (Turn #{turn_idx}, 得分: {best['total_score']:.3f})"
-        )
+            if verbose:
+                prefix = "[DRY-RUN] " if dry_run else ""
+                tqdm.write(
+                    f"  ✅ {prefix}成功回填: [{commit_hash[:8]}] -> {best['session_name']} (Turn #{turn_idx}, 得分: {best['total_score']:.3f})"
+                )
+
+            pbar.update(1)
 
     if not dry_run:
         conn.commit()
@@ -174,6 +196,12 @@ if __name__ == "__main__":
         action="store_true",
         help="演练模式，仅打印对齐计划，不写入 Quipu 数据库",
     )
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="详细日志模式，显示每条成功回填的详细信息",
+    )
 
     args = parser.parse_args()
     sync_intents(
@@ -183,4 +211,5 @@ if __name__ == "__main__":
         window_hours=args.window_hours,
         force=args.force,
         dry_run=args.dry_run,
+        verbose=args.verbose,
     )
