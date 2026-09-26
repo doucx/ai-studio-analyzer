@@ -20,6 +20,7 @@ import {
 } from './state/metrics';
 import { fetchSessions, sidebarCollapsedSignal, toggleSidebar } from './state/session';
 import {
+  setupAutoSyncOnFocus,
   setupSyncEventListener,
   syncInProgressSignal,
   syncProgressTextSignal,
@@ -157,7 +158,11 @@ export function App() {
     const cleanupSync = setupSyncEventListener(() => {
       loadAllData();
     });
-    return cleanupSync;
+    const cleanupAutoSync = setupAutoSyncOnFocus();
+    return () => {
+      cleanupSync();
+      cleanupAutoSync();
+    };
   }, []);
 
   return (
