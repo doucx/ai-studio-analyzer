@@ -1,4 +1,4 @@
-import { MessagesSquare } from 'lucide-preact';
+import { MessagesSquare, PanelLeftOpen } from 'lucide-preact';
 import { useLocation, useRoute } from 'preact-iso';
 import { useMemo } from 'preact/hooks';
 import { SessionDetailPanel } from '../components/SessionDetailPanel';
@@ -8,6 +8,7 @@ import {
   sessionsLoadingSignal,
   sessionsSignal,
   sidebarCollapsedSignal,
+  toggleSidebar,
 } from '../state/session';
 import type { SessionItem } from '../types/metrics';
 
@@ -75,7 +76,22 @@ export function SessionsRoute() {
       )}
 
       {/* 右侧：单会话详情 或 空状态引导 */}
-      <main className="flex-1 overflow-y-auto lg:h-[calc(100vh-120px)] pr-1 w-full flex flex-col">
+      <main className="flex-1 overflow-y-auto lg:h-[calc(100vh-120px)] pr-1 w-full flex flex-col relative">
+        {/* 侧边栏折叠时的主视口快捷展开入口 */}
+        {isSidebarCollapsed && (
+          <div className="mb-3 flex items-center">
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="px-2.5 py-1 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 text-zinc-300 border border-zinc-700/80 rounded transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+              title="展开会话历史列表"
+            >
+              <PanelLeftOpen size={14} className="text-indigo-400" />
+              <span>展开会话历史</span>
+            </button>
+          </div>
+        )}
+
         {isLoading && sessions.length === 0 ? (
           <div className="py-24 text-center text-zinc-500 text-sm animate-pulse">
             正在载入会话工作台索引...

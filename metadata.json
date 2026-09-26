@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(frontend): 精简顶部导航栏并迁移版本号徽章至系统设置", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790398154.7058942, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(frontend): 彻底根治 Header 布局抖动并引入全局 Toast 反馈系统", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790398423.0896704, "duration_ms": 0}}

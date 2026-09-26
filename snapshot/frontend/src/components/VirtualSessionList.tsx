@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-preact';
+import { Loader2, PanelLeftClose } from 'lucide-preact';
 import { useRef, useState } from 'preact/hooks';
 import {
   type DepthFilter,
@@ -15,6 +15,7 @@ import {
   selectedModelSignal,
   sessionsSignal,
   sortBySignal,
+  toggleSidebar,
 } from '../state/session';
 import type { SessionItem } from '../types/metrics';
 
@@ -82,18 +83,29 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
             )}
           </div>
 
-          <select
-            value={currentSort}
-            onChange={(e) => {
-              sortBySignal.value = (e.target as HTMLSelectElement).value as SortOption;
-            }}
-            className="bg-zinc-950 border border-zinc-700 text-zinc-300 text-[11px] rounded px-1.5 py-0.5 outline-none focus:border-indigo-500"
-          >
-            {ftsResultsSignal.value !== null && <option value="relevance">相关度</option>}
-            <option value="modified">最近修改</option>
-            <option value="tokens">Token 能耗</option>
-            <option value="chunks">Chunk 数量</option>
-          </select>
+          <div className="flex items-center gap-1.5">
+            <select
+              value={currentSort}
+              onChange={(e) => {
+                sortBySignal.value = (e.target as HTMLSelectElement).value as SortOption;
+              }}
+              className="bg-zinc-950 border border-zinc-700 text-zinc-300 text-[11px] rounded px-1.5 py-0.5 outline-none focus:border-indigo-500"
+            >
+              {ftsResultsSignal.value !== null && <option value="relevance">相关度</option>}
+              <option value="modified">最近修改</option>
+              <option value="tokens">Token 能耗</option>
+              <option value="chunks">Chunk 数量</option>
+            </select>
+
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="p-1 text-zinc-400 hover:text-zinc-200 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700/60 rounded transition cursor-pointer"
+              title="收起会话历史列表"
+            >
+              <PanelLeftClose size={13} />
+            </button>
+          </div>
         </div>
 
         {/* 第二行：FTS 全文检索输入 */}

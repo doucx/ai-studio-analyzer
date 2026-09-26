@@ -1,13 +1,12 @@
 import {
   LayoutDashboard,
   MessagesSquare,
-  PanelLeftClose,
-  PanelLeftOpen,
   RefreshCw,
   Settings as SettingsIcon,
 } from 'lucide-preact';
 import { LocationProvider, Route, Router, useLocation } from 'preact-iso';
 import { useEffect } from 'preact/hooks';
+import { ToastContainer } from './components/ToastContainer';
 import { NotFoundRoute } from './routes/NotFoundRoute';
 import { OverviewRoute } from './routes/OverviewRoute';
 import { SessionsRoute } from './routes/SessionsRoute';
@@ -19,12 +18,11 @@ import {
   setTimeRange,
   timeRangeSignal,
 } from './state/metrics';
-import { fetchSessions, sidebarCollapsedSignal, toggleSidebar } from './state/session';
+import { fetchSessions } from './state/session';
 import {
   setupAutoSyncOnFocus,
   setupSyncEventListener,
   syncInProgressSignal,
-  syncProgressTextSignal,
   triggerSync,
 } from './state/sync';
 
@@ -40,30 +38,17 @@ function handleTimeRangeChange(newRange: TimeRange) {
 function HeaderBar() {
   const { path, route } = useLocation();
   const currentRange = timeRangeSignal.value;
-  const isSidebarCollapsed = sidebarCollapsedSignal.value;
   const isSessionsView = path.startsWith('/sessions');
 
   return (
     <header className="border-b border-zinc-800 bg-zinc-950/80 backdrop-blur px-6 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-4 sticky top-0 z-20">
       <div className="flex items-center gap-3">
-        {isSessionsView && (
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            className="p-1.5 text-zinc-400 hover:text-zinc-200 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded transition text-xs flex items-center gap-1"
-            title={isSidebarCollapsed ? '展开会话历史侧边栏' : '收起会话历史侧边栏'}
-          >
-            {isSidebarCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
-            <span className="text-[11px]">{isSidebarCollapsed ? '展开' : '收起'}</span>
-          </button>
-        )}
-
-        {/* 页面主视图切换 Tab */}
+        {/* 页面主视图切换 Tab (零前置偏移，尺寸绝对恒定) */}
         <nav className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 p-0.5 rounded-lg text-xs">
           <button
             type="button"
             onClick={() => route('/')}
-            className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
+            className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 cursor-pointer ${
               path === '/'
                 ? 'bg-indigo-600 text-white shadow-sm'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
@@ -75,7 +60,7 @@ function HeaderBar() {
           <button
             type="button"
             onClick={() => route('/sessions')}
-            className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
+            className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 cursor-pointer ${
               isSessionsView
                 ? 'bg-indigo-600 text-white shadow-sm'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
@@ -87,7 +72,7 @@ function HeaderBar() {
           <button
             type="button"
             onClick={() => route('/settings')}
-            className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 ${
+            className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 cursor-pointer ${
               path.startsWith('/settings')
                 ? 'bg-indigo-600 text-white shadow-sm'
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
@@ -107,7 +92,7 @@ function HeaderBar() {
               key={key}
               type="button"
               onClick={() => handleTimeRangeChange(key)}
-              className={`px-2.5 py-1 text-xs rounded-md font-medium transition-all ${
+              className={`px-2.5 py-1 text-xs rounded-md font-medium transition-all cursor-pointer ${
                 currentRange === key
                   ? 'bg-indigo-600 text-white shadow-sm'
                   : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
@@ -120,22 +105,17 @@ function HeaderBar() {
 
         <div className="h-4 w-px bg-zinc-800 hidden sm:block" />
 
-        {/* 增量同步操作组 */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* 增量同步操作组：等宽固定无抖动设计 */}
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => triggerSync(50)}
             disabled={syncInProgressSignal.value}
-            className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded transition shadow-sm flex items-center gap-1.5"
+            className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded transition shadow-sm flex items-center justify-center gap-1.5 min-w-[96px] cursor-pointer"
+            title="拉取 Google 云端最近 50 条修改的会话"
           >
             <RefreshCw size={13} className={syncInProgressSignal.value ? 'animate-spin' : ''} />
-            <span>
-              {syncInProgressSignal.value
-                ? syncProgressTextSignal.value
-                  ? `同步中 ${syncProgressTextSignal.value}`
-                  : '同步中...'
-                : '增量同步 (50)'}
-            </span>
+            <span>{syncInProgressSignal.value ? '同步中...' : '增量同步'}</span>
           </button>
         </div>
       </div>
@@ -167,6 +147,7 @@ export function App() {
           <Route path="/settings" component={SettingsRoute} />
           <Route default component={NotFoundRoute} />
         </Router>
+        <ToastContainer />
       </div>
     </LocationProvider>
   );
