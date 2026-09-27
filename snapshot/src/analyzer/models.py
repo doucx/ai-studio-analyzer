@@ -195,8 +195,39 @@ class PromptSession:
 
     @property
     def total_tokens(self) -> int:
-        """该会话消耗的 Token 总量"""
+        """该会话消耗的 Token 总量 (静态上下文资产规模)"""
         return sum(t.token_count for t in self.turns)
+
+    @property
+    def cumulative_api_tokens(self) -> int:
+        """
+        推导实际与 API 交互时的累计算力/计费 Token 消耗量 (Cumulative API Usage):
+        每一次模型回复，都会将此前沉淀的历史上下文全量作为输入发送给 API。
+        对于单轮会话，累计消耗 == 上下文净规模 (total_tokens)；
+        对于多轮会话，累计消耗会随上下文滚动呈二次方累积增长。
+        """
+        if not self.turns:
+            return 0
+
+        total_api_tokens = 0
+        prefix_tokens = 0
+        in_model_response = False
+
+        for t in self.turns:
+            if t.role == "model":
+                if not in_model_response:
+                    # 刚进入模型回复阶段，历史的所有前置上下文作为本次调用的 Prompt 输入
+                    total_api_tokens += prefix_tokens
+                    in_model_response = True
+                # 输出生成的 tokens
+                total_api_tokens += t.token_count
+                prefix_tokens += t.token_count
+            else:
+                # user 或 system 等输入
+                in_model_response = False
+                prefix_tokens += t.token_count
+
+        return max(total_api_tokens, self.total_tokens)
 
     @property
     def user_tokens(self) -> int:

@@ -15,9 +15,10 @@ export function TokenTrendChart({ data, mode = 'tokens' }: Props) {
   const chartConfig = useMemo<ChartConfiguration<'line' | 'bar'>>(() => {
     const labels = data.map((d) => d.date);
 
-    // 1. 上下文 Token 规模模式 (双折线面积图)
+    // 1. 上下文 Token 规模模式 (静态规模 vs 累计推理消耗)
     if (mode === 'tokens') {
       const totalTokens = data.map((d) => d.total_tokens);
+      const cumulativeTokens = data.map((d) => d.cumulative_tokens ?? d.total_tokens);
       const thoughtTokens = data.map((d) => d.thought_tokens);
 
       return {
@@ -26,7 +27,7 @@ export function TokenTrendChart({ data, mode = 'tokens' }: Props) {
           labels,
           datasets: [
             {
-              label: '总 Token 规模',
+              label: '静态上下文规模',
               data: totalTokens,
               borderColor: CHART_PALETTE.indigo,
               backgroundColor: CHART_PALETTE.indigoBg,
@@ -37,15 +38,25 @@ export function TokenTrendChart({ data, mode = 'tokens' }: Props) {
               pointHoverRadius: 5,
             },
             {
+              label: '累计推理 API 消耗',
+              data: cumulativeTokens,
+              borderColor: '#f59e0b', // amber-500
+              backgroundColor: 'transparent',
+              borderDash: [4, 4],
+              borderWidth: 1.8,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+            },
+            {
               label: '思考链 (Thinking) 规模',
               data: thoughtTokens,
               borderColor: CHART_PALETTE.emerald,
               backgroundColor: CHART_PALETTE.emeraldBg,
-              fill: true,
+              fill: false,
               tension: 0.3,
-              borderWidth: 1.8,
-              pointRadius: labels.length > 40 ? 0 : 2.5,
-              pointHoverRadius: 5,
+              borderWidth: 1.5,
+              pointRadius: labels.length > 40 ? 0 : 2,
+              pointHoverRadius: 4,
             },
           ],
         },

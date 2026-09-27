@@ -84,14 +84,14 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
 
         <div className="bg-zinc-900/70 border border-zinc-800 rounded-lg p-4">
           <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider flex items-center justify-between">
-            <span>总 Token 规模</span>
+            <span>总 Token (静态上下文)</span>
             <span className="text-[10px] text-zinc-500 font-mono">[{activeRangeLabel}]</span>
           </div>
           <div className="mt-1.5 text-2xl font-bold text-emerald-400 tracking-tight">
             {(metrics.tok_stats?.total || 0).toLocaleString()}
           </div>
-          <div className="mt-1 text-[11px] text-zinc-500 truncate" title="会话最终上下文规模，含思考链占比">
-            上下文规模 · 思考: {metrics.tok_stats?.thought_ratio ?? '0%'}
+          <div className="mt-1 text-[11px] text-zinc-400 truncate" title="累计 API 推理算力消耗，较静态规模的膨胀倍率">
+            累计 API 消耗: <strong className="text-emerald-300">{(metrics.tok_stats?.cumulative_total || metrics.tok_stats?.total || 0).toLocaleString()}</strong> ({metrics.tok_stats?.expansion_factor ?? '1.0x'})
           </div>
         </div>
 

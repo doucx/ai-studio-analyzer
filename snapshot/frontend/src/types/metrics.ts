@@ -18,6 +18,8 @@ export interface DurStats {
 
 export interface TokStats {
   total: number;
+  cumulative_total?: number;
+  expansion_factor?: string;
   mean: number;
   median: number;
   p75: number;
@@ -35,6 +37,7 @@ export interface FrictionStats {
 export interface DailyTrendItem {
   date: string;
   total_tokens: number;
+  cumulative_tokens?: number;
   thought_tokens: number;
   sessions: number;
   turns: number;
@@ -73,6 +76,7 @@ export interface SessionItem {
   turn_count: number;
   chunk_count?: number;
   total_tokens: number;
+  cumulative_tokens?: number;
   thought_tokens: number;
   duration_human: string;
   duration_seconds: number | null;
