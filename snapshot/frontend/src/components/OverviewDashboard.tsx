@@ -90,8 +90,19 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
           <div className="mt-1.5 text-2xl font-bold text-emerald-400 tracking-tight">
             {(metrics.tok_stats?.total || 0).toLocaleString()}
           </div>
-          <div className="mt-1 text-[11px] text-zinc-400 truncate" title="累计 API 推理算力消耗，较静态规模的膨胀倍率">
-            累计 API 消耗: <strong className="text-emerald-300">{(metrics.tok_stats?.cumulative_total || metrics.tok_stats?.total || 0).toLocaleString()}</strong> ({metrics.tok_stats?.expansion_factor ?? '1.0x'})
+          <div
+            className="mt-1 text-[11px] text-zinc-400 truncate"
+            title="累计 API 推理算力消耗，较静态规模的膨胀倍率"
+          >
+            累计 API 消耗:{' '}
+            <strong className="text-emerald-300">
+              {(
+                metrics.tok_stats?.cumulative_total ||
+                metrics.tok_stats?.total ||
+                0
+              ).toLocaleString()}
+            </strong>{' '}
+            ({metrics.tok_stats?.expansion_factor ?? '1.0x'})
           </div>
         </div>
 
@@ -124,9 +135,12 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
                 </span>
               </h2>
               <p className="text-xs text-zinc-500 mt-0.5">
-                {trendMode === 'tokens' && `展示【${activeRangeLabel}】周期内的上下文 Token 规模与思考链沉淀`}
-                {trendMode === 'chunks' && `展示【${activeRangeLabel}】周期内与模型往返交互的数据块推进总量`}
-                {trendMode === 'sessions' && `展示【${activeRangeLabel}】周期内每日活跃的独立对话场次`}
+                {trendMode === 'tokens' &&
+                  `展示【${activeRangeLabel}】周期内的上下文 Token 规模与思考链沉淀`}
+                {trendMode === 'chunks' &&
+                  `展示【${activeRangeLabel}】周期内与模型往返交互的数据块推进总量`}
+                {trendMode === 'sessions' &&
+                  `展示【${activeRangeLabel}】周期内每日活跃的独立对话场次`}
               </p>
             </div>
 

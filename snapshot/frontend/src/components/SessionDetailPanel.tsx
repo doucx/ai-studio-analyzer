@@ -489,7 +489,12 @@ export function SessionDetailPanel({ session, onClose }: Props) {
               {session.total_tokens.toLocaleString()}
             </div>
             <div className="text-[10px] text-zinc-500" title="估算实际 API 累计算力消耗">
-              累计推理: {(detail?.cumulative_tokens ?? session.cumulative_tokens ?? session.total_tokens).toLocaleString()}
+              累计推理:{' '}
+              {(
+                detail?.cumulative_tokens ??
+                session.cumulative_tokens ??
+                session.total_tokens
+              ).toLocaleString()}
             </div>
           </div>
 

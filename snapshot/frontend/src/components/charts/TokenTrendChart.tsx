@@ -88,7 +88,12 @@ export function TokenTrendChart({ data, mode = 'tokens' }: Props) {
           scales: {
             x: {
               ...defaultDarkScales.x,
-              ticks: { ...defaultDarkScales.x.ticks, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 },
+              ticks: {
+                ...defaultDarkScales.x.ticks,
+                maxRotation: 0,
+                autoSkip: true,
+                maxTicksLimit: 12,
+              },
             },
             y: {
               ...defaultDarkScales.y,
@@ -148,7 +153,12 @@ export function TokenTrendChart({ data, mode = 'tokens' }: Props) {
           scales: {
             x: {
               ...defaultDarkScales.x,
-              ticks: { ...defaultDarkScales.x.ticks, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 },
+              ticks: {
+                ...defaultDarkScales.x.ticks,
+                maxRotation: 0,
+                autoSkip: true,
+                maxTicksLimit: 12,
+              },
             },
             y: {
               ...defaultDarkScales.y,
@@ -201,7 +211,12 @@ export function TokenTrendChart({ data, mode = 'tokens' }: Props) {
         scales: {
           x: {
             ...defaultDarkScales.x,
-            ticks: { ...defaultDarkScales.x.ticks, maxRotation: 0, autoSkip: true, maxTicksLimit: 12 },
+            ticks: {
+              ...defaultDarkScales.x.ticks,
+              maxRotation: 0,
+              autoSkip: true,
+              maxTicksLimit: 12,
+            },
           },
           y: {
             ...defaultDarkScales.y,

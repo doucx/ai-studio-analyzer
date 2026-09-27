@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 纳入系统提示词算力消耗并将累计 API 消耗图表统一样式", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790508527.5586393, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "checkf Capture: M OverviewDashboard.tsx, M SessionDetailPanel.tsx, M TokenTrendChart.tsx", "type": "capture", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790508882.414294, "duration_ms": 0}}
