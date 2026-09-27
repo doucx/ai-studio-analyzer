@@ -45,7 +45,24 @@ def parse_prompt_json(
 
     file_meta = file_meta or {}
     model = raw_data.get("runSettings", {}).get("model", "unknown")
-    sys_instruction = raw_data.get("systemInstruction", {}).get("text", "")
+    sys_inst_obj = raw_data.get("systemInstruction", {})
+    sys_instruction = ""
+    sys_inst_tokens = 0
+
+    if isinstance(sys_inst_obj, dict):
+        sys_instruction = sys_inst_obj.get("text", "")
+        if "tokenCount" in sys_inst_obj:
+            sys_inst_tokens = int(sys_inst_obj.get("tokenCount") or 0)
+        elif not sys_instruction and "parts" in sys_inst_obj:
+            parts = sys_inst_obj.get("parts", [])
+            sys_instruction = "\n".join(p.get("text", "") for p in parts if "text" in p)
+    elif isinstance(sys_inst_obj, str):
+        sys_instruction = sys_inst_obj
+
+    # 若无显式标注的 tokenCount，按多语言通用分词基线保守估算 (约 1 token / 3.0 字符)
+    if sys_instruction and sys_inst_tokens <= 0:
+        sys_inst_tokens = max(1, int(len(sys_instruction) / 3.0))
+
     turns = []
 
     # 1. 核心 chunkedPrompt 结构
@@ -193,4 +210,5 @@ def parse_prompt_json(
         modified_time=modified_time,
         turns=turns,
         system_instruction=sys_instruction,
+        system_instruction_tokens=sys_inst_tokens,
     )
