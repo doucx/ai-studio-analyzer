@@ -161,26 +161,30 @@ export function TokenTrendChart({ data, mode = 'tokens' }: Props) {
       };
     }
 
-    // 3. 每日会话场次活跃度模式 (带圆角暗色柱状图)
+    // 3. 每日会话场次活跃度模式 (平滑折线面积图)
     const sessions = data.map((d) => d.sessions);
     return {
-      type: 'bar',
+      type: 'line',
       data: {
         labels,
         datasets: [
           {
             label: '会话场次',
             data: sessions,
-            backgroundColor: 'rgba(129, 140, 248, 0.75)',
-            hoverBackgroundColor: CHART_PALETTE.indigo,
-            borderRadius: 4,
-            borderSkipped: false,
+            borderColor: CHART_PALETTE.indigo,
+            backgroundColor: CHART_PALETTE.indigoBg,
+            fill: true,
+            tension: 0.3,
+            borderWidth: 2,
+            pointRadius: labels.length > 40 ? 0 : 2.5,
+            pointHoverRadius: 5,
           },
         ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { display: false },
           tooltip: {

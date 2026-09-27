@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 引入真实推理 API 累积消耗 (Cumulative Usage) 双轨模型", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790508067.190873, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] style(frontend): 将每日会话场次时序图调整为平滑折线图", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790508203.058921, "duration_ms": 0}}
