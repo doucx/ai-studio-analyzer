@@ -115,26 +115,17 @@ def get_daily_timeline(days: Optional[int] = None):
     for idx in indices:
         file_id = idx["file_id"]
 
-        # 1. 尝试从原始缓存中提取该会话所有 chunk 发生的时间戳与落入的本地日期
+        # 从索引的物化列直接读取跨日映射，彻底免除 N+1 原始 JSON 反序列化
         date_time_map: dict[str, str] = {}
-        raw_data = cache.get(file_id)
-        if raw_data and "chunkedPrompt" in raw_data:
-            chunks = raw_data.get("chunkedPrompt", {}).get("chunks", [])
-            for c in chunks:
-                if "createTime" in c:
-                    try:
-                        c_dt = datetime.fromisoformat(
-                            c["createTime"].replace("Z", "+00:00")
-                        ).astimezone(local_tz)
-                        d_str = c_dt.strftime("%Y-%m-%d")
-                        t_str = c_dt.strftime("%H:%M")
-                        # 保留当天交互的最晚时间
-                        if d_str not in date_time_map or t_str > date_time_map[d_str]:
-                            date_time_map[d_str] = t_str
-                    except Exception:
-                        pass
+        active_dates_str = idx.get("active_dates")
+        
+        if active_dates_str:
+            try:
+                date_time_map = json.loads(active_dates_str)
+            except Exception:
+                pass
 
-        # 兜底：若 chunk 中无时间戳，回退使用 modified_time / created_time
+        # 兼容尚未重建索引的旧数据兜底
         if not date_time_map:
             mtime_str = idx["modified_time"] or idx["created_time"]
             if mtime_str:

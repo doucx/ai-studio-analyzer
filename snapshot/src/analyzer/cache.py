@@ -63,7 +63,8 @@ class SQLiteCache:
                     first_prompt TEXT,
                     created_time TEXT,
                     modified_time TEXT,
-                    date TEXT
+                    date TEXT,
+                    active_dates TEXT
                 );
             """)
             cursor.execute("""
@@ -189,6 +190,32 @@ class SQLiteCache:
         c_time = s.created_time.isoformat() if s.created_time else None
         m_time = s.modified_time.isoformat() if s.modified_time else None
 
+        from datetime import datetime
+        local_tz = datetime.now().astimezone().tzinfo
+        date_time_map = {}
+        for t in getattr(s, "turns", []):
+            if getattr(t, "timestamp", None):
+                try:
+                    t_local = t.timestamp.astimezone(local_tz)
+                    d_str = t_local.strftime("%Y-%m-%d")
+                    t_str = t_local.strftime("%H:%M")
+                    if d_str not in date_time_map or t_str > date_time_map[d_str]:
+                        date_time_map[d_str] = t_str
+                except Exception:
+                    pass
+
+        if not date_time_map:
+            m_dt = s.modified_time or s.created_time
+            if m_dt:
+                try:
+                    dt_local = m_dt.astimezone(local_tz)
+                    date_time_map[dt_local.strftime("%Y-%m-%d")] = dt_local.strftime("%H:%M")
+                except Exception:
+                    pass
+
+        import json
+        active_dates_json = json.dumps(date_time_map) if date_time_map else "{}"
+
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -197,8 +224,8 @@ class SQLiteCache:
                     file_id, name, model, turn_count, total_tokens, thought_tokens,
                     user_char_count, duration_seconds, duration_human, has_branching,
                     branch_count, has_sys_instruction, first_prompt, created_time,
-                    modified_time, date
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    modified_time, date, active_dates
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(file_id) DO UPDATE SET
                     name = excluded.name,
                     model = excluded.model,
@@ -214,7 +241,8 @@ class SQLiteCache:
                     first_prompt = excluded.first_prompt,
                     created_time = excluded.created_time,
                     modified_time = excluded.modified_time,
-                    date = excluded.date;
+                    date = excluded.date,
+                    active_dates = excluded.active_dates;
             """,
                 (
                     s.file_id,
@@ -233,6 +261,7 @@ class SQLiteCache:
                     c_time,
                     m_time,
                     date_str,
+                    active_dates_json,
                 ),
             )
             conn.commit()
