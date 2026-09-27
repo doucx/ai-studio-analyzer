@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 调整 SessionDetailPanel 中锚点跳转的滚动对齐方式", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790422125.604707, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(analyzer): 实现本地时区自适应、每日时间线聚合接口与今日看板卡片 (Phase 2)", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790490884.8132827, "duration_ms": 0}}

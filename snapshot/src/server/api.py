@@ -14,6 +14,22 @@ from src.analyzer.sync import fetch_remote_files
 router = APIRouter(prefix="/api")
 cache = SQLiteCache(cache_dir=".cache")
 
+
+def _format_seconds_human(total_sec: float | int) -> str:
+    total_sec = int(total_sec)
+    if total_sec < 60:
+        return f"{total_sec}s"
+    hours, remainder = divmod(total_sec, 3600)
+    minutes, _ = divmod(remainder, 60)
+    parts = []
+    if hours > 0:
+        parts.append(f"{hours}h")
+    if minutes > 0:
+        parts.append(f"{minutes}m")
+    if not parts:
+        parts.append("0m")
+    return " ".join(parts)
+
 # 全局后台增量同步状态
 sync_status = {"is_syncing": False, "last_result": None, "error": None}
 
@@ -83,6 +99,95 @@ def _run_sync_task(limit: Optional[int], all_files: bool):
         notify_sync_event("sync_error", {"error": str(exc)})
     finally:
         sync_status["is_syncing"] = False
+
+
+@router.get("/daily/timeline")
+def get_daily_timeline(days: Optional[int] = None):
+    """
+    按本地日历日期聚合返回所有会话的每日时间线 (一次性拉取，规避 N+1 轮询)。
+    """
+    indices = cache.query_indices()
+    local_tz = datetime.now().astimezone().tzinfo
+
+    timeline: dict[str, dict] = {}
+
+    for idx in indices:
+        mtime_str = idx["modified_time"] or idx["created_time"]
+        if not mtime_str:
+            continue
+        try:
+            dt_utc = datetime.fromisoformat(mtime_str.replace("Z", "+00:00"))
+            dt_local = dt_utc.astimezone(local_tz)
+            date_key = dt_local.strftime("%Y-%m-%d")
+        except Exception:
+            continue
+
+        if date_key not in timeline:
+            timeline[date_key] = {
+                "date": date_key,
+                "total_duration_seconds": 0.0,
+                "total_tokens": 0,
+                "thought_tokens": 0,
+                "session_count": 0,
+                "sessions": [],
+            }
+
+        dur_sec = idx.get("duration_seconds") or 0.0
+        timeline[date_key]["total_duration_seconds"] += dur_sec
+        timeline[date_key]["total_tokens"] += idx.get("total_tokens", 0)
+        timeline[date_key]["thought_tokens"] += idx.get("thought_tokens", 0)
+        timeline[date_key]["session_count"] += 1
+
+        timeline[date_key]["sessions"].append(
+            {
+                "file_id": idx["file_id"],
+                "name": idx["name"],
+                "model": idx["model"].replace("models/", ""),
+                "duration": idx["duration_human"],
+                "duration_seconds": idx.get("duration_seconds"),
+                "tokens": idx.get("total_tokens", 0),
+                "thought_tokens": idx.get("thought_tokens", 0),
+                "first_prompt": idx.get("first_prompt") or "",
+                "time_local": dt_local.strftime("%H:%M"),
+            }
+        )
+
+    sorted_dates = sorted(timeline.keys(), reverse=True)
+    if days and days > 0:
+        sorted_dates = sorted_dates[:days]
+
+    result = {}
+    for d in sorted_dates:
+        item = timeline[d]
+        item["total_duration_human"] = _format_seconds_human(
+            item["total_duration_seconds"]
+        )
+        item["sessions"].sort(key=lambda s: s.get("time_local", ""), reverse=True)
+        result[d] = item
+
+    return {"date_timeline": result}
+
+
+@router.get("/daily/today")
+def get_daily_today():
+    """
+    获取今天（本地日历）的交互场次、总心智耗时与能耗切片。
+    """
+    today_str = datetime.now().astimezone().strftime("%Y-%m-%d")
+    timeline_resp = get_daily_timeline()
+    today_item = timeline_resp["date_timeline"].get(
+        today_str,
+        {
+            "date": today_str,
+            "total_duration_seconds": 0.0,
+            "total_duration_human": "0m",
+            "total_tokens": 0,
+            "thought_tokens": 0,
+            "session_count": 0,
+            "sessions": [],
+        },
+    )
+    return today_item
 
 
 @router.get("/metrics")

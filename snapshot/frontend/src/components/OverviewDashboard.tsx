@@ -1,4 +1,5 @@
-import { Bot, Clock, LineChart } from 'lucide-preact';
+import { Activity, Bot, Clock, LineChart, Sparkles } from 'lucide-preact';
+import { todayMetricsSignal } from '../state/metrics';
 import type { MetricsSummary } from '../types/metrics';
 import { DurationTiersChart } from './charts/DurationTiersChart';
 import { ModelDistributionChart } from './charts/ModelDistributionChart';
@@ -10,8 +11,46 @@ interface Props {
 }
 
 export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
+  const today = todayMetricsSignal.value;
+
   return (
     <div className="space-y-6">
+      {/* 今日心智耗时状态条 */}
+      {today && (
+        <section className="bg-gradient-to-r from-indigo-950/40 via-zinc-900/60 to-zinc-900/40 border border-indigo-900/30 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              <Sparkles size={18} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-zinc-100">今日人机心智活跃</span>
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
+                  {today.date}
+                </span>
+              </div>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                今天已沉浸交互 <strong className="text-indigo-400">{today.session_count}</strong> 场
+                {today.sessions.length > 0 && ` · 最近会话: ${today.sessions[0].name}`}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-6 sm:gap-8 self-end sm:self-auto text-xs font-mono">
+            <div className="text-right">
+              <div className="text-[10px] text-zinc-500 uppercase">活跃总时长</div>
+              <div className="text-lg font-bold text-indigo-400">{today.total_duration_human}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] text-zinc-500 uppercase">总 Token 消耗</div>
+              <div className="text-lg font-bold text-emerald-400">
+                {today.total_tokens.toLocaleString()}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* 四大关键能耗卡片 */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
         <div className="bg-zinc-900/70 border border-zinc-800 rounded-lg p-4">

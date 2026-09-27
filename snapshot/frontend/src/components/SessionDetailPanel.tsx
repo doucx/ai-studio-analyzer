@@ -19,6 +19,7 @@ import { marked } from 'marked';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { syncVersionSignal } from '../state/sync';
 import type { ConversationTurnItem, SessionDetail, SessionItem } from '../types/metrics';
+import { formatLocalTime } from '../utils/date';
 
 marked.setOptions({
   breaks: true,
@@ -511,13 +512,11 @@ export function SessionDetailPanel({ session, onClose }: Props) {
 
           <div className="bg-zinc-900/80 border border-zinc-800/60 rounded p-2.5">
             <div className="text-[10px] text-zinc-400">最后修改时间</div>
-            <div className="text-xs font-medium text-zinc-300 font-mono mt-1 truncate">
-              {session.modified_time
-                ? session.modified_time.replace('T', ' ').slice(0, 16)
-                : '未知'}
+            <div className="text-xs font-medium text-zinc-300 font-mono mt-1 truncate" title={session.modified_time || ''}>
+              {formatLocalTime(session.modified_time)}
             </div>
-            <div className="text-[10px] text-zinc-500 truncate">
-              创建: {session.created_time ? session.created_time.slice(0, 10) : '未知'}
+            <div className="text-[10px] text-zinc-500 truncate" title={session.created_time || ''}>
+              创建: {formatLocalTime(session.created_time, false)}
             </div>
           </div>
         </div>

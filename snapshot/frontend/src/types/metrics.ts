@@ -106,3 +106,25 @@ export interface SessionDetail extends SessionItem {
   system_instruction: string;
   turns: ConversationTurnItem[];
 }
+
+export interface DailySessionBrief {
+  file_id: string;
+  name: string;
+  model: string;
+  duration: string;
+  duration_seconds: number | null;
+  tokens: number;
+  thought_tokens: number;
+  first_prompt: string;
+  time_local: string;
+}
+
+export interface DailyTimelineItem {
+  date: string;
+  total_duration_seconds: number;
+  total_duration_human: string;
+  total_tokens: number;
+  thought_tokens: number;
+  session_count: number;
+  sessions: DailySessionBrief[];
+}
