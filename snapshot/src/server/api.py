@@ -105,6 +105,7 @@ def _run_sync_task(limit: Optional[int], all_files: bool):
 def get_daily_timeline(days: Optional[int] = None):
     """
     按本地日历日期聚合返回所有会话的每日时间线 (一次性拉取，规避 N+1 轮询)。
+    若会话包含跨多个自然日的交互 Chunk，自动派发到每一天的记录中，并将总耗时平均分摊。
     """
     indices = cache.query_indices()
     local_tz = datetime.now().astimezone().tzinfo
@@ -112,45 +113,84 @@ def get_daily_timeline(days: Optional[int] = None):
     timeline: dict[str, dict] = {}
 
     for idx in indices:
-        mtime_str = idx["modified_time"] or idx["created_time"]
-        if not mtime_str:
+        file_id = idx["file_id"]
+
+        # 1. 尝试从原始缓存中提取该会话所有 chunk 发生的时间戳与落入的本地日期
+        date_time_map: dict[str, str] = {}
+        raw_data = cache.get(file_id)
+        if raw_data and "chunkedPrompt" in raw_data:
+            chunks = raw_data.get("chunkedPrompt", {}).get("chunks", [])
+            for c in chunks:
+                if "createTime" in c:
+                    try:
+                        c_dt = datetime.fromisoformat(
+                            c["createTime"].replace("Z", "+00:00")
+                        ).astimezone(local_tz)
+                        d_str = c_dt.strftime("%Y-%m-%d")
+                        t_str = c_dt.strftime("%H:%M")
+                        # 保留当天交互的最晚时间
+                        if d_str not in date_time_map or t_str > date_time_map[d_str]:
+                            date_time_map[d_str] = t_str
+                    except Exception:
+                        pass
+
+        # 兜底：若 chunk 中无时间戳，回退使用 modified_time / created_time
+        if not date_time_map:
+            mtime_str = idx["modified_time"] or idx["created_time"]
+            if mtime_str:
+                try:
+                    dt_utc = datetime.fromisoformat(mtime_str.replace("Z", "+00:00"))
+                    dt_local = dt_utc.astimezone(local_tz)
+                    date_time_map[dt_local.strftime("%Y-%m-%d")] = dt_local.strftime("%H:%M")
+                except Exception:
+                    pass
+
+        if not date_time_map:
             continue
-        try:
-            dt_utc = datetime.fromisoformat(mtime_str.replace("Z", "+00:00"))
-            dt_local = dt_utc.astimezone(local_tz)
-            date_key = dt_local.strftime("%Y-%m-%d")
-        except Exception:
-            continue
 
-        if date_key not in timeline:
-            timeline[date_key] = {
-                "date": date_key,
-                "total_duration_seconds": 0.0,
-                "total_tokens": 0,
-                "thought_tokens": 0,
-                "session_count": 0,
-                "sessions": [],
-            }
+        # 2. 均分耗时与消耗
+        total_dur_sec = idx.get("duration_seconds") or 0.0
+        days_count = max(1, len(date_time_map))
+        split_dur_sec = total_dur_sec / days_count
 
-        dur_sec = idx.get("duration_seconds") or 0.0
-        timeline[date_key]["total_duration_seconds"] += dur_sec
-        timeline[date_key]["total_tokens"] += idx.get("total_tokens", 0)
-        timeline[date_key]["thought_tokens"] += idx.get("thought_tokens", 0)
-        timeline[date_key]["session_count"] += 1
+        dur_label = _format_seconds_human(split_dur_sec)
+        if days_count > 1:
+            dur_label = f"{dur_label} (跨{days_count}天均分)"
 
-        timeline[date_key]["sessions"].append(
-            {
-                "file_id": idx["file_id"],
-                "name": idx["name"],
-                "model": idx["model"].replace("models/", ""),
-                "duration": idx["duration_human"],
-                "duration_seconds": idx.get("duration_seconds"),
-                "tokens": idx.get("total_tokens", 0),
-                "thought_tokens": idx.get("thought_tokens", 0),
-                "first_prompt": idx.get("first_prompt") or "",
-                "time_local": dt_local.strftime("%H:%M"),
-            }
-        )
+        total_tok = idx.get("total_tokens", 0)
+        thought_tok = idx.get("thought_tokens", 0)
+
+        # 3. 分发到各天的 timeline
+        for date_key, time_local in date_time_map.items():
+            if date_key not in timeline:
+                timeline[date_key] = {
+                    "date": date_key,
+                    "total_duration_seconds": 0.0,
+                    "total_tokens": 0,
+                    "thought_tokens": 0,
+                    "session_count": 0,
+                    "sessions": [],
+                }
+
+            timeline[date_key]["total_duration_seconds"] += split_dur_sec
+            timeline[date_key]["total_tokens"] += total_tok // days_count
+            timeline[date_key]["thought_tokens"] += thought_tok // days_count
+            timeline[date_key]["session_count"] += 1
+
+            timeline[date_key]["sessions"].append(
+                {
+                    "file_id": file_id,
+                    "name": idx["name"],
+                    "model": idx["model"].replace("models/", ""),
+                    "duration": dur_label,
+                    "duration_seconds": split_dur_sec,
+                    "tokens": total_tok,
+                    "thought_tokens": thought_tok,
+                    "first_prompt": idx.get("first_prompt") or "",
+                    "time_local": time_local,
+                    "cross_days": days_count,
+                }
+            )
 
     sorted_dates = sorted(timeline.keys(), reverse=True)
     if days and days > 0:

@@ -1,93 +1,43 @@
-现在开始执行路线图中的 **Phase 2: ai-studio-analyzer 认知时量与时间线批量接口**。
+收到，我们立即开始在 `ai-studio-analyzer` 中实施 `/api/daily/timeline` 的跨日会话解析与耗时均分支持。
 
-我们将保持底层数据库与服务端的 UTC 标准时间格式不变，在后端构建本地日历聚合时间线端点（`GET /api/daily/timeline` 与 `GET /api/daily/today`），并在前端实现本地时区投影工具函数，消除会话详情中的时差滞后，同时在大盘顶部挂载【今日心智耗时】卡片。
-
-## [WIP] feat(analyzer): 实现本地时区自适应、每日时间线聚合接口与今日看板卡片 (Phase 2)
+## [WIP] feat(server): 支持会话跨日多日记映射与心智耗时均分
 
 ### 用户需求
-1. **解决时区倒退问题**：保持数据库底层标准的 UTC ISO-8601 原貌不变，前端展示时自动调用本地时区转换工具，彻底解决查看会话时间时出现的 8 小时倒退问题。
-2. **规避 N+1 轮询瓶颈**：后端提供基于本地日历投影的批量聚合端点 `GET /api/daily/timeline` 和当天切片端点 `GET /api/daily/today`，支持跨日记快速反查与当天即时回填。
-3. **增加实时度量卡片**：在前端全景大盘顶部增加【今日心智耗时】指示胶囊，直观展示今日 AI 活跃时长、交互场次与 Token 消耗。
+针对长线会话跨越多个自然日的情况，提取 `chunkedPrompt.chunks` 中真实的 `createTime` 集合，使同一个会话能够在它活跃的所有历史日记中均被正确引用与溯源；对于总持续耗时，将其平均分摊到所涉及的跨天天数中。
 
 ### 评论
-将时区计算放置在消费端和查询汇聚层（而不是重构或篡改已有底层数据库数据），是最稳定且具备跨时区适应性的方案。同时，`timeline` 批量接口为后续 Phase 3 中 `neuron daylog link-ai --all` 的毫秒级批量关联打下了关键前置支撑。
+这是一个关键的体验升级。它打破了以往单纯依赖 `modified_time` 单一时间戳导致的前序活跃日“溯源盲区”，使得多天持续推进的大型任务能够在每一天的日记中均有迹可循，同时均分耗时避免了单日时间过度膨胀。
 
 ### 目标
-1. 在 `src/server/api.py` 中添加 `GET /api/daily/timeline` 与 `GET /api/daily/today` 端点，根据服务运行环境的本地时区投影会话并聚合每日心智时长与能耗。
-2. 在 `frontend/src/utils/date.ts` 中封装 `formatLocalTime` 工具函数，并替换 `SessionDetailPanel.tsx` 中的原始字符串切片。
-3. 在 `frontend/src/types/metrics.ts` 和 `frontend/src/state/metrics.ts` 中增加每日时量类型定义与状态管理。
-4. 在 `frontend/src/components/OverviewDashboard.tsx` 顶部增加【今日心智耗时】卡片并在 `app.tsx` 中配置自动拉取。
+1. 修改 `src/server/api.py` 中的 `get_daily_timeline` 路由函数。
+2. 在遍历会话索引时，按需读取原始 chunk 的 `createTime` 并转换为本地日期集合。
+3. 对涉及多日的会话，计算平均分摊耗时 `total_duration / days_count`，并生成带有 `(跨N天均分)` 的可读标签。
+4. 将该会话分别挂载至所涉及日期的 timeline 桶内。
 
 ### 基本原理
-- **时区安全**：使用 `datetime.fromisoformat(...).astimezone()` 解析 UTC 时间并投影到本地日历，避免临界跨天导致的日记归属错位。
-- **批量聚合防 N+1**：通过单次查询内存汇总生成 `date_timeline` 结构，将原来需要发起数千次 HTTP 请求的逐日探针收敛为单次请求。
-- **前端原生国际化**：利用浏览器的 `new Date(isoStr).toLocaleString()` 遵循终端用户本地时区和偏好格式。
+通过在生成时间线时检查原始 chunk 的创建时间戳，构建 `日期 -> 当日最新时刻` 的映射。如果会话只在一天内完成，则保持原本行为；如果跨越多个自然日，则将该条目派发到对应的每一天，并按天数等分分配总时长秒数与总 token 消耗量，确保日记端 `link-ai` 查询任意活跃日期时都能准确拉取。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/runtime #comp/cli #concept/ui #scope/api #scope/ux #ai/instruct #task/domain/analyzer #task/object/daily-timeline-api #task/action/implementation #task/state/begin
+#intent/build #flow/ready #priority/high #comp/runtime #concept/api #scope/api #ai/instruct #task/domain/analyzer #task/object/daily-timeline #task/action/cross-day-split #task/state/begin #task/status/active
 
 ---
 
 ### Script
 
-#### Acts 1: 在后端 API 中实现本地时间线与今日切片端点
+#### Acts 1: 升级 `get_daily_timeline` 支持跨日检测与均分
 
-在 `src/server/api.py` 中增加 `GET /api/daily/timeline` 与 `GET /api/daily/today`。
+我们将修改 `src/server/api.py` 中的 `get_daily_timeline` 实现，使其支持读取 chunk 跨日并均分派发。
 
 ~~~~~act
-patch_file
-src/server/api.py
-~~~~~
-~~~~~python
-from src.analyzer.drive import DriveClient
-from src.analyzer.metrics import calculate_session_metrics
-from src.analyzer.parser import parse_prompt_json
-from src.analyzer.sync import fetch_remote_files
-
-router = APIRouter(prefix="/api")
-cache = SQLiteCache(cache_dir=".cache")
-~~~~~
-~~~~~python
-from src.analyzer.drive import DriveClient
-from src.analyzer.metrics import calculate_session_metrics
-from src.analyzer.parser import parse_prompt_json
-from src.analyzer.sync import fetch_remote_files
-
-router = APIRouter(prefix="/api")
-cache = SQLiteCache(cache_dir=".cache")
-
-
-def _format_seconds_human(total_sec: float | int) -> str:
-    total_sec = int(total_sec)
-    if total_sec < 60:
-        return f"{total_sec}s"
-    hours, remainder = divmod(total_sec, 3600)
-    minutes, _ = divmod(remainder, 60)
-    parts = []
-    if hours > 0:
-        parts.append(f"{hours}h")
-    if minutes > 0:
-        parts.append(f"{minutes}m")
-    if not parts:
-        parts.append("0m")
-    return " ".join(parts)
+check_cwd_match
+/home/doucx/Documents/Projects/ai-studio-analyzer
 ~~~~~
 
 ~~~~~act
 patch_file
 src/server/api.py
 ~~~~~
-~~~~~python
-@router.get("/metrics")
-def get_metrics(range: str = "all"):
-    """
-    基于 session_index 表毫秒级聚合认知与交互指标（耗时 <10ms）。
-    """
-    range_start = _get_range_start_iso(range)
-    indices = cache.query_indices(range_start_iso=range_start)
-    return calculate_session_metrics(indices)
-~~~~~
-~~~~~python
+~~~~~python.old
 @router.get("/daily/timeline")
 def get_daily_timeline(days: Optional[int] = None):
     """
@@ -153,349 +103,117 @@ def get_daily_timeline(days: Optional[int] = None):
         result[d] = item
 
     return {"date_timeline": result}
-
-
-@router.get("/daily/today")
-def get_daily_today():
+~~~~~
+~~~~~python.new
+@router.get("/daily/timeline")
+def get_daily_timeline(days: Optional[int] = None):
     """
-    获取今天（本地日历）的交互场次、总心智耗时与能耗切片。
+    按本地日历日期聚合返回所有会话的每日时间线 (一次性拉取，规避 N+1 轮询)。
+    若会话包含跨多个自然日的交互 Chunk，自动派发到每一天的记录中，并将总耗时平均分摊。
     """
-    today_str = datetime.now().astimezone().strftime("%Y-%m-%d")
-    timeline_resp = get_daily_timeline()
-    today_item = timeline_resp["date_timeline"].get(
-        today_str,
-        {
-            "date": today_str,
-            "total_duration_seconds": 0.0,
-            "total_duration_human": "0m",
-            "total_tokens": 0,
-            "thought_tokens": 0,
-            "session_count": 0,
-            "sessions": [],
-        },
-    )
-    return today_item
+    indices = cache.query_indices()
+    local_tz = datetime.now().astimezone().tzinfo
 
+    timeline: dict[str, dict] = {}
 
-@router.get("/metrics")
-def get_metrics(range: str = "all"):
-    """
-    基于 session_index 表毫秒级聚合认知与交互指标（耗时 <10ms）。
-    """
-    range_start = _get_range_start_iso(range)
-    indices = cache.query_indices(range_start_iso=range_start)
-    return calculate_session_metrics(indices)
+    for idx in indices:
+        file_id = idx["file_id"]
+
+        # 1. 尝试从原始缓存中提取该会话所有 chunk 发生的时间戳与落入的本地日期
+        date_time_map: dict[str, str] = {}
+        raw_data = cache.get(file_id)
+        if raw_data and "chunkedPrompt" in raw_data:
+            chunks = raw_data.get("chunkedPrompt", {}).get("chunks", [])
+            for c in chunks:
+                if "createTime" in c:
+                    try:
+                        c_dt = datetime.fromisoformat(
+                            c["createTime"].replace("Z", "+00:00")
+                        ).astimezone(local_tz)
+                        d_str = c_dt.strftime("%Y-%m-%d")
+                        t_str = c_dt.strftime("%H:%M")
+                        # 保留当天交互的最晚时间
+                        if d_str not in date_time_map or t_str > date_time_map[d_str]:
+                            date_time_map[d_str] = t_str
+                    except Exception:
+                        pass
+
+        # 兜底：若 chunk 中无时间戳，回退使用 modified_time / created_time
+        if not date_time_map:
+            mtime_str = idx["modified_time"] or idx["created_time"]
+            if mtime_str:
+                try:
+                    dt_utc = datetime.fromisoformat(mtime_str.replace("Z", "+00:00"))
+                    dt_local = dt_utc.astimezone(local_tz)
+                    date_time_map[dt_local.strftime("%Y-%m-%d")] = dt_local.strftime("%H:%M")
+                except Exception:
+                    pass
+
+        if not date_time_map:
+            continue
+
+        # 2. 均分耗时与消耗
+        total_dur_sec = idx.get("duration_seconds") or 0.0
+        days_count = max(1, len(date_time_map))
+        split_dur_sec = total_dur_sec / days_count
+
+        dur_label = _format_seconds_human(split_dur_sec)
+        if days_count > 1:
+            dur_label = f"{dur_label} (跨{days_count}天均分)"
+
+        total_tok = idx.get("total_tokens", 0)
+        thought_tok = idx.get("thought_tokens", 0)
+
+        # 3. 分发到各天的 timeline
+        for date_key, time_local in date_time_map.items():
+            if date_key not in timeline:
+                timeline[date_key] = {
+                    "date": date_key,
+                    "total_duration_seconds": 0.0,
+                    "total_tokens": 0,
+                    "thought_tokens": 0,
+                    "session_count": 0,
+                    "sessions": [],
+                }
+
+            timeline[date_key]["total_duration_seconds"] += split_dur_sec
+            timeline[date_key]["total_tokens"] += total_tok // days_count
+            timeline[date_key]["thought_tokens"] += thought_tok // days_count
+            timeline[date_key]["session_count"] += 1
+
+            timeline[date_key]["sessions"].append(
+                {
+                    "file_id": file_id,
+                    "name": idx["name"],
+                    "model": idx["model"].replace("models/", ""),
+                    "duration": dur_label,
+                    "duration_seconds": split_dur_sec,
+                    "tokens": total_tok,
+                    "thought_tokens": thought_tok,
+                    "first_prompt": idx.get("first_prompt") or "",
+                    "time_local": time_local,
+                    "cross_days": days_count,
+                }
+            )
+
+    sorted_dates = sorted(timeline.keys(), reverse=True)
+    if days and days > 0:
+        sorted_dates = sorted_dates[:days]
+
+    result = {}
+    for d in sorted_dates:
+        item = timeline[d]
+        item["total_duration_human"] = _format_seconds_human(
+            item["total_duration_seconds"]
+        )
+        item["sessions"].sort(key=lambda s: s.get("time_local", ""), reverse=True)
+        result[d] = item
+
+    return {"date_timeline": result}
 ~~~~~
 
-#### Acts 2: 封装前端本地时区转换工具并修复会话详情时差
-
-创建 `frontend/src/utils/date.ts`，并在 `SessionDetailPanel.tsx` 中应用，消除 8 小时倒退。
-
-~~~~~act
-write_file
-frontend/src/utils/date.ts
-~~~~~
-~~~~~typescript
-/**
- * 本地时区格式化工具函数：基于浏览器原生时区能力安全转换 ISO-8601 时间串。
- */
-export function formatLocalTime(isoStr: string | null | undefined, includeTime = true): string {
-  if (!isoStr) return '未知';
-  try {
-    const d = new Date(isoStr);
-    if (Number.isNaN(d.getTime())) return isoStr;
-    if (!includeTime) {
-      return d.toLocaleDateString(undefined, {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      });
-    }
-    return d.toLocaleString(undefined, {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
-  } catch {
-    return isoStr;
-  }
-}
-~~~~~
-
-~~~~~act
-patch_file
-frontend/src/components/SessionDetailPanel.tsx
-~~~~~
-~~~~~typescript
-import { marked } from 'marked';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { syncVersionSignal } from '../state/sync';
-import type { ConversationTurnItem, SessionDetail, SessionItem } from '../types/metrics';
-~~~~~
-~~~~~typescript
-import { marked } from 'marked';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { syncVersionSignal } from '../state/sync';
-import type { ConversationTurnItem, SessionDetail, SessionItem } from '../types/metrics';
-import { formatLocalTime } from '../utils/date';
-~~~~~
-
-~~~~~act
-patch_file
-frontend/src/components/SessionDetailPanel.tsx
-~~~~~
-~~~~~typescript
-          <div className="bg-zinc-900/80 border border-zinc-800/60 rounded p-2.5">
-            <div className="text-[10px] text-zinc-400">最后修改时间</div>
-            <div className="text-xs font-medium text-zinc-300 font-mono mt-1 truncate">
-              {session.modified_time
-                ? session.modified_time.replace('T', ' ').slice(0, 16)
-                : '未知'}
-            </div>
-            <div className="text-[10px] text-zinc-500 truncate">
-              创建: {session.created_time ? session.created_time.slice(0, 10) : '未知'}
-            </div>
-          </div>
-~~~~~
-~~~~~typescript
-          <div className="bg-zinc-900/80 border border-zinc-800/60 rounded p-2.5">
-            <div className="text-[10px] text-zinc-400">最后修改时间</div>
-            <div className="text-xs font-medium text-zinc-300 font-mono mt-1 truncate" title={session.modified_time || ''}>
-              {formatLocalTime(session.modified_time)}
-            </div>
-            <div className="text-[10px] text-zinc-500 truncate" title={session.created_time || ''}>
-              创建: {formatLocalTime(session.created_time, false)}
-            </div>
-          </div>
-~~~~~
-
-#### Acts 3: 扩充度量类型与前端状态管理
-
-在 `frontend/src/types/metrics.ts` 与 `frontend/src/state/metrics.ts` 声明每日时间线类型并增加获取逻辑。
-
-~~~~~act
-patch_file
-frontend/src/types/metrics.ts
-~~~~~
-~~~~~typescript
-export interface SessionDetail extends SessionItem {
-  total_user_chars: number;
-  system_instruction: string;
-  turns: ConversationTurnItem[];
-}
-~~~~~
-~~~~~typescript
-export interface SessionDetail extends SessionItem {
-  total_user_chars: number;
-  system_instruction: string;
-  turns: ConversationTurnItem[];
-}
-
-export interface DailySessionBrief {
-  file_id: string;
-  name: string;
-  model: string;
-  duration: string;
-  duration_seconds: number | null;
-  tokens: number;
-  thought_tokens: number;
-  first_prompt: string;
-  time_local: string;
-}
-
-export interface DailyTimelineItem {
-  date: string;
-  total_duration_seconds: number;
-  total_duration_human: string;
-  total_tokens: number;
-  thought_tokens: number;
-  session_count: number;
-  sessions: DailySessionBrief[];
-}
-~~~~~
-
-~~~~~act
-patch_file
-frontend/src/state/metrics.ts
-~~~~~
-~~~~~typescript
-import { signal } from '@preact/signals';
-import type { MetricsSummary } from '../types/metrics';
-
-export type TimeRange = '7d' | '30d' | '90d' | 'this_year' | 'all';
-~~~~~
-~~~~~typescript
-import { signal } from '@preact/signals';
-import type { DailyTimelineItem, MetricsSummary } from '../types/metrics';
-
-export type TimeRange = '7d' | '30d' | '90d' | 'this_year' | 'all';
-~~~~~
-
-~~~~~act
-patch_file
-frontend/src/state/metrics.ts
-~~~~~
-~~~~~typescript
-export const timeRangeSignal = signal<TimeRange>('all');
-export const metricsSignal = signal<MetricsSummary | null>(null);
-export const metricsLoadingSignal = signal<boolean>(true);
-
-export async function fetchMetrics(range: TimeRange = timeRangeSignal.value) {
-~~~~~
-~~~~~typescript
-export const timeRangeSignal = signal<TimeRange>('all');
-export const metricsSignal = signal<MetricsSummary | null>(null);
-export const metricsLoadingSignal = signal<boolean>(true);
-export const todayMetricsSignal = signal<DailyTimelineItem | null>(null);
-
-export async function fetchTodayMetrics() {
-  try {
-    const res = await fetch('/api/daily/today');
-    if (res.ok) {
-      const data: DailyTimelineItem = await res.json();
-      todayMetricsSignal.value = data;
-    }
-  } catch (err) {
-    console.error('加载今日认知时量切片失败:', err);
-  }
-}
-
-export async function fetchMetrics(range: TimeRange = timeRangeSignal.value) {
-~~~~~
-
-~~~~~act
-patch_file
-frontend/src/app.tsx
-~~~~~
-~~~~~typescript
-import {
-  TIME_RANGE_OPTIONS,
-  type TimeRange,
-  fetchMetrics,
-  setTimeRange,
-  timeRangeSignal,
-} from './state/metrics';
-~~~~~
-~~~~~typescript
-import {
-  TIME_RANGE_OPTIONS,
-  type TimeRange,
-  fetchMetrics,
-  fetchTodayMetrics,
-  setTimeRange,
-  timeRangeSignal,
-} from './state/metrics';
-~~~~~
-
-~~~~~act
-patch_file
-frontend/src/app.tsx
-~~~~~
-~~~~~typescript
-function loadAllData(range: TimeRange = timeRangeSignal.value) {
-  return Promise.all([fetchMetrics(range), fetchSessions(range)]);
-}
-~~~~~
-~~~~~typescript
-function loadAllData(range: TimeRange = timeRangeSignal.value) {
-  return Promise.all([fetchMetrics(range), fetchSessions(range), fetchTodayMetrics()]);
-}
-~~~~~
-
-#### Acts 4: 在全景大盘顶部挂载【今日心智耗时】指标胶囊
-
-在 `frontend/src/components/OverviewDashboard.tsx` 挂载今日认知指标展示条。
-
-~~~~~act
-patch_file
-frontend/src/components/OverviewDashboard.tsx
-~~~~~
-~~~~~typescript
-import { Bot, Clock, LineChart } from 'lucide-preact';
-import type { MetricsSummary } from '../types/metrics';
-import { DurationTiersChart } from './charts/DurationTiersChart';
-import { ModelDistributionChart } from './charts/ModelDistributionChart';
-import { TokenTrendChart } from './charts/TokenTrendChart';
-
-interface Props {
-  metrics: MetricsSummary;
-  activeRangeLabel: string;
-}
-
-export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
-  return (
-    <div className="space-y-6">
-      {/* 四大关键能耗卡片 */}
-~~~~~
-~~~~~typescript
-import { Activity, Bot, Clock, LineChart, Sparkles } from 'lucide-preact';
-import { todayMetricsSignal } from '../state/metrics';
-import type { MetricsSummary } from '../types/metrics';
-import { DurationTiersChart } from './charts/DurationTiersChart';
-import { ModelDistributionChart } from './charts/ModelDistributionChart';
-import { TokenTrendChart } from './charts/TokenTrendChart';
-
-interface Props {
-  metrics: MetricsSummary;
-  activeRangeLabel: string;
-}
-
-export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
-  const today = todayMetricsSignal.value;
-
-  return (
-    <div className="space-y-6">
-      {/* 今日心智耗时状态条 */}
-      {today && (
-        <section className="bg-gradient-to-r from-indigo-950/40 via-zinc-900/60 to-zinc-900/40 border border-indigo-900/30 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              <Sparkles size={18} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-zinc-100">今日人机心智活跃</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400">
-                  {today.date}
-                </span>
-              </div>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                今天已沉浸交互 <strong className="text-indigo-400">{today.session_count}</strong> 场
-                {today.sessions.length > 0 && ` · 最近会话: ${today.sessions[0].name}`}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-6 sm:gap-8 self-end sm:self-auto text-xs font-mono">
-            <div className="text-right">
-              <div className="text-[10px] text-zinc-500 uppercase">活跃总时长</div>
-              <div className="text-lg font-bold text-indigo-400">{today.total_duration_human}</div>
-            </div>
-            <div className="text-right">
-              <div className="text-[10px] text-zinc-500 uppercase">总 Token 消耗</div>
-              <div className="text-lg font-bold text-emerald-400">
-                {today.total_tokens.toLocaleString()}
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* 四大关键能耗卡片 */}
-~~~~~
+---
 
 ### 下一步建议
-1. 在前端目录执行检查：
-   ```bash
-   cd frontend && npm run check
-   ```
-   确认 TypeScript 类型与 Biome 代码规范全部通过。
-2. 启动服务进行本地验证：
-   ```bash
-   python main.py
-   ```
-   并在浏览器中访问 `http://127.0.0.1:8000/docs`，验证 `GET /api/daily/timeline` 与 `GET /api/daily/today` 返回的数据结构。
-3. 验证通过后，即可推进至 **Phase 3: 跨系统 API 桥接**（在 `neuron` 中实现 `link-ai` 命令，直连该后端进行日记回填）。
+1. 执行本计划以完成 `ai-studio-analyzer` 的跨日均分与多天时间线映射。
+2. 随后转向 `neuron` 仓库，实施 `auto_links.py`（卡片表格化、精准字数、时间呈现与去 Emoji）及 `link_ai.py`（彻底去除 Emoji 保持纯净）。

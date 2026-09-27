@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(analyzer): 实现本地时区自适应、每日时间线聚合接口与今日看板卡片 (Phase 2)", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790490884.8132827, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(server): 支持会话跨日多日记映射与心智耗时均分", "type": "plan", "generator": {"id": "manual", "tool": "quipu-cli"}, "env": {"quipu": "0.4.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1790491686.3448725, "duration_ms": 0}}
