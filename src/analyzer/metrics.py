@@ -69,6 +69,8 @@ def calculate_session_metrics(sessions: List[Any]) -> Dict[str, Any]:
         for d in sessions:
             dur_sec = d.get("duration_seconds")
             dur_min = round(dur_sec / 60, 2) if dur_sec is not None else None
+            tot_tok = d.get("total_tokens", 0)
+            cum_tok = d.get("cumulative_tokens") or tot_tok
             records.append(
                 {
                     "file_id": d["file_id"],
@@ -76,7 +78,8 @@ def calculate_session_metrics(sessions: List[Any]) -> Dict[str, Any]:
                     "turn_count": d.get("turn_count", 0),
                     "duration_seconds": dur_sec,
                     "duration_minutes": dur_min,
-                    "total_tokens": d.get("total_tokens", 0),
+                    "total_tokens": tot_tok,
+                    "cumulative_tokens": cum_tok,
                     "thought_tokens": d.get("thought_tokens", 0),
                     "user_chars": d.get("user_char_count", 0),
                     "has_branching": bool(d.get("has_branching", False)),
@@ -91,6 +94,8 @@ def calculate_session_metrics(sessions: List[Any]) -> Dict[str, Any]:
             date_str = st.strftime("%Y-%m-%d") if st else None
             dur_sec = s.duration_seconds
             dur_min = round(dur_sec / 60, 2) if dur_sec is not None else None
+            tot_tok = s.total_tokens
+            cum_tok = getattr(s, "cumulative_api_tokens", tot_tok)
             records.append(
                 {
                     "file_id": s.file_id,
@@ -98,7 +103,8 @@ def calculate_session_metrics(sessions: List[Any]) -> Dict[str, Any]:
                     "turn_count": s.turn_count,
                     "duration_seconds": dur_sec,
                     "duration_minutes": dur_min,
-                    "total_tokens": s.total_tokens,
+                    "total_tokens": tot_tok,
+                    "cumulative_tokens": cum_tok,
                     "thought_tokens": s.thought_tokens,
                     "user_chars": s.total_user_chars,
                     "has_branching": s.has_branching,
@@ -187,12 +193,21 @@ def calculate_session_metrics(sessions: List[Any]) -> Dict[str, Any]:
         "epic": (tier_epic, f"{round(tier_epic / denom * 100, 1)}%"),
     }
 
-    # 4. Token 消耗分位数
+    # 4. Token 消耗分位数与累计推理算力
     tok_s = df["total_tokens"]
     total_tokens = int(tok_s.sum())
     total_thought_tokens = int(df["thought_tokens"].sum())
+    total_cumulative_tokens = int(df["cumulative_tokens"].sum())
+    expansion_factor = (
+        f"{round(total_cumulative_tokens / total_tokens, 2)}x"
+        if total_tokens > 0
+        else "1.0x"
+    )
+
     tok_stats = {
         "total": total_tokens,
+        "cumulative_total": total_cumulative_tokens,
+        "expansion_factor": expansion_factor,
         "mean": round(float(tok_s.mean()), 0),
         "median": round(float(tok_s.median()), 0),
         "p75": round(float(tok_s.quantile(0.75)), 0),
@@ -222,6 +237,7 @@ def calculate_session_metrics(sessions: List[Any]) -> Dict[str, Any]:
             valid_dates_df.groupby("date")
             .agg(
                 total_tokens=("total_tokens", "sum"),
+                cumulative_tokens=("cumulative_tokens", "sum"),
                 thought_tokens=("thought_tokens", "sum"),
                 sessions=("file_id", "count"),
                 turns=("turn_count", "sum"),
@@ -235,6 +251,7 @@ def calculate_session_metrics(sessions: List[Any]) -> Dict[str, Any]:
                 {
                     "date": str(row["date"]),
                     "total_tokens": int(row["total_tokens"]),
+                    "cumulative_tokens": int(row["cumulative_tokens"]),
                     "thought_tokens": int(row["thought_tokens"]),
                     "sessions": int(row["sessions"]),
                     "turns": int(row["turns"]),

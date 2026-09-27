@@ -484,12 +484,17 @@ export function SessionDetailPanel({ session, onClose }: Props) {
           </div>
 
           <div className="bg-zinc-900/80 border border-zinc-800/60 rounded p-2.5">
-            <div className="text-[10px] text-zinc-400">总 Token 消耗</div>
+            <div className="text-[10px] text-zinc-400">上下文规模 / API消耗</div>
             <div className="text-base font-bold text-emerald-400 font-mono mt-0.5">
               {session.total_tokens.toLocaleString()}
             </div>
-            <div className="text-[10px] text-zinc-500">
-              思考链: {session.thought_tokens.toLocaleString()}
+            <div className="text-[10px] text-zinc-500" title="估算实际 API 累计算力消耗">
+              累计推理:{' '}
+              {(
+                detail?.cumulative_tokens ??
+                session.cumulative_tokens ??
+                session.total_tokens
+              ).toLocaleString()}
             </div>
           </div>
 

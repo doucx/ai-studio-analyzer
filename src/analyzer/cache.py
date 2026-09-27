@@ -64,9 +64,17 @@ class SQLiteCache:
                     created_time TEXT,
                     modified_time TEXT,
                     date TEXT,
-                    active_dates TEXT
+                    active_dates TEXT,
+                    cumulative_tokens INTEGER DEFAULT 0
                 );
             """)
+            # 增量字段平滑迁移
+            try:
+                cursor.execute(
+                    "ALTER TABLE session_index ADD COLUMN cumulative_tokens INTEGER DEFAULT 0;"
+                )
+            except sqlite3.OperationalError:
+                pass
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_sidx_mtime 
                 ON session_index(modified_time DESC);
@@ -220,6 +228,7 @@ class SQLiteCache:
 
         active_dates_json = json.dumps(date_time_map) if date_time_map else "{}"
 
+        cum_tokens = getattr(s, "cumulative_api_tokens", s.total_tokens)
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -228,8 +237,8 @@ class SQLiteCache:
                     file_id, name, model, turn_count, total_tokens, thought_tokens,
                     user_char_count, duration_seconds, duration_human, has_branching,
                     branch_count, has_sys_instruction, first_prompt, created_time,
-                    modified_time, date, active_dates
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    modified_time, date, active_dates, cumulative_tokens
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(file_id) DO UPDATE SET
                     name = excluded.name,
                     model = excluded.model,
@@ -246,7 +255,8 @@ class SQLiteCache:
                     created_time = excluded.created_time,
                     modified_time = excluded.modified_time,
                     date = excluded.date,
-                    active_dates = excluded.active_dates;
+                    active_dates = excluded.active_dates,
+                    cumulative_tokens = excluded.cumulative_tokens;
             """,
                 (
                     s.file_id,
@@ -266,6 +276,7 @@ class SQLiteCache:
                     m_time,
                     date_str,
                     active_dates_json,
+                    cum_tokens,
                 ),
             )
             conn.commit()
