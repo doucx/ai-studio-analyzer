@@ -3,7 +3,6 @@ Quipu Bridge - 统一认知对齐、生命周期与存储水合 CLI 工具箱
 """
 
 import argparse
-import sys
 from datetime import datetime
 from tqdm import tqdm
 
@@ -34,7 +33,11 @@ def cmd_status(args):
     print(
         f"• 状态节点总量:       {status['total_nodes']} 个 (Plan: {status['total_plans']}, Capture: {status['total_captures']})"
     )
-    cache_badge = "✅ 完备" if status["uncached_plans"] == 0 else f"⚠️ 待补水 {status['uncached_plans']} 个"
+    cache_badge = (
+        "✅ 完备"
+        if status["uncached_plans"] == 0
+        else f"⚠️ 待补水 {status['uncached_plans']} 个"
+    )
     print(
         f"• Plan 正文缓存覆盖:  {format_pct(status['cached_plans'], status['total_plans'])} [{cache_badge}]"
     )
@@ -48,13 +51,19 @@ def cmd_status(args):
         c_mark = "✅" if p["has_cache"] else "❌"
         i_mark = "✅" if p["has_intent"] else "⚪"
         summary = (p["summary"][:42] + "..") if len(p["summary"]) > 42 else p["summary"]
-        print(f"  [{p['commit_hash'][:7]}] {dt_str} (缓存:{c_mark} | 意图:{i_mark}) - {summary}")
+        print(
+            f"  [{p['commit_hash'][:7]}] {dt_str} (缓存:{c_mark} | 意图:{i_mark}) - {summary}"
+        )
 
     print("=" * 75)
     if status["uncached_plans"] > 0:
-        print("💡 提示: 存在未缓存正文的 Plan 节点，可执行 `hydrate` 命令从 Git 一键补水加速。")
+        print(
+            "💡 提示: 存在未缓存正文的 Plan 节点，可执行 `hydrate` 命令从 Git 一键补水加速。"
+        )
     if status["intent_count"] == 0 and status["total_plans"] > 0:
-        print("💡 提示: 尚未回填认知意图，可执行 `sync` 命令与 AI Studio 进行自动溯源回填。")
+        print(
+            "💡 提示: 尚未回填认知意图，可执行 `sync` 命令与 AI Studio 进行自动溯源回填。"
+        )
 
 
 def cmd_hydrate(args):
@@ -101,7 +110,9 @@ def cmd_hydrate(args):
 
         if not args.dry_run:
             conn.commit()
-            print(f"\n🎉 补水完成: 成功为 {success} 个节点物化正文缓存 (失败/无正文: {failed})。")
+            print(
+                f"\n🎉 补水完成: 成功为 {success} 个节点物化正文缓存 (失败/无正文: {failed})。"
+            )
         else:
             print(f"\n💡 [DRY-RUN] 演练完成: 可成功补水 {success} 个节点。")
 
@@ -115,7 +126,9 @@ def cmd_clear(args):
         print("ℹ️ 目标仓库的 private_data 中不存在任何意图回填记录，无需清空。")
         return
 
-    print(f"⚠️ 即将清空 [{repo.quipu_dir}] 中的 {status['intent_count']} 条意图回填数据！")
+    print(
+        f"⚠️ 即将清空 [{repo.quipu_dir}] 中的 {status['intent_count']} 条意图回填数据！"
+    )
     if not args.yes:
         confirm = input("确定继续执行清空吗? [y/N]: ").strip().lower()
         if confirm != "y":
@@ -123,7 +136,9 @@ def cmd_clear(args):
             return
 
     deleted = repo.clear_intents(force=True)
-    print(f"✨ 已成功清空 {deleted} 条 intent_md 记录。现在可使用 sync 重新进行纯净对齐。")
+    print(
+        f"✨ 已成功清空 {deleted} 条 intent_md 记录。现在可使用 sync 重新进行纯净对齐。"
+    )
 
 
 def cmd_probe(args):
@@ -137,7 +152,9 @@ def cmd_probe(args):
     print("=" * 80)
     print(f"📁 Quipu 仓库:  {repo.quipu_dir}")
     print(f"📦 Analyzer 库:  {cache.db_path} ({cache.count()} 场会话)")
-    print(f"🎯 审查规模:    最近 {args.limit} 个 Plan 节点 | 回溯窗口: {args.window_hours}h | 判定基线: {args.min_score}")
+    print(
+        f"🎯 审查规模:    最近 {args.limit} 个 Plan 节点 | 回溯窗口: {args.window_hours}h | 判定基线: {args.min_score}"
+    )
     print("-" * 80)
 
     with repo.get_connection() as conn:
@@ -161,7 +178,9 @@ def cmd_probe(args):
         for node in pbar:
             # 自动兜底提取
             if not node.get("plan_md_cache") or len(node["plan_md_cache"]) < 20:
-                node["plan_md_cache"] = read_git_plan_content(repo.quipu_dir, node["commit_hash"])
+                node["plan_md_cache"] = read_git_plan_content(
+                    repo.quipu_dir, node["commit_hash"]
+                )
 
             if not node.get("plan_md_cache") or len(node["plan_md_cache"]) < 20:
                 missed_count += 1
@@ -186,23 +205,31 @@ def cmd_probe(args):
     print("📊 批量认知溯源对齐 - 统计审计总览")
     print("=" * 80)
     print(f"  - 审计 Quipu Plan 节点总量:    {total_scanned} 场")
-    print(f"  - ✅ 确定置信命中 (Score>={args.min_score}):  {strong_count} 场 (命中率: {hit_rate:.1f}%)")
+    print(
+        f"  - ✅ 确定置信命中 (Score>={args.min_score}):  {strong_count} 场 (命中率: {hit_rate:.1f}%)"
+    )
     print(f"  - ⚠️  临界弱相关 (0.30<=Score<{args.min_score}): {border_count} 场")
     print(f"  - ❌ 未命中 (Score<0.30 或无正文):  {missed_count} 场")
     print("-" * 80)
     if strong_count > 0:
         avg_score = sum(s["total_score"] for s in strong_hits) / strong_count
         avg_time_gap = sum(s["time_diff_minutes"] for s in strong_hits) / strong_count
-        print(f"  - 🧠 短指令向前穿透率:          {penetrated_count}/{strong_count} ({(penetrated_count/strong_count*100):.1f}%)")
+        print(
+            f"  - 🧠 短指令向前穿透率:          {penetrated_count}/{strong_count} ({(penetrated_count / strong_count * 100):.1f}%)"
+        )
         print(f"  - 📈 强命中平均置信度得分:      {avg_score:.3f}")
         print(f"  - ⏱️  真实时差 (Quipu执行 - AI生成): 平均 {avg_time_gap:.1f} 分钟")
 
         # 打印置信度最高的代表样本
         best_sample = max(strong_hits, key=lambda x: x["total_score"])
         print("\n🌟 [最高置信度代表样本]:")
-        print(f"  Commit: [{best_sample['quipu_commit'][:8]}] {best_sample['quipu_summary']}")
-        print(f"  AI会话: {best_sample['session_name']} (Turn #{best_sample['turn_index']}, 得分: {best_sample['total_score']:.3f})")
-        print(f"  意图:   \"{best_sample.get('user_prompt', '')[:100]}...\"")
+        print(
+            f"  Commit: [{best_sample['quipu_commit'][:8]}] {best_sample['quipu_summary']}"
+        )
+        print(
+            f"  AI会话: {best_sample['session_name']} (Turn #{best_sample['turn_index']}, 得分: {best_sample['total_score']:.3f})"
+        )
+        print(f'  意图:   "{best_sample.get("user_prompt", "")[:100]}..."')
     print("=" * 80)
 
 
@@ -235,7 +262,9 @@ def cmd_sync(args):
     print(f"🔍 检索到 {total} 个待对齐/刷新的 Quipu 节点 (force={args.force})。")
     if total == 0:
         if not args.force:
-            print("✅ 检索到的所有 Plan 节点均已包含意图内容，无需处理。如需全量重新对齐请添加 --force 参数。")
+            print(
+                "✅ 检索到的所有 Plan 节点均已包含意图内容，无需处理。如需全量重新对齐请添加 --force 参数。"
+            )
         else:
             print("⚠️ 未检索到任何 Plan 节点。")
         conn.close()
@@ -282,7 +311,9 @@ def cmd_sync(args):
             model = best["model"].replace("models/", "")
             time_gap = best["time_diff_minutes"]
 
-            analyzer_url = f"http://localhost:{args.port}/sessions/{file_id}#turn-{turn_idx}"
+            analyzer_url = (
+                f"http://localhost:{args.port}/sessions/{file_id}#turn-{turn_idx}"
+            )
             google_url = f"https://aistudio.google.com/prompts/{file_id}"
 
             thinking_section = ""
@@ -291,7 +322,9 @@ def cmd_sync(args):
                 if len(t_snippet) > 400:
                     t_snippet = t_snippet[:400] + "..."
                 thinking_lines = t_snippet.replace("\n", "\n> ")
-                thinking_section = f"\n\n> 💭 **思考链摘要 (Thinking Process)**:\n> {thinking_lines}"
+                thinking_section = (
+                    f"\n\n> 💭 **思考链摘要 (Thinking Process)**:\n> {thinking_lines}"
+                )
 
             ai_context_md = (
                 f"🔗 **AI 认知上下文溯源 (匹配度: {best['total_score']:.2f})**:\n"
@@ -323,10 +356,18 @@ def cmd_sync(args):
 
     if not args.dry_run:
         conn.commit()
-        hydrate_msg = f"，同时自动补水了 {hydrated_cache_count} 个节点的 plan_md_cache" if hydrated_cache_count > 0 else ""
-        print(f"\n🎉 写入完成: 成功回填 {success_count} 个节点至 intent_md (跳过/未达阈值: {skipped_count}{hydrate_msg})。")
+        hydrate_msg = (
+            f"，同时自动补水了 {hydrated_cache_count} 个节点的 plan_md_cache"
+            if hydrated_cache_count > 0
+            else ""
+        )
+        print(
+            f"\n🎉 写入完成: 成功回填 {success_count} 个节点至 intent_md (跳过/未达阈值: {skipped_count}{hydrate_msg})。"
+        )
     else:
-        print(f"\n💡 [DRY-RUN] 预演完成: 可对齐 {success_count} 个节点 (跳过: {skipped_count})。")
+        print(
+            f"\n💡 [DRY-RUN] 预演完成: 可对齐 {success_count} 个节点 (跳过: {skipped_count})。"
+        )
 
     conn.close()
 
@@ -336,45 +377,99 @@ def main():
         prog="quipu-bridge",
         description="Quipu ↔ AI Studio 认知溯源统一控制工具箱",
     )
-    subparsers = parser.add_subparsers(dest="command", required=True, help="可执行的子命令")
+    subparsers = parser.add_subparsers(
+        dest="command", required=True, help="可执行的子命令"
+    )
 
     # 1. status 命令
-    p_status = subparsers.add_parser("status", help="查看目标 Quipu 仓库的认知桥接状态与完整率")
-    p_status.add_argument("--quipu-dir", "-d", default=".", help="Quipu 仓库工作区根路径 (默认: 当前目录)")
+    p_status = subparsers.add_parser(
+        "status", help="查看目标 Quipu 仓库的认知桥接状态与完整率"
+    )
+    p_status.add_argument(
+        "--quipu-dir", "-d", default=".", help="Quipu 仓库工作区根路径 (默认: 当前目录)"
+    )
     p_status.set_defaults(func=cmd_status)
 
     # 2. hydrate 命令
-    p_hydrate = subparsers.add_parser("hydrate", help="从 Git 快照提取 content.md 补水物化 plan_md_cache")
-    p_hydrate.add_argument("--quipu-dir", "-d", default=".", help="Quipu 仓库工作区根路径 (默认: 当前目录)")
-    p_hydrate.add_argument("--limit", "-n", type=int, default=None, help="限制本次补水的最大节点数")
-    p_hydrate.add_argument("--dry-run", action="store_true", help="演练模式，不写数据库")
+    p_hydrate = subparsers.add_parser(
+        "hydrate", help="从 Git 快照提取 content.md 补水物化 plan_md_cache"
+    )
+    p_hydrate.add_argument(
+        "--quipu-dir", "-d", default=".", help="Quipu 仓库工作区根路径 (默认: 当前目录)"
+    )
+    p_hydrate.add_argument(
+        "--limit", "-n", type=int, default=None, help="限制本次补水的最大节点数"
+    )
+    p_hydrate.add_argument(
+        "--dry-run", action="store_true", help="演练模式，不写数据库"
+    )
     p_hydrate.set_defaults(func=cmd_hydrate)
 
     # 3. sync 命令
-    p_sync = subparsers.add_parser("sync", help="执行 AI Studio 意图回填到 Quipu 的 intent_md")
-    p_sync.add_argument("--quipu-dir", "-d", default=".", help="Quipu 仓库工作区根路径 (默认: 当前目录)")
-    p_sync.add_argument("--cache-dir", default=".cache", help="Analyzer 缓存目录 (默认: .cache)")
-    p_sync.add_argument("--port", type=int, default=5173, help="Analyzer 前端端口 (默认: 5173)")
-    p_sync.add_argument("--min-score", type=float, default=0.45, help="最低判定置信度得分 (默认: 0.45)")
-    p_sync.add_argument("--window-hours", type=float, default=24.0, help="时钟因果窗口小时数 (默认: 24.0)")
-    p_sync.add_argument("--force", "-f", action="store_true", help="强制覆盖已有的 intent_md")
-    p_sync.add_argument("--dry-run", action="store_true", help="演练模式，仅打印回填计划")
+    p_sync = subparsers.add_parser(
+        "sync", help="执行 AI Studio 意图回填到 Quipu 的 intent_md"
+    )
+    p_sync.add_argument(
+        "--quipu-dir", "-d", default=".", help="Quipu 仓库工作区根路径 (默认: 当前目录)"
+    )
+    p_sync.add_argument(
+        "--cache-dir", default=".cache", help="Analyzer 缓存目录 (默认: .cache)"
+    )
+    p_sync.add_argument(
+        "--port", type=int, default=5173, help="Analyzer 前端端口 (默认: 5173)"
+    )
+    p_sync.add_argument(
+        "--min-score", type=float, default=0.45, help="最低判定置信度得分 (默认: 0.45)"
+    )
+    p_sync.add_argument(
+        "--window-hours",
+        type=float,
+        default=24.0,
+        help="时钟因果窗口小时数 (默认: 24.0)",
+    )
+    p_sync.add_argument(
+        "--force", "-f", action="store_true", help="强制覆盖已有的 intent_md"
+    )
+    p_sync.add_argument(
+        "--dry-run", action="store_true", help="演练模式，仅打印回填计划"
+    )
     p_sync.add_argument("--verbose", "-v", action="store_true", help="详细日志模式")
     p_sync.set_defaults(func=cmd_sync)
 
     # 4. probe 命令
-    p_probe = subparsers.add_parser("probe", help="无副作用地审查回溯对齐置信度与时区基准")
-    p_probe.add_argument("--quipu-dir", "-d", default=".", help="Quipu 仓库工作区根路径 (默认: 当前目录)")
-    p_probe.add_argument("--cache-dir", default=".cache", help="Analyzer 缓存目录 (默认: .cache)")
-    p_probe.add_argument("--limit", type=int, default=100, help="审查的节点数量 (默认: 100)")
-    p_probe.add_argument("--min-score", type=float, default=0.45, help="判定门限得分 (默认: 0.45)")
-    p_probe.add_argument("--window-hours", type=float, default=24.0, help="时间因果窗口小时数 (默认: 24.0)")
+    p_probe = subparsers.add_parser(
+        "probe", help="无副作用地审查回溯对齐置信度与时区基准"
+    )
+    p_probe.add_argument(
+        "--quipu-dir", "-d", default=".", help="Quipu 仓库工作区根路径 (默认: 当前目录)"
+    )
+    p_probe.add_argument(
+        "--cache-dir", default=".cache", help="Analyzer 缓存目录 (默认: .cache)"
+    )
+    p_probe.add_argument(
+        "--limit", type=int, default=100, help="审查的节点数量 (默认: 100)"
+    )
+    p_probe.add_argument(
+        "--min-score", type=float, default=0.45, help="判定门限得分 (默认: 0.45)"
+    )
+    p_probe.add_argument(
+        "--window-hours",
+        type=float,
+        default=24.0,
+        help="时间因果窗口小时数 (默认: 24.0)",
+    )
     p_probe.set_defaults(func=cmd_probe)
 
     # 5. clear 命令
-    p_clear = subparsers.add_parser("clear", help="清空目标 Quipu 仓库的 intent_md 回填数据")
-    p_clear.add_argument("--quipu-dir", "-d", default=".", help="Quipu 仓库工作区根路径 (默认: 当前目录)")
-    p_clear.add_argument("--yes", "-y", action="store_true", help="跳过人工确认，直接执行清空")
+    p_clear = subparsers.add_parser(
+        "clear", help="清空目标 Quipu 仓库的 intent_md 回填数据"
+    )
+    p_clear.add_argument(
+        "--quipu-dir", "-d", default=".", help="Quipu 仓库工作区根路径 (默认: 当前目录)"
+    )
+    p_clear.add_argument(
+        "--yes", "-y", action="store_true", help="跳过人工确认，直接执行清空"
+    )
     p_clear.set_defaults(func=cmd_clear)
 
     parsed = parser.parse_args()

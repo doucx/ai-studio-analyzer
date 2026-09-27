@@ -1,4 +1,4 @@
-import { Activity, Bot, Clock, LineChart, Sparkles } from 'lucide-preact';
+import { Bot, Clock, LineChart, Sparkles } from 'lucide-preact';
 import { todayMetricsSignal } from '../state/metrics';
 import type { MetricsSummary } from '../types/metrics';
 import { DurationTiersChart } from './charts/DurationTiersChart';

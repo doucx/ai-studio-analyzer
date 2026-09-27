@@ -30,6 +30,7 @@ def _format_seconds_human(total_sec: float | int) -> str:
         parts.append("0m")
     return " ".join(parts)
 
+
 # 全局后台增量同步状态
 sync_status = {"is_syncing": False, "last_result": None, "error": None}
 
@@ -118,7 +119,7 @@ def get_daily_timeline(days: Optional[int] = None):
         # 从索引的物化列直接读取跨日映射，彻底免除 N+1 原始 JSON 反序列化
         date_time_map: dict[str, str] = {}
         active_dates_str = idx.get("active_dates")
-        
+
         if active_dates_str:
             try:
                 date_time_map = json.loads(active_dates_str)
@@ -132,7 +133,9 @@ def get_daily_timeline(days: Optional[int] = None):
                 try:
                     dt_utc = datetime.fromisoformat(mtime_str.replace("Z", "+00:00"))
                     dt_local = dt_utc.astimezone(local_tz)
-                    date_time_map[dt_local.strftime("%Y-%m-%d")] = dt_local.strftime("%H:%M")
+                    date_time_map[dt_local.strftime("%Y-%m-%d")] = dt_local.strftime(
+                        "%H:%M"
+                    )
                 except Exception:
                     pass
 

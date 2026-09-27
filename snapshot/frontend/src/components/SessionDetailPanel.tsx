@@ -392,17 +392,12 @@ export function SessionDetailPanel({ session, onClose }: Props) {
   useEffect(() => {
     if (!loading && detail?.turns && detail.turns.length > 0) {
       const hash = window.location.hash;
-      if (hash && hash.startsWith('#turn-')) {
+      if (hash?.startsWith('#turn-')) {
         const timer = setTimeout(() => {
           const targetEl = document.querySelector(hash);
           if (targetEl) {
             targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            targetEl.classList.add(
-              'ring-2',
-              'ring-indigo-500',
-              'transition-all',
-              'duration-500'
-            );
+            targetEl.classList.add('ring-2', 'ring-indigo-500', 'transition-all', 'duration-500');
             setTimeout(() => {
               targetEl.classList.remove('ring-2', 'ring-indigo-500');
             }, 2500);
@@ -429,7 +424,7 @@ export function SessionDetailPanel({ session, onClose }: Props) {
             )}
           </div>
           <p className="text-[11px] text-zinc-400 font-mono truncate">
-            ID: {session.file_id} · 模型: {session.model.replace('models/', '')}
+            模型: {session.model.replace('models/', '')}
           </p>
         </div>
 
@@ -512,7 +507,10 @@ export function SessionDetailPanel({ session, onClose }: Props) {
 
           <div className="bg-zinc-900/80 border border-zinc-800/60 rounded p-2.5">
             <div className="text-[10px] text-zinc-400">最后修改时间</div>
-            <div className="text-xs font-medium text-zinc-300 font-mono mt-1 truncate" title={session.modified_time || ''}>
+            <div
+              className="text-xs font-medium text-zinc-300 font-mono mt-1 truncate"
+              title={session.modified_time || ''}
+            >
               {formatLocalTime(session.modified_time)}
             </div>
             <div className="text-[10px] text-zinc-500 truncate" title={session.created_time || ''}>
