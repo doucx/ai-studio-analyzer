@@ -10,16 +10,16 @@ import sqlite3
 import subprocess
 import sys
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, Optional, Set, Tuple
+from src.analyzer.cache import SQLiteCache
+from src.analyzer.models import PromptSession
+from src.analyzer.parser import parse_prompt_json
+
 
 # 将项目根目录注入 sys.path，保证无论在何处执行均能定位 src 模块
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
-
-from src.analyzer.cache import SQLiteCache
-from src.analyzer.models import PromptSession
-from src.analyzer.parser import parse_prompt_json
 
 PATH_PATTERN = re.compile(
     r"[a-zA-Z0-9_\u4e00-\u9fa5\.\-]+/[a-zA-Z0-9_\u4e00-\u9fa5\.\-\/]+\.[a-zA-Z0-9]+"
@@ -35,7 +35,9 @@ def get_quipu_db_path(quipu_dir: str) -> str:
     abs_dir = os.path.abspath(quipu_dir)
     db_path = os.path.join(abs_dir, ".quipu", "history.sqlite")
     if not os.path.exists(db_path):
-        raise FileNotFoundError(f"未找到 Quipu 数据库: {db_path}，请确认目录是否为有效 Quipu 仓库。")
+        raise FileNotFoundError(
+            f"未找到 Quipu 数据库: {db_path}，请确认目录是否为有效 Quipu 仓库。"
+        )
     return db_path
 
 
@@ -181,9 +183,7 @@ class AlignmentProbe:
 
                 path_score = set_jaccard(q_paths, m_paths)
                 title_score = (
-                    text_similarity(q_title, m_title)
-                    if (q_title and m_title)
-                    else 0.0
+                    text_similarity(q_title, m_title) if (q_title and m_title) else 0.0
                 )
                 body_score = text_similarity(plan_content, m_text)
 
@@ -243,7 +243,9 @@ class AlignmentProbe:
                         "session_name": session.name,
                         "model": session.model,
                         "turn_index": idx + 1,
-                        "turn_time_local": turn_time_utc.astimezone().strftime("%Y-%m-%d %H:%M:%S %Z")
+                        "turn_time_local": turn_time_utc.astimezone().strftime(
+                            "%Y-%m-%d %H:%M:%S %Z"
+                        )
                         if turn_time_utc
                         else "未知",
                         "turn_time_utc": turn_time_utc.strftime("%Y-%m-%d %H:%M:%S UTC")
@@ -355,7 +357,9 @@ class QuipuRepositoryManager:
         with self.get_connection() as conn:
             self.ensure_private_data_schema(conn)
             cur = conn.cursor()
-            cur.execute("SELECT COUNT(*) FROM private_data WHERE intent_md IS NOT NULL;")
+            cur.execute(
+                "SELECT COUNT(*) FROM private_data WHERE intent_md IS NOT NULL;"
+            )
             count = cur.fetchone()[0]
             if count > 0:
                 cur.execute("DELETE FROM private_data;")

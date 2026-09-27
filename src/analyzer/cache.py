@@ -191,6 +191,7 @@ class SQLiteCache:
         m_time = s.modified_time.isoformat() if s.modified_time else None
 
         from datetime import datetime
+
         local_tz = datetime.now().astimezone().tzinfo
         date_time_map = {}
         for t in getattr(s, "turns", []):
@@ -209,11 +210,14 @@ class SQLiteCache:
             if m_dt:
                 try:
                     dt_local = m_dt.astimezone(local_tz)
-                    date_time_map[dt_local.strftime("%Y-%m-%d")] = dt_local.strftime("%H:%M")
+                    date_time_map[dt_local.strftime("%Y-%m-%d")] = dt_local.strftime(
+                        "%H:%M"
+                    )
                 except Exception:
                     pass
 
         import json
+
         active_dates_json = json.dumps(date_time_map) if date_time_map else "{}"
 
         with self._get_connection() as conn:

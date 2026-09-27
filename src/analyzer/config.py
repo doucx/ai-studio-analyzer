@@ -65,9 +65,7 @@ def save_config(new_config: Dict[str, Any]) -> Dict[str, Any]:
         CONFIG_FILE_PATH
         if os.path.exists(CONFIG_FILE_PATH)
         else (
-            LEGACY_CONFIG_FILE_PATH
-            if os.path.exists(LEGACY_CONFIG_FILE_PATH)
-            else None
+            LEGACY_CONFIG_FILE_PATH if os.path.exists(LEGACY_CONFIG_FILE_PATH) else None
         )
     )
 
