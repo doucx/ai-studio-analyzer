@@ -11,15 +11,16 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Set, Tuple
-from src.analyzer.cache import SQLiteCache
-from src.analyzer.models import PromptSession
-from src.analyzer.parser import parse_prompt_json
 
 
 # 将项目根目录注入 sys.path，保证无论在何处执行均能定位 src 模块
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.analyzer.cache import SQLiteCache # noqa E402
+from src.analyzer.models import PromptSession # noqa E402
+from src.analyzer.parser import parse_prompt_json # noqa E402
 
 PATH_PATTERN = re.compile(
     r"[a-zA-Z0-9_\u4e00-\u9fa5\.\-]+/[a-zA-Z0-9_\u4e00-\u9fa5\.\-\/]+\.[a-zA-Z0-9]+"
