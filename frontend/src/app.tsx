@@ -15,6 +15,7 @@ import {
   TIME_RANGE_OPTIONS,
   type TimeRange,
   fetchMetrics,
+  fetchTodayMetrics,
   setTimeRange,
   timeRangeSignal,
 } from './state/metrics';
@@ -27,7 +28,7 @@ import {
 } from './state/sync';
 
 function loadAllData(range: TimeRange = timeRangeSignal.value) {
-  return Promise.all([fetchMetrics(range), fetchSessions(range)]);
+  return Promise.all([fetchMetrics(range), fetchSessions(range), fetchTodayMetrics()]);
 }
 
 function handleTimeRangeChange(newRange: TimeRange) {
