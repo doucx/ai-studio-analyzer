@@ -5,6 +5,7 @@ import { SessionDetailPanel } from '../components/SessionDetailPanel';
 import { VirtualSessionList } from '../components/VirtualSessionList';
 import {
   filteredSessionsSignal,
+  isExpandedViewSignal,
   sessionsLoadingSignal,
   sessionsSignal,
   sidebarCollapsedSignal,
@@ -58,15 +59,21 @@ export function SessionsRoute() {
     route('/sessions');
   };
 
+  const isExpanded = isExpandedViewSignal.value;
+
   return (
     <div
       className={`flex-1 flex flex-col lg:flex-row overflow-hidden p-4 md:p-6 gap-6 w-full mx-auto transition-all duration-300 ${
-        isSidebarCollapsed ? 'max-w-full px-6' : 'max-w-7xl'
+        isExpanded || isSidebarCollapsed ? 'max-w-full px-6' : 'max-w-7xl'
       }`}
     >
-      {/* 左侧：5000+ 虚拟列表会话检索器 */}
+      {/* 5000+ 虚拟列表会话检索器 (支持常规 380px 侧栏 vs 全屏灯箱宽屏视图) */}
       {!isSidebarCollapsed && (
-        <aside className="w-full lg:w-[380px] h-[520px] lg:h-[calc(100vh-120px)] flex-shrink-0">
+        <aside
+          className={`h-[520px] lg:h-[calc(100vh-120px)] transition-all duration-300 flex-shrink-0 ${
+            isExpanded ? 'w-full lg:w-[620px] xl:w-[720px]' : 'w-full lg:w-[380px]'
+          }`}
+        >
           <VirtualSessionList
             sessions={sessions}
             selectedId={selectedId}
@@ -76,7 +83,7 @@ export function SessionsRoute() {
       )}
 
       {/* 右侧：单会话详情 或 空状态引导 */}
-      <main className="flex-1 overflow-y-auto lg:h-[calc(100vh-120px)] pr-1 w-full flex flex-col relative">
+      <main className="flex-1 overflow-y-auto lg:h-[calc(100vh-120px)] pr-1 w-full flex flex-col relative min-w-0">
         {/* 侧边栏折叠时的主视口快捷展开入口 */}
         {isSidebarCollapsed && (
           <div className="mb-3 flex items-center">
@@ -106,7 +113,7 @@ export function SessionsRoute() {
             <h3 className="text-base font-semibold text-zinc-300">会话工作台已就绪</h3>
             <p className="text-xs text-zinc-500 mt-1 max-w-sm leading-relaxed">
               请在左侧列表中选择任意会话，查看包含完整 Markdown
-              呈现、内联附件、思考链与分支追踪的详细对话流。
+              呈现、内联附件、思考链与分支追踪的详细对话流。可点击左上方展开按钮开启全屏会话灯箱模式。
             </p>
           </div>
         )}

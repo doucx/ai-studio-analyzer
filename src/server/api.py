@@ -55,21 +55,46 @@ def notify_sync_event(event_type: str, payload: dict):
             logger.debug("广播 SSE 队列已满或异常: %s", err)
 
 
-def _get_range_start_iso(range_key: str) -> str | None:
+def _resolve_time_bounds(
+    range_key: str = "all",
+    start_date: str | None = None,
+    end_date: str | None = None,
+) -> tuple[str | None, str | None, str | None, str | None]:
+    """
+    解析时间范围边界：
+    如果提供了显式的 start_date/end_date (YYYY-MM-DD)，优先作为日历闭区间；
+    否则按相对枚举解析 (start_iso, end_iso, start_date, end_date)。
+    """
+    if start_date or end_date:
+        return None, None, start_date, end_date
+
     if range_key == "all":
-        return None
+        return None, None, None, None
+
     now = datetime.now(UTC)
+    today_local = datetime.now().astimezone().strftime("%Y-%m-%d")
+
     if range_key == "1d":
-        return (now - timedelta(days=1)).isoformat()
+        start_dt = now - timedelta(days=1)
+        return start_dt.isoformat(), None, None, None
     if range_key == "7d":
-        return (now - timedelta(days=7)).isoformat()
+        start_d = (datetime.now().astimezone() - timedelta(days=7)).strftime("%Y-%m-%d")
+        return None, None, start_d, today_local
     if range_key == "30d":
-        return (now - timedelta(days=30)).isoformat()
+        start_d = (datetime.now().astimezone() - timedelta(days=30)).strftime(
+            "%Y-%m-%d"
+        )
+        return None, None, start_d, today_local
     if range_key == "90d":
-        return (now - timedelta(days=90)).isoformat()
+        start_d = (datetime.now().astimezone() - timedelta(days=90)).strftime(
+            "%Y-%m-%d"
+        )
+        return None, None, start_d, today_local
     if range_key == "this_year":
-        return datetime(now.year, 1, 1, tzinfo=UTC).isoformat()
-    return None
+        this_year_start = f"{datetime.now().year}-01-01"
+        return None, None, this_year_start, today_local
+
+    return None, None, None, None
 
 
 def _run_sync_task(limit: int | None, all_files: bool):
@@ -241,22 +266,46 @@ def get_daily_today():
 
 
 @router.get("/metrics")
-def get_metrics(range: str = "all"):
+def get_metrics(
+    range: str = "all",
+    start: str | None = None,
+    end: str | None = None,
+):
     """
-    基于 session_index 表毫秒级聚合认知与交互指标（耗时 <10ms）。
+    基于 session_index 表毫秒级聚合认知与交互指标，支持精确闭区间。
     """
-    range_start = _get_range_start_iso(range)
-    indices = cache.query_indices(range_start_iso=range_start)
+    start_iso, end_iso, start_d, end_d = _resolve_time_bounds(range, start, end)
+    indices = cache.query_indices(
+        range_start_iso=start_iso,
+        range_end_iso=end_iso,
+        start_date=start_d,
+        end_date=end_d,
+    )
     return calculate_session_metrics(indices)
 
 
 @router.get("/sessions")
-def list_sessions(range: str = "all", limit: int | None = None):
+def list_sessions(
+    range: str = "all",
+    start: str | None = None,
+    end: str | None = None,
+    model: str | None = None,
+    depth: str | None = None,
+    limit: int | None = None,
+):
     """
-    基于 session_index 极速返回会话列表，供前端 5000+ 虚拟滚动使用（耗时 <15ms）。
+    基于 session_index 极速返回会话列表，支持下推精确日期、模型与深度过滤。
     """
-    range_start = _get_range_start_iso(range)
-    indices = cache.query_indices(range_start_iso=range_start, limit=limit)
+    start_iso, end_iso, start_d, end_d = _resolve_time_bounds(range, start, end)
+    indices = cache.query_indices(
+        range_start_iso=start_iso,
+        range_end_iso=end_iso,
+        start_date=start_d,
+        end_date=end_d,
+        model=model,
+        depth=depth,
+        limit=limit,
+    )
     return [
         {
             "file_id": idx["file_id"],
@@ -280,11 +329,35 @@ def list_sessions(range: str = "all", limit: int | None = None):
 
 
 @router.get("/sessions/search")
-def search_sessions(q: str, range: str = "all", limit: int = 50, offset: int = 0):
-    """基于 SQLite FTS5 全文索引的高性能深度检索接口 (声明于 /sessions/{file_id} 前避免被拦截)"""
-    range_start = _get_range_start_iso(range)
+def search_sessions(
+    q: str,
+    range: str = "all",
+    start: str | None = None,
+    end: str | None = None,
+    model: str | None = None,
+    depth: str | None = None,
+    scope: str = "range",
+    limit: int = 50,
+    offset: int = 0,
+):
+    """
+    基于 SQLite FTS5 全文索引的高性能深度检索接口，支持范围筛选与全库穿透 (scope=all)。
+    """
+    if scope == "all":
+        start_iso, end_iso, start_d, end_d = None, None, None, None
+    else:
+        start_iso, end_iso, start_d, end_d = _resolve_time_bounds(range, start, end)
+
     return cache.search_fts(
-        query=q, limit=limit, offset=offset, range_start_iso=range_start
+        query=q,
+        limit=limit,
+        offset=offset,
+        range_start_iso=start_iso,
+        range_end_iso=end_iso,
+        start_date=start_d,
+        end_date=end_d,
+        model=model,
+        depth=depth,
     )
 
 

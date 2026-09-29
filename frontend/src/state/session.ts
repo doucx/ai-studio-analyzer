@@ -4,6 +4,7 @@ import { timeRangeSignal } from './metrics';
 
 export type DepthFilter = 'all' | 'single' | 'few' | 'many' | 'branch';
 export type SortOption = 'relevance' | 'modified' | 'tokens' | 'chunks';
+export type SearchScope = 'range' | 'all';
 
 // 基础源数据状态
 export const sessionsSignal = signal<SessionItem[]>([]);
@@ -11,8 +12,14 @@ export const selectedSessionSignal = signal<SessionItem | null>(null);
 export const sessionsLoadingSignal = signal<boolean>(true);
 export const sidebarCollapsedSignal = signal<boolean>(false);
 
+// 视图与检索增强状态
+export const isExpandedViewSignal = signal<boolean>(false); // 全屏/灯箱大画幅会话检索长廊
+export const isMultiLineSearchSignal = signal<boolean>(false); // 多行搜索编辑器开关
+export const searchScopeSignal = signal<SearchScope>('range'); // 'range' 在时间区间内筛选, 'all' 全库穿透
+
 // 复合筛选器状态
 export const searchKeywordSignal = signal<string>('');
+export const filterDateSignal = signal<string | null>(null); // 显式下钻日期，不再污染 searchKeyword
 export const selectedModelSignal = signal<string>('all');
 export const depthFilterSignal = signal<DepthFilter>('all');
 export const sortBySignal = signal<SortOption>('modified');
@@ -49,55 +56,22 @@ export const availableModelsSignal = computed(() => {
 export const isFilterActiveSignal = computed(() => {
   return (
     searchKeywordSignal.value.trim() !== '' ||
+    filterDateSignal.value !== null ||
     selectedModelSignal.value !== 'all' ||
     depthFilterSignal.value !== 'all' ||
-    sortBySignal.value !== 'modified'
+    sortBySignal.value !== 'modified' ||
+    searchScopeSignal.value !== 'range'
   );
 });
 
 // 核心多维复合过滤计算管道 (响应式原子派生)
 export const filteredSessionsSignal = computed(() => {
-  let term = searchKeywordSignal.value.trim().toLowerCase();
+  const term = searchKeywordSignal.value.trim().toLowerCase();
+  const explicitDate = filterDateSignal.value;
 
-  // 1. 提取 date:YYYY-MM-DD
-  let targetDate: string | null = null;
-  const dateMatch = term.match(/(?:date|d)\s*:\s*(\d{4}-\d{2}-\d{2})/i);
-  if (dateMatch) {
-    targetDate = dateMatch[1];
-    term = term.replace(dateMatch[0], '').trim();
-  }
-
-  // 2. 提取 tier:flash|focus|deep|epic
-  let targetTier: string | null = null;
-  const tierMatch = term.match(/tier\s*:\s*(flash|focus|deep|epic)/i);
-  if (tierMatch) {
-    targetTier = tierMatch[1].toLowerCase();
-    term = term.replace(tierMatch[0], '').trim();
-  }
-
-  // 3. 提取 is:branch
-  let filterBranchOnly = false;
-  if (term.includes('is:branch')) {
-    filterBranchOnly = true;
-    term = term.replace('is:branch', '').trim();
-  }
-
-  // 4. 提取关键词中可能携带的 Chunk 语法指令 (如: "chunk:2", "chunks:>5", "c:<=3", "c:1")
-  const chunkSyntaxMatch = term.match(/(?:chunks?|c)\s*(:|>=|<=|>|<|=)\s*(\d+)/i);
-  let targetChunkOp: string | null = null;
-  let targetChunkNum: number | null = null;
-
-  if (chunkSyntaxMatch) {
-    targetChunkOp = chunkSyntaxMatch[1];
-    targetChunkNum = Number.parseInt(chunkSyntaxMatch[2], 10);
-    term = term.replace(chunkSyntaxMatch[0], '').trim();
-  }
-
-  const cleanTerm = term;
-
-  // 当开启 FTS 全文搜索且命中结果集时，直接接入 FTS 倒排结果
+  // 当开启 FTS 全文搜索且命中结果集时，已在后端完成模型/深度下推，直接复用
   const rawList =
-    cleanTerm.length >= 2 && ftsResultsSignal.value !== null
+    term.length >= 2 && ftsResultsSignal.value !== null
       ? ftsResultsSignal.value
       : sessionsSignal.value;
 
@@ -106,67 +80,45 @@ export const filteredSessionsSignal = computed(() => {
   const model = selectedModelSignal.value;
   const depth = depthFilterSignal.value;
   const sort = sortBySignal.value;
+  const isFtsActive = term.length >= 2 && ftsResultsSignal.value !== null;
 
   return list
     .filter((s) => {
       const chunks = s.chunk_count ?? s.turn_count;
 
-      // 日期过滤：匹配 modified_time 或 created_time 是否以指定日期打头
-      if (targetDate) {
+      // 1. 显式下钻日期过滤
+      if (explicitDate) {
         const mDate = s.modified_time ? s.modified_time.slice(0, 10) : '';
         const cDate = s.created_time ? s.created_time.slice(0, 10) : '';
-        if (mDate !== targetDate && cDate !== targetDate) return false;
+        if (mDate !== explicitDate && cDate !== explicitDate) return false;
       }
 
-      // 时长梯队过滤
-      if (targetTier && !matchDurationTier(s.duration_seconds, targetTier)) {
-        return false;
-      }
-
-      // is:branch 过滤
-      if (filterBranchOnly && !s.has_branching) {
-        return false;
-      }
-
-      // Chunk 显式语法过滤
-      if (targetChunkOp && targetChunkNum !== null) {
-        if (targetChunkOp === ':' || targetChunkOp === '=') {
-          if (chunks !== targetChunkNum) return false;
-        } else if (targetChunkOp === '>') {
-          if (chunks <= targetChunkNum) return false;
-        } else if (targetChunkOp === '>=') {
-          if (chunks < targetChunkNum) return false;
-        } else if (targetChunkOp === '<') {
-          if (chunks >= targetChunkNum) return false;
-        } else if (targetChunkOp === '<=') {
-          if (chunks > targetChunkNum) return false;
+      // 如果来自 FTS 结果，后端已下推 model 与 depth 过滤，无需在此再次截断
+      if (!isFtsActive) {
+        // 模型筛选
+        if (model !== 'all') {
+          const rawModel = s.model.replace('models/', '');
+          if (rawModel !== model) return false;
         }
-      }
 
-      // 模型筛选
-      if (model !== 'all') {
-        const rawModel = s.model.replace('models/', '');
-        if (rawModel !== model) return false;
-      }
+        // Chunk 梯队胶囊与摩擦力筛选
+        if (depth === 'single' && chunks > 2) return false;
+        if (depth === 'few' && (chunks < 3 || chunks > 6)) return false;
+        if (depth === 'many' && chunks < 7) return false;
+        if (depth === 'branch' && !s.has_branching) return false;
 
-      // 3. Chunk 梯队胶囊与摩擦力筛选
-      if (depth === 'single' && chunks > 2) return false;
-      if (depth === 'few' && (chunks < 3 || chunks > 6)) return false;
-      if (depth === 'many' && chunks < 7) return false;
-      if (depth === 'branch' && !s.has_branching) return false;
-
-      // 4. 文本模糊过滤
-      if (cleanTerm && ftsResultsSignal.value === null) {
-        const matchName = s.name.toLowerCase().includes(cleanTerm);
-        const matchPrompt = (s.first_prompt || '').toLowerCase().includes(cleanTerm);
-        const matchModel = s.model.toLowerCase().includes(cleanTerm);
-        if (!matchName && !matchPrompt && !matchModel) return false;
+        // 本地纯文本模糊过滤 (用于 1 个字以内的快速匹配)
+        if (term) {
+          const matchName = s.name.toLowerCase().includes(term);
+          const matchPrompt = (s.first_prompt || '').toLowerCase().includes(term);
+          const matchModel = s.model.toLowerCase().includes(term);
+          if (!matchName && !matchPrompt && !matchModel) return false;
+        }
       }
 
       return true;
     })
     .sort((a, b) => {
-      // 保持 FTS 默认的 BM25 相关度排序
       if (sort === 'relevance') {
         return 0;
       }
@@ -184,13 +136,22 @@ export const filteredSessionsSignal = computed(() => {
     });
 });
 
-export async function fetchSessions(range = timeRangeSignal.value) {
+import { customEndDateSignal, customStartDateSignal } from './metrics';
+
+export async function fetchSessions(
+  range = timeRangeSignal.value,
+  start = customStartDateSignal.value,
+  end = customEndDateSignal.value,
+) {
   refreshFtsSearch(range);
   if (sessionsSignal.value.length === 0) {
     sessionsLoadingSignal.value = true;
   }
   try {
-    const res = await fetch(`/api/sessions?range=${range}`);
+    let url = `/api/sessions?range=${range}`;
+    if (start) url += `&start=${encodeURIComponent(start)}`;
+    if (end) url += `&end=${encodeURIComponent(end)}`;
+    const res = await fetch(url);
     if (res.ok) {
       const data = await res.json();
       sessionsSignal.value = Array.isArray(data) ? data : [];
@@ -210,31 +171,16 @@ export function toggleSidebar() {
   sidebarCollapsedSignal.value = !sidebarCollapsedSignal.value;
 }
 
+export function toggleExpandedView() {
+  isExpandedViewSignal.value = !isExpandedViewSignal.value;
+}
+
 let activeSearchAbortController: AbortController | null = null;
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-function extractCleanTerm(keyword: string): string {
-  let cleanTerm = keyword.trim().toLowerCase();
-  const dateMatch = cleanTerm.match(/(?:date|d)\s*:\s*(\d{4}-\d{2}-\d{2})/i);
-  if (dateMatch) {
-    cleanTerm = cleanTerm.replace(dateMatch[0], '').trim();
-  }
-  const tierMatch = cleanTerm.match(/tier\s*:\s*(flash|focus|deep|epic)/i);
-  if (tierMatch) {
-    cleanTerm = cleanTerm.replace(tierMatch[0], '').trim();
-  }
-  cleanTerm = cleanTerm.replace(/is:branch/gi, '').trim();
-  const chunkSyntaxMatch = cleanTerm.match(/(?:chunks?|c)\s*(:|>=|<=|>|<|=)\s*(\d+)/i);
-  if (chunkSyntaxMatch) {
-    cleanTerm = cleanTerm.replace(chunkSyntaxMatch[0], '').trim();
-  }
-  return cleanTerm;
-}
 
 export function drillDownToSessions({
   model,
   date,
-  tier,
   depth,
 }: {
   model?: string;
@@ -245,13 +191,7 @@ export function drillDownToSessions({
   resetFilters();
   if (model) selectedModelSignal.value = model;
   if (depth) depthFilterSignal.value = depth;
-
-  const keywords: string[] = [];
-  if (date) keywords.push(`date:${date}`);
-  if (tier) keywords.push(`tier:${tier}`);
-  if (keywords.length > 0) {
-    searchKeywordSignal.value = keywords.join(' ');
-  }
+  if (date) filterDateSignal.value = date;
 }
 
 export function executeFtsSearch(keyword: string, range = timeRangeSignal.value) {
@@ -260,7 +200,7 @@ export function executeFtsSearch(keyword: string, range = timeRangeSignal.value)
     activeSearchAbortController = null;
   }
 
-  const cleanTerm = extractCleanTerm(keyword);
+  const cleanTerm = keyword.trim();
   if (cleanTerm.length < 2) {
     ftsResultsSignal.value = null;
     isSearchingFtsSignal.value = false;
@@ -274,13 +214,25 @@ export function executeFtsSearch(keyword: string, range = timeRangeSignal.value)
   const controller = new AbortController();
   activeSearchAbortController = controller;
 
-  fetch(`/api/sessions/search?q=${encodeURIComponent(cleanTerm)}&range=${range}&limit=100`, {
-    signal: controller.signal,
-  })
+  const start = customStartDateSignal.value;
+  const end = customEndDateSignal.value;
+  const model = selectedModelSignal.value;
+  const depth = depthFilterSignal.value;
+  const scope = searchScopeSignal.value;
+
+  let url = `/api/sessions/search?q=${encodeURIComponent(cleanTerm)}&range=${range}&scope=${scope}&limit=100`;
+  if (scope === 'range') {
+    if (start) url += `&start=${encodeURIComponent(start)}`;
+    if (end) url += `&end=${encodeURIComponent(end)}`;
+  }
+  if (model !== 'all') url += `&model=${encodeURIComponent(model)}`;
+  if (depth !== 'all') url += `&depth=${encodeURIComponent(depth)}`;
+
+  fetch(url, { signal: controller.signal })
     .then(async (res) => {
       if (res.ok) {
         const data = await res.json();
-        if (extractCleanTerm(searchKeywordSignal.value) === cleanTerm) {
+        if (searchKeywordSignal.value.trim() === cleanTerm) {
           ftsResultsSignal.value = Array.isArray(data) ? data : [];
           if (sortBySignal.value === 'modified') {
             sortBySignal.value = 'relevance';
@@ -302,9 +254,8 @@ export function executeFtsSearch(keyword: string, range = timeRangeSignal.value)
 }
 
 export function refreshFtsSearch(range = timeRangeSignal.value) {
-  const currentKeyword = searchKeywordSignal.value;
-  const cleanTerm = extractCleanTerm(currentKeyword);
-  if (cleanTerm.length >= 2) {
+  const currentKeyword = searchKeywordSignal.value.trim();
+  if (currentKeyword.length >= 2) {
     if (searchDebounceTimer) {
       clearTimeout(searchDebounceTimer);
       searchDebounceTimer = null;
@@ -315,7 +266,7 @@ export function refreshFtsSearch(range = timeRangeSignal.value) {
 
 export function handleSearchInput(keyword: string) {
   searchKeywordSignal.value = keyword;
-  const cleanTerm = extractCleanTerm(keyword);
+  const cleanTerm = keyword.trim();
 
   if (searchDebounceTimer) {
     clearTimeout(searchDebounceTimer);
@@ -351,9 +302,11 @@ export function resetFilters() {
     activeSearchAbortController = null;
   }
   searchKeywordSignal.value = '';
+  filterDateSignal.value = null;
   ftsResultsSignal.value = null;
   isSearchingFtsSignal.value = false;
   selectedModelSignal.value = 'all';
   depthFilterSignal.value = 'all';
   sortBySignal.value = 'modified';
+  searchScopeSignal.value = 'range';
 }

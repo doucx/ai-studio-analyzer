@@ -297,14 +297,51 @@ class SQLiteCache:
     def query_indices(
         self,
         range_start_iso: str | None = None,
+        range_end_iso: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        model: str | None = None,
+        depth: str | None = None,
         limit: int | None = None,
     ) -> list[dict[str, Any]]:
-        """基于时间条件毫秒级检索会话索引列表"""
-        sql = "SELECT * FROM session_index"
+        """基于时间闭区间与多维属性毫秒级检索会话索引列表"""
+        conditions = []
         params = []
-        if range_start_iso:
-            sql += " WHERE (modified_time >= ? OR created_time >= ?)"
+
+        if start_date and end_date:
+            conditions.append("date >= ? AND date <= ?")
+            params.extend([start_date, end_date])
+        elif start_date:
+            conditions.append("date >= ?")
+            params.append(start_date)
+        elif end_date:
+            conditions.append("date <= ?")
+            params.append(end_date)
+        elif range_start_iso and range_end_iso:
+            conditions.append("(modified_time >= ? AND modified_time <= ?)")
+            params.extend([range_start_iso, range_end_iso])
+        elif range_start_iso:
+            conditions.append("(modified_time >= ? OR created_time >= ?)")
             params.extend([range_start_iso, range_start_iso])
+
+        if model and model != "all":
+            clean_m = model.replace("models/", "")
+            conditions.append("(model = ? OR model = ?)")
+            params.extend([clean_m, f"models/{clean_m}"])
+
+        if depth and depth != "all":
+            if depth == "single":
+                conditions.append("turn_count <= 2")
+            elif depth == "few":
+                conditions.append("turn_count >= 3 AND turn_count <= 6")
+            elif depth == "many":
+                conditions.append("turn_count >= 7")
+            elif depth == "branch":
+                conditions.append("has_branching = 1")
+
+        sql = "SELECT * FROM session_index"
+        if conditions:
+            sql += " WHERE " + " AND ".join(conditions)
         sql += " ORDER BY modified_time DESC"
         if limit and limit > 0:
             sql += " LIMIT ?"
@@ -390,9 +427,15 @@ class SQLiteCache:
         limit: int = 50,
         offset: int = 0,
         range_start_iso: str | None = None,
+        range_end_iso: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        model: str | None = None,
+        depth: str | None = None,
     ) -> list[dict[str, Any]]:
-        """基于 FTS5 Trigram 与 BM25 进行全文检索，并提取上下文命中片段 (Snippet)"""
-        clean_query = query.strip().replace('"', '""')
+        """基于 FTS5 Trigram 与 BM25 进行全文检索，支持时间闭区间、模型与深度全下推过滤"""
+        # 支持多行或多关键词匹配，去除连续空白
+        clean_query = " ".join(query.strip().split()).replace('"', '""')
         if not clean_query:
             return []
 
@@ -400,18 +443,44 @@ class SQLiteCache:
         where_conditions = ["session_fts MATCH ?"]
         params: list[Any] = [fts_match_expr]
 
-        if range_start_iso:
+        if start_date and end_date:
+            where_conditions.append("s.date >= ? AND s.date <= ?")
+            params.extend([start_date, end_date])
+        elif start_date:
+            where_conditions.append("s.date >= ?")
+            params.append(start_date)
+        elif end_date:
+            where_conditions.append("s.date <= ?")
+            params.append(end_date)
+        elif range_start_iso and range_end_iso:
+            where_conditions.append("(s.modified_time >= ? AND s.modified_time <= ?)")
+            params.extend([range_start_iso, range_end_iso])
+        elif range_start_iso:
             where_conditions.append("(s.modified_time >= ? OR s.created_time >= ?)")
             params.extend([range_start_iso, range_start_iso])
 
+        if model and model != "all":
+            clean_m = model.replace("models/", "")
+            where_conditions.append("(s.model = ? OR s.model = ?)")
+            params.extend([clean_m, f"models/{clean_m}"])
+
+        if depth and depth != "all":
+            if depth == "single":
+                where_conditions.append("s.turn_count <= 2")
+            elif depth == "few":
+                where_conditions.append("s.turn_count >= 3 AND s.turn_count <= 6")
+            elif depth == "many":
+                where_conditions.append("s.turn_count >= 7")
+            elif depth == "branch":
+                where_conditions.append("s.has_branching = 1")
+
         where_sql = " AND ".join(where_conditions)
 
-        # snippet 第二个参数限定为 3 (即 session_fts 的 content 列，避免遍历整表其他列产生极大 I/O)
         sql = f"""
             SELECT 
                 f.file_id,
                 bm25(session_fts) AS rank,
-                snippet(session_fts, 3, '<mark class="bg-indigo-500/30 text-indigo-300 font-semibold px-0.5 rounded">', '</mark>', '...', 22) AS snippet,
+                snippet(session_fts, 3, '<mark class="bg-indigo-500/30 text-indigo-300 font-semibold px-0.5 rounded">', '</mark>', '...', 28) AS snippet,
                 s.name,
                 s.model,
                 s.turn_count,

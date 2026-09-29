@@ -13,6 +13,9 @@ export const TIME_RANGE_OPTIONS: { key: TimeRange; label: string }[] = [
 ];
 
 export const timeRangeSignal = signal<TimeRange>('all');
+export const customStartDateSignal = signal<string | null>(null);
+export const customEndDateSignal = signal<string | null>(null);
+
 export const metricsSignal = signal<MetricsSummary | null>(null);
 export const metricsLoadingSignal = signal<boolean>(true);
 export const todayMetricsSignal = signal<DailyTimelineItem | null>(null);
@@ -29,12 +32,19 @@ export async function fetchTodayMetrics() {
   }
 }
 
-export async function fetchMetrics(range: TimeRange = timeRangeSignal.value) {
+export async function fetchMetrics(
+  range: TimeRange = timeRangeSignal.value,
+  start: string | null = customStartDateSignal.value,
+  end: string | null = customEndDateSignal.value,
+) {
   if (!metricsSignal.value) {
     metricsLoadingSignal.value = true;
   }
   try {
-    const res = await fetch(`/api/metrics?range=${range}`);
+    let url = `/api/metrics?range=${range}`;
+    if (start) url += `&start=${encodeURIComponent(start)}`;
+    if (end) url += `&end=${encodeURIComponent(end)}`;
+    const res = await fetch(url);
     const data = await res.json();
     metricsSignal.value = data;
   } catch (err) {
@@ -46,4 +56,11 @@ export async function fetchMetrics(range: TimeRange = timeRangeSignal.value) {
 
 export function setTimeRange(newRange: TimeRange) {
   timeRangeSignal.value = newRange;
+  customStartDateSignal.value = null;
+  customEndDateSignal.value = null;
+}
+
+export function setCustomDateRange(start: string, end: string) {
+  customStartDateSignal.value = start;
+  customEndDateSignal.value = end;
 }

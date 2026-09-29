@@ -1,20 +1,34 @@
-import { Loader2, PanelLeftClose } from 'lucide-preact';
+import {
+  AlignLeft,
+  Calendar,
+  Globe,
+  Loader2,
+  Maximize2,
+  Minimize2,
+  PanelLeftClose,
+  Sparkles,
+} from 'lucide-preact';
 import { useRef, useState } from 'preact/hooks';
 import {
   type DepthFilter,
   type SortOption,
   availableModelsSignal,
   depthFilterSignal,
+  filterDateSignal,
   filteredSessionsSignal,
   ftsResultsSignal,
   handleSearchInput,
+  isExpandedViewSignal,
   isFilterActiveSignal,
+  isMultiLineSearchSignal,
   isSearchingFtsSignal,
   resetFilters,
   searchKeywordSignal,
+  searchScopeSignal,
   selectedModelSignal,
   sessionsSignal,
   sortBySignal,
+  toggleExpandedView,
   toggleSidebar,
 } from '../state/session';
 import type { SessionItem } from '../types/metrics';
@@ -26,6 +40,7 @@ interface Props {
 }
 
 const ITEM_HEIGHT = 86; // 每项固定高度 86px
+const EXPANDED_ITEM_HEIGHT = 112; // 展开灯箱模式下高度 112px
 const BUFFER = 5; // 视口外缓冲项数
 
 const DEPTH_OPTIONS: { key: DepthFilter; label: string; tip: string }[] = [
@@ -40,6 +55,11 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);
 
+  const isExpanded = isExpandedViewSignal.value;
+  const isMultiLine = isMultiLineSearchSignal.value;
+  const searchScope = searchScopeSignal.value;
+  const explicitDate = filterDateSignal.value;
+
   const totalSessionsCount = sessionsSignal.value.length;
   const filteredSessions = filteredSessionsSignal.value;
   const models = availableModelsSignal.value;
@@ -50,27 +70,48 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
   const currentDepth = depthFilterSignal.value;
   const currentSort = sortBySignal.value;
 
-  // 虚拟滚动动态计算
-  const totalHeight = filteredSessions.length * ITEM_HEIGHT;
+  const rowHeight = isExpanded ? EXPANDED_ITEM_HEIGHT : ITEM_HEIGHT;
+  const totalHeight = filteredSessions.length * rowHeight;
   const containerHeight = containerRef.current?.clientHeight || 650;
 
-  const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - BUFFER);
-  const visibleCount = Math.ceil(containerHeight / ITEM_HEIGHT);
+  const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - BUFFER);
+  const visibleCount = Math.ceil(containerHeight / rowHeight);
   const endIndex = Math.min(filteredSessions.length, startIndex + visibleCount + BUFFER * 2);
-  const offsetY = startIndex * ITEM_HEIGHT;
+  const offsetY = startIndex * rowHeight;
 
   const visibleItems = filteredSessions.slice(startIndex, endIndex);
 
   return (
-    <div className="flex flex-col h-full bg-zinc-900/60 border border-zinc-800 rounded-lg overflow-hidden shadow-sm">
+    <div
+      className={`flex flex-col h-full bg-zinc-900/60 border border-zinc-800 rounded-lg overflow-hidden shadow-sm transition-all duration-300 ${
+        isExpanded ? 'w-full' : ''
+      }`}
+    >
       {/* 搜索与复合过滤控制栏 */}
       <div className="p-3 border-b border-zinc-800 space-y-2.5 bg-zinc-900/90 backdrop-blur">
-        {/* 第一行：状态指示与排序选择 */}
+        {/* 第一行：状态指示、范围穿透与全屏灯箱切换 */}
         <div className="flex items-center justify-between text-xs text-zinc-400">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <span className="font-semibold text-zinc-200">
               会话历史 ({filteredSessions.length} / {totalSessionsCount})
             </span>
+
+            {explicitDate && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-800/60 font-mono">
+                <Calendar size={10} />
+                <span>{explicitDate}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    filterDateSignal.value = null;
+                  }}
+                  className="hover:text-white cursor-pointer ml-0.5"
+                >
+                  ✕
+                </button>
+              </span>
+            )}
+
             {isFilterActive && (
               <button
                 type="button"
@@ -84,6 +125,33 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
           </div>
 
           <div className="flex items-center gap-1.5">
+            {/* 范围/全库穿透切换 */}
+            <button
+              type="button"
+              onClick={() => {
+                searchScopeSignal.value = searchScope === 'range' ? 'all' : 'range';
+                if (currentKeyword.trim().length >= 2) {
+                  handleSearchInput(currentKeyword);
+                }
+              }}
+              className={`p-1 rounded text-xs transition border cursor-pointer flex items-center gap-1 ${
+                searchScope === 'all'
+                  ? 'bg-amber-950/80 text-amber-300 border-amber-800'
+                  : 'bg-zinc-800/80 text-zinc-400 hover:text-zinc-200 border-zinc-700/60'
+              }`}
+              title={
+                searchScope === 'all'
+                  ? '当前处于【全库穿透检索】模式（忽略上方时间切片）'
+                  : '当前处于【时间区间内初筛】模式，点击可穿透检索全库'
+              }
+            >
+              <Globe size={12} className={searchScope === 'all' ? 'text-amber-400' : ''} />
+              <span className="text-[10px] font-mono hidden sm:inline">
+                {searchScope === 'all' ? '全库穿透' : '区间初筛'}
+              </span>
+            </button>
+
+            {/* 排序选择 */}
             <select
               value={currentSort}
               onChange={(e) => {
@@ -97,49 +165,94 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
               <option value="chunks">Chunk 数量</option>
             </select>
 
+            {/* 灯箱模式切换按钮 */}
             <button
               type="button"
-              onClick={toggleSidebar}
-              className="p-1 text-zinc-400 hover:text-zinc-200 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700/60 rounded transition cursor-pointer"
-              title="收起会话历史列表"
+              onClick={toggleExpandedView}
+              className={`p-1 rounded transition border cursor-pointer ${
+                isExpanded
+                  ? 'bg-indigo-600 text-white border-indigo-500'
+                  : 'text-zinc-400 hover:text-zinc-200 bg-zinc-800/80 hover:bg-zinc-700 border-zinc-700/60'
+              }`}
+              title={isExpanded ? '收拢为侧栏视口' : '展开为全屏大画幅会话灯箱'}
             >
-              <PanelLeftClose size={13} />
+              {isExpanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
             </button>
+
+            {!isExpanded && (
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                className="p-1 text-zinc-400 hover:text-zinc-200 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700/60 rounded transition cursor-pointer"
+                title="收起会话历史列表"
+              >
+                <PanelLeftClose size={13} />
+              </button>
+            )}
           </div>
         </div>
 
-        {/* 第二行：FTS 全文检索输入 */}
+        {/* 第二行：FTS 全文检索输入（支持单行/多行自然语言及代码块搜索切换） */}
         <div className="relative">
-          <input
-            type="text"
-            placeholder="全文检索，支持 date:2025-01-01、tier:deep、c:>5..."
-            value={currentKeyword}
-            onInput={(e) => {
-              handleSearchInput((e.target as HTMLInputElement).value);
-              setScrollTop(0);
-              if (containerRef.current) containerRef.current.scrollTop = 0;
-            }}
-            className="w-full bg-zinc-950 border border-zinc-800 focus:border-indigo-500 rounded px-2.5 py-1 text-xs text-zinc-200 placeholder-zinc-500 outline-none transition"
-          />
-          {isSearchingFtsSignal.value ? (
-            <Loader2
-              size={13}
-              className="absolute right-2.5 top-2 text-indigo-400 animate-spin pointer-events-none"
+          {isMultiLine ? (
+            <textarea
+              rows={3}
+              placeholder="多行深度检索：支持粘贴长篇 Prompt、异常调用栈或代码片段..."
+              value={currentKeyword}
+              onInput={(e) => {
+                handleSearchInput((e.target as HTMLTextAreaElement).value);
+                setScrollTop(0);
+                if (containerRef.current) containerRef.current.scrollTop = 0;
+              }}
+              className="w-full bg-zinc-950 border border-zinc-800 focus:border-indigo-500 rounded p-2 text-xs font-mono text-zinc-200 placeholder-zinc-500 outline-none transition resize-none leading-relaxed"
             />
-          ) : currentKeyword ? (
+          ) : (
+            <input
+              type="text"
+              placeholder="全文毫秒级检索：输入代码关键词、报错信息或对话主题..."
+              value={currentKeyword}
+              onInput={(e) => {
+                handleSearchInput((e.target as HTMLInputElement).value);
+                setScrollTop(0);
+                if (containerRef.current) containerRef.current.scrollTop = 0;
+              }}
+              className="w-full bg-zinc-950 border border-zinc-800 focus:border-indigo-500 rounded px-2.5 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 outline-none transition pr-16"
+            />
+          )}
+
+          <div className="absolute right-2 top-2 flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => {
-                handleSearchInput('');
+                isMultiLineSearchSignal.value = !isMultiLine;
               }}
-              className="absolute right-2 top-1 text-xs text-zinc-500 hover:text-zinc-300 cursor-pointer"
+              className={`p-0.5 rounded text-[10px] transition cursor-pointer ${
+                isMultiLine
+                  ? 'text-indigo-400 bg-indigo-950 border border-indigo-800/60'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+              title={isMultiLine ? '切换为单行输入' : '切换为多行复杂检索框'}
             >
-              ✕
+              <AlignLeft size={13} />
             </button>
-          ) : null}
+
+            {isSearchingFtsSignal.value ? (
+              <Loader2 size={13} className="text-indigo-400 animate-spin pointer-events-none" />
+            ) : currentKeyword ? (
+              <button
+                type="button"
+                onClick={() => {
+                  handleSearchInput('');
+                }}
+                className="text-xs text-zinc-500 hover:text-zinc-300 cursor-pointer"
+              >
+                ✕
+              </button>
+            ) : null}
+          </div>
         </div>
 
-        {/* 第三行：模型下拉筛选 */}
+        {/* 第三行：模型下拉筛选与下推 */}
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-zinc-400 shrink-0">模型:</span>
           <select
@@ -148,6 +261,9 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
               selectedModelSignal.value = (e.target as HTMLSelectElement).value;
               setScrollTop(0);
               if (containerRef.current) containerRef.current.scrollTop = 0;
+              if (currentKeyword.trim().length >= 2) {
+                handleSearchInput(currentKeyword);
+              }
             }}
             className="flex-1 bg-zinc-950 border border-zinc-800 focus:border-indigo-500 text-zinc-300 text-[11px] rounded px-2 py-1 outline-none truncate"
           >
@@ -170,6 +286,9 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
                 depthFilterSignal.value = key;
                 setScrollTop(0);
                 if (containerRef.current) containerRef.current.scrollTop = 0;
+                if (currentKeyword.trim().length >= 2) {
+                  handleSearchInput(currentKeyword);
+                }
               }}
               title={tip}
               className={`text-[10px] py-1 rounded font-medium transition text-center truncate ${
@@ -197,7 +316,7 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
               <button
                 type="button"
                 onClick={resetFilters}
-                className="text-indigo-400 hover:text-indigo-300 text-xs underline"
+                className="text-indigo-400 hover:text-indigo-300 text-xs underline cursor-pointer"
               >
                 清空筛选条件
               </button>
@@ -222,14 +341,14 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
                     type="button"
                     key={s.file_id}
                     onClick={() => onSelect(s)}
-                    style={{ height: `${ITEM_HEIGHT}px` }}
-                    className={`w-full text-left p-2.5 cursor-pointer transition flex flex-col justify-between border-b border-zinc-800/30 outline-none focus:bg-zinc-800/60 ${
+                    style={{ height: `${rowHeight}px` }}
+                    className={`w-full text-left p-3 cursor-pointer transition flex flex-col justify-between border-b border-zinc-800/30 outline-none focus:bg-zinc-800/60 ${
                       isSelected
                         ? 'bg-indigo-950/60 border-l-2 border-l-indigo-500 text-white'
                         : 'hover:bg-zinc-800/40 text-zinc-300'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-1.5 w-full">
+                    <div className="flex items-center justify-between gap-2 w-full">
                       <span
                         className="font-medium text-xs truncate flex-1 text-zinc-100"
                         title={s.name}
@@ -237,7 +356,7 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
                         {s.name}
                       </span>
                       {s.has_branching && (
-                        <span className="text-[9px] px-1 py-0.2 rounded bg-amber-950/80 text-amber-400 border border-amber-800/50">
+                        <span className="text-[9px] px-1 py-0.2 rounded bg-amber-950/80 text-amber-400 border border-amber-800/50 shrink-0">
                           分叉
                         </span>
                       )}
@@ -248,18 +367,24 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
 
                     {s.snippet ? (
                       <p
-                        className="text-[11px] text-zinc-300 truncate font-mono w-full bg-black/20 px-1 py-0.5 rounded border border-zinc-800/40"
+                        className={`text-[11px] text-zinc-200 font-mono w-full bg-black/30 px-2 py-1 rounded border border-zinc-800/60 leading-relaxed overflow-hidden ${
+                          isExpanded ? 'line-clamp-2' : 'truncate'
+                        }`}
                         // biome-ignore lint/security/noDangerouslySetInnerHtml: 用于呈现 FTS 高亮标记 (<mark>)
                         dangerouslySetInnerHTML={{ __html: s.snippet }}
                       />
                     ) : (
-                      <p className="text-[11px] text-zinc-400 truncate font-sans w-full">
+                      <p
+                        className={`text-[11px] text-zinc-400 font-sans w-full ${
+                          isExpanded ? 'line-clamp-2' : 'truncate'
+                        }`}
+                      >
                         {s.first_prompt || '(无首轮文本提示)'}
                       </p>
                     )}
 
                     <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono w-full">
-                      <span className="bg-zinc-800/80 px-1 py-0.2 rounded text-zinc-400 max-w-[130px] truncate">
+                      <span className="bg-zinc-800/80 px-1 py-0.2 rounded text-zinc-400 max-w-[150px] truncate">
                         {s.model.replace('models/', '')}
                       </span>
                       <span>

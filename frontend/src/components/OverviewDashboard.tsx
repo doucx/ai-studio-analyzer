@@ -26,8 +26,8 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
     route('/sessions');
   };
 
-  const handleTierDrillDown = (tier: 'flash' | 'focus' | 'deep' | 'epic') => {
-    drillDownToSessions({ tier });
+  const handleTierDrillDown = (_tier: 'flash' | 'focus' | 'deep' | 'epic') => {
+    // 聚焦于会话工作台
     route('/sessions');
   };
 
