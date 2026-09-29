@@ -8,6 +8,7 @@ import {
 import { useRef, useState } from 'preact/hooks';
 import {
   type DepthFilter,
+  type DurationTierFilter,
   type SortOption,
   availableModelsSignal,
   depthFilterSignal,
@@ -23,6 +24,7 @@ import {
   searchKeywordSignal,
   searchScopeSignal,
   selectedModelSignal,
+  selectedTierSignal,
   sessionsSignal,
   sortBySignal,
 } from '../state/session';
@@ -64,6 +66,7 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
 
   const currentKeyword = searchKeywordSignal.value;
   const currentModel = selectedModelSignal.value;
+  const currentTier = selectedTierSignal.value;
   const currentDepth = depthFilterSignal.value;
   const currentSort = sortBySignal.value;
 
@@ -95,22 +98,6 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
             <span className="font-semibold text-zinc-200">
               会话历史 ({filteredSessions.length} / {totalSessionsCount})
             </span>
-
-            {explicitDate && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-indigo-950 text-indigo-300 border border-indigo-800/60 font-mono">
-                <Calendar size={10} />
-                <span>{explicitDate}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    filterDateSignal.value = null;
-                  }}
-                  className="hover:text-white cursor-pointer ml-0.5"
-                >
-                  ✕
-                </button>
-              </span>
-            )}
 
             {isFilterActive && (
               <button
@@ -227,9 +214,9 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
           </div>
         </div>
 
-        {/* 第三行：模型下拉筛选与下推 */}
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-zinc-400 shrink-0">模型:</span>
+        {/* 第三行：分面属性并排筛选 (模型 / 时长梯队 / 精确日期) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {/* 模型维度选择 */}
           <select
             value={currentModel}
             onChange={(e) => {
@@ -240,7 +227,8 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
                 handleSearchInput(currentKeyword);
               }
             }}
-            className="flex-1 bg-zinc-950 border border-zinc-800 focus:border-indigo-500 text-zinc-300 text-[11px] rounded px-2 py-1 outline-none truncate"
+            className="w-full bg-zinc-950 border border-zinc-800 focus:border-indigo-500 text-zinc-300 text-[11px] rounded px-2 py-1 outline-none truncate"
+            title="按模型筛选"
           >
             <option value="all">全部模型 ({totalSessionsCount})</option>
             {models.map(([modelName, count]) => (
@@ -249,6 +237,40 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
               </option>
             ))}
           </select>
+
+          {/* 时长心智梯队选择 */}
+          <select
+            value={currentTier}
+            onChange={(e) => {
+              selectedTierSignal.value = (e.target as HTMLSelectElement).value as DurationTierFilter;
+              setScrollTop(0);
+              if (containerRef.current) containerRef.current.scrollTop = 0;
+            }}
+            className="w-full bg-zinc-950 border border-zinc-800 focus:border-indigo-500 text-zinc-300 text-[11px] rounded px-2 py-1 outline-none truncate"
+            title="按心智时长梯队筛选"
+          >
+            <option value="all">全部时长梯队</option>
+            <option value="flash">即时快问 (&lt;10m)</option>
+            <option value="focus">聚焦推进 (10~60m)</option>
+            <option value="deep">深度攻坚 (1~6h)</option>
+            <option value="epic">跨日长线 (&gt;6h)</option>
+          </select>
+
+          {/* 精确日期选择器 (原生输入框，支持自选与下钻回显，让出右侧原生图标) */}
+          <div className="relative flex items-center min-w-0">
+            <input
+              type="date"
+              value={explicitDate || ''}
+              onChange={(e) => {
+                const val = (e.target as HTMLInputElement).value;
+                filterDateSignal.value = val ? val : null;
+                setScrollTop(0);
+                if (containerRef.current) containerRef.current.scrollTop = 0;
+              }}
+              className="w-full bg-zinc-950 border border-zinc-800 focus:border-indigo-500 text-zinc-300 text-[11px] rounded px-2 py-1 outline-none font-mono cursor-pointer"
+              title="按精确交互日期过滤 (支持大盘下钻回显或手动自选)"
+            />
+          </div>
         </div>
 
         {/* 第四行：Chunk 数量梯队与摩擦力胶囊切换 */}

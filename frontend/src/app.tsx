@@ -9,6 +9,7 @@ import {
 } from 'lucide-preact';
 import { LocationProvider, Route, Router, useLocation } from 'preact-iso';
 import { useEffect, useState } from 'preact/hooks';
+import { TimeSliceScrubber } from './components/TimeSliceScrubber';
 import { ToastContainer } from './components/ToastContainer';
 import { NotFoundRoute } from './routes/NotFoundRoute';
 import { OverviewRoute } from './routes/OverviewRoute';
@@ -17,10 +18,13 @@ import { SettingsRoute } from './routes/SettingsRoute';
 import {
   TIME_RANGE_OPTIONS,
   type TimeRange,
+  allDailyTrendsSignal,
   customEndDateSignal,
   customStartDateSignal,
+  fetchAllDailyTrends,
   fetchMetrics,
   fetchTodayMetrics,
+  metricsSignal,
   setCustomDateRange,
   setTimeRange,
   timeRangeSignal,
@@ -62,6 +66,23 @@ function HeaderBar() {
   const [tempEnd, setTempEnd] = useState(customEnd || '');
 
   const isCustomActive = Boolean(customStart && customEnd);
+
+  // 优先采用全量趋势波形，若未初始化则回退至当前 metrics 的 trends
+  const trendData =
+    allDailyTrendsSignal.value.length > 0
+      ? allDailyTrendsSignal.value
+      : metricsSignal.value?.daily_trends || [];
+
+  const handleOpenCustom = () => {
+    fetchAllDailyTrends();
+    const sorted = [...trendData].sort((a, b) => a.date.localeCompare(b.date));
+    const firstDate = sorted.length > 0 ? sorted[0].date : '';
+    const lastDate = sorted.length > 0 ? sorted[sorted.length - 1].date : '';
+
+    setTempStart(customStart || firstDate);
+    setTempEnd(customEnd || lastDate);
+    setIsCustomOpen(!isCustomOpen);
+  };
 
   const applyCustomRange = () => {
     if (!tempStart || !tempEnd) return;
@@ -141,11 +162,7 @@ function HeaderBar() {
           <div className="relative">
             <button
               type="button"
-              onClick={() => {
-                setTempStart(customStart || '');
-                setTempEnd(customEnd || '');
-                setIsCustomOpen(!isCustomOpen);
-              }}
+              onClick={handleOpenCustom}
               className={`px-2.5 py-1 text-xs rounded-md font-medium transition-all flex items-center gap-1 cursor-pointer ${
                 isCustomActive
                   ? 'bg-indigo-600 text-white shadow-sm'
@@ -160,11 +177,14 @@ function HeaderBar() {
               <ChevronDown size={11} />
             </button>
 
-            {/* 精确日期选择弹层面板 */}
+            {/* 专业时序切片器面板 (支持时序波形圈选 + 双把手拖拽) */}
             {isCustomOpen && (
-              <div className="absolute right-0 top-9 z-50 bg-zinc-950 border border-zinc-700/80 rounded-lg p-3 shadow-2xl space-y-3 w-64 animate-in fade-in zoom-in-95 duration-150">
-                <div className="text-xs font-semibold text-zinc-200 flex items-center justify-between">
-                  <span>精确日历区间 (闭区间)</span>
+              <div className="absolute right-0 top-9 z-50 bg-zinc-950 border border-zinc-700/80 rounded-xl p-4 shadow-2xl space-y-4 w-[340px] sm:w-[480px] md:w-[540px] animate-in fade-in zoom-in-95 duration-150">
+                <div className="text-xs font-semibold text-zinc-200 flex items-center justify-between border-b border-zinc-800/80 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <Calendar size={14} className="text-indigo-400" />
+                    <span>时空波形切片器 (闭区间圈选)</span>
+                  </div>
                   {isCustomActive && (
                     <button
                       type="button"
@@ -172,52 +192,75 @@ function HeaderBar() {
                         handleTimeRangeChange(currentRange);
                         setIsCustomOpen(false);
                       }}
-                      className="text-[10px] text-zinc-400 hover:text-zinc-200 underline cursor-pointer"
+                      className="text-[11px] text-zinc-400 hover:text-indigo-300 underline cursor-pointer"
                     >
-                      清空区间
+                      清空自定义区间
                     </button>
                   )}
                 </div>
 
-                <div className="space-y-2">
+                {/* 交互波形切片器核心组件 */}
+                <TimeSliceScrubber
+                  dailyTrends={trendData}
+                  startDate={tempStart}
+                  endDate={tempEnd}
+                  onRangeChange={(start, end) => {
+                    setTempStart(start);
+                    setTempEnd(end);
+                  }}
+                />
+
+                {/* 辅助微调输入框与操作动作条 */}
+                <div className="grid grid-cols-2 gap-3 pt-1 border-t border-zinc-800/60">
                   <div className="space-y-1">
-                    <label className="text-[10px] text-zinc-400 block">起始日期 (From)</label>
+                    <label htmlFor="temp-start-date" className="text-[10px] text-zinc-400 block font-mono">
+                      起始日期 (Start)
+                    </label>
                     <input
+                      id="temp-start-date"
                       type="date"
                       value={tempStart}
                       onChange={(e) => setTempStart((e.target as HTMLInputElement).value)}
-                      className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 outline-none focus:border-indigo-500 font-mono"
+                      className="w-full bg-zinc-900 border border-zinc-700/80 rounded px-2.5 py-1 text-xs text-zinc-200 outline-none focus:border-indigo-500 font-mono"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[10px] text-zinc-400 block">截止日期 (To)</label>
+                    <label htmlFor="temp-end-date" className="text-[10px] text-zinc-400 block font-mono">
+                      截止日期 (End)
+                    </label>
                     <input
+                      id="temp-end-date"
                       type="date"
                       value={tempEnd}
                       onChange={(e) => setTempEnd((e.target as HTMLInputElement).value)}
-                      className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 outline-none focus:border-indigo-500 font-mono"
+                      className="w-full bg-zinc-900 border border-zinc-700/80 rounded px-2.5 py-1 text-xs text-zinc-200 outline-none focus:border-indigo-500 font-mono"
                     />
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-1 border-t border-zinc-800">
-                  <button
-                    type="button"
-                    onClick={() => setIsCustomOpen(false)}
-                    className="px-2.5 py-1 text-xs text-zinc-400 hover:text-zinc-200 rounded hover:bg-zinc-800 transition cursor-pointer"
-                  >
-                    取消
-                  </button>
-                  <button
-                    type="button"
-                    onClick={applyCustomRange}
-                    disabled={!tempStart || !tempEnd}
-                    className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded transition flex items-center gap-1 cursor-pointer"
-                  >
-                    <Check size={12} />
-                    <span>生效区间</span>
-                  </button>
+                <div className="flex items-center justify-between pt-1 border-t border-zinc-800">
+                  <span className="text-[11px] text-zinc-500 font-mono hidden sm:inline">
+                    提示: 拖动左右两端手柄或中间窗口可快速圈选
+                  </span>
+                  <div className="flex items-center gap-2 ml-auto">
+                    <button
+                      type="button"
+                      onClick={() => setIsCustomOpen(false)}
+                      className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 rounded hover:bg-zinc-800 transition cursor-pointer"
+                    >
+                      取消
+                    </button>
+                    <button
+                      type="button"
+                      onClick={applyCustomRange}
+                      disabled={!tempStart || !tempEnd}
+                      className="px-4 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-md transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                    >
+                      <Check size={13} />
+                      <span>生效区间</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

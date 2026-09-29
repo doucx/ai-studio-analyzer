@@ -3,6 +3,7 @@ import type { SessionItem } from '../types/metrics';
 import { timeRangeSignal } from './metrics';
 
 export type DepthFilter = 'all' | 'single' | 'few' | 'many' | 'branch';
+export type DurationTierFilter = 'all' | 'flash' | 'focus' | 'deep' | 'epic';
 export type SortOption = 'relevance' | 'modified' | 'tokens' | 'chunks';
 export type SearchScope = 'range' | 'all';
 
@@ -19,8 +20,9 @@ export const searchScopeSignal = signal<SearchScope>('range'); // 'range' 在时
 
 // 复合筛选器状态
 export const searchKeywordSignal = signal<string>('');
-export const filterDateSignal = signal<string | null>(null); // 显式下钻日期，不再污染 searchKeyword
+export const filterDateSignal = signal<string | null>(null); // 显式下钻/自选日期
 export const selectedModelSignal = signal<string>('all');
+export const selectedTierSignal = signal<DurationTierFilter>('all'); // 心智时长梯队筛选
 export const depthFilterSignal = signal<DepthFilter>('all');
 export const sortBySignal = signal<SortOption>('modified');
 
@@ -58,6 +60,7 @@ export const isFilterActiveSignal = computed(() => {
     searchKeywordSignal.value.trim() !== '' ||
     filterDateSignal.value !== null ||
     selectedModelSignal.value !== 'all' ||
+    selectedTierSignal.value !== 'all' ||
     depthFilterSignal.value !== 'all' ||
     sortBySignal.value !== 'modified' ||
     searchScopeSignal.value !== 'range'
@@ -79,6 +82,7 @@ export const filteredSessionsSignal = computed(() => {
 
   const model = selectedModelSignal.value;
   const depth = depthFilterSignal.value;
+  const tier = selectedTierSignal.value;
   const sort = sortBySignal.value;
   const isFtsActive = term.length >= 2 && ftsResultsSignal.value !== null;
 
@@ -86,7 +90,7 @@ export const filteredSessionsSignal = computed(() => {
     .filter((s) => {
       const chunks = s.chunk_count ?? s.turn_count;
 
-      // 1. 显式下钻日期过滤
+      // 1. 显式下钻/自选日期过滤
       if (explicitDate) {
         const mDate = s.modified_time ? s.modified_time.slice(0, 10) : '';
         const cDate = s.created_time ? s.created_time.slice(0, 10) : '';
@@ -99,6 +103,11 @@ export const filteredSessionsSignal = computed(() => {
         if (model !== 'all') {
           const rawModel = s.model.replace('models/', '');
           if (rawModel !== model) return false;
+        }
+
+        // 心智时长梯队筛选 (自选或大盘切片下钻)
+        if (tier !== 'all' && !matchDurationTier(s.duration_seconds, tier)) {
+          return false;
         }
 
         // Chunk 梯队胶囊与摩擦力筛选
@@ -181,17 +190,19 @@ let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 export function drillDownToSessions({
   model,
   date,
+  tier,
   depth,
 }: {
   model?: string;
   date?: string;
-  tier?: 'flash' | 'focus' | 'deep' | 'epic';
+  tier?: DurationTierFilter;
   depth?: DepthFilter;
 }) {
   resetFilters();
   if (model) selectedModelSignal.value = model;
   if (depth) depthFilterSignal.value = depth;
   if (date) filterDateSignal.value = date;
+  if (tier) selectedTierSignal.value = tier;
 }
 
 export function executeFtsSearch(keyword: string, range = timeRangeSignal.value) {
@@ -306,6 +317,7 @@ export function resetFilters() {
   ftsResultsSignal.value = null;
   isSearchingFtsSignal.value = false;
   selectedModelSignal.value = 'all';
+  selectedTierSignal.value = 'all';
   depthFilterSignal.value = 'all';
   sortBySignal.value = 'modified';
   searchScopeSignal.value = 'range';

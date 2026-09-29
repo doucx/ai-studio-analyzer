@@ -19,6 +19,22 @@ export const customEndDateSignal = signal<string | null>(null);
 export const metricsSignal = signal<MetricsSummary | null>(null);
 export const metricsLoadingSignal = signal<boolean>(true);
 export const todayMetricsSignal = signal<DailyTimelineItem | null>(null);
+export const allDailyTrendsSignal = signal<DailyTrendItem[]>([]);
+
+export async function fetchAllDailyTrends() {
+  if (allDailyTrendsSignal.value.length > 0) return;
+  try {
+    const res = await fetch('/api/metrics?range=all');
+    if (res.ok) {
+      const data: MetricsSummary = await res.json();
+      if (data.daily_trends) {
+        allDailyTrendsSignal.value = data.daily_trends;
+      }
+    }
+  } catch (err) {
+    console.error('加载全量历史时序趋势失败:', err);
+  }
+}
 
 export async function fetchTodayMetrics() {
   try {
@@ -47,6 +63,9 @@ export async function fetchMetrics(
     const res = await fetch(url);
     const data = await res.json();
     metricsSignal.value = data;
+    if (range === 'all' && !start && !end && data.daily_trends) {
+      allDailyTrendsSignal.value = data.daily_trends;
+    }
   } catch (err) {
     console.error('加载审计指标失败:', err);
   } finally {
