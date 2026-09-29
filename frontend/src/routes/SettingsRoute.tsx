@@ -1,11 +1,9 @@
 import {
   Activity,
   AlertTriangle,
-  ArrowRight,
   Check,
   Cpu,
   Database,
-  ExternalLink,
   Flame,
   Globe,
   HardDrive,

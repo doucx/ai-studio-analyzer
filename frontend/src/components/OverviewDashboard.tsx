@@ -1,5 +1,7 @@
 import { Bot, Clock, LineChart } from 'lucide-preact';
+import { useLocation } from 'preact-iso';
 import { useState } from 'preact/hooks';
+import { drillDownToSessions } from '../state/session';
 import type { MetricsSummary } from '../types/metrics';
 import { DurationTiersChart } from './charts/DurationTiersChart';
 import { ModelDistributionChart } from './charts/ModelDistributionChart';
@@ -11,7 +13,28 @@ interface Props {
 }
 
 export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
+  const { route } = useLocation();
   const [trendMode, setTrendMode] = useState<TrendMode>('tokens');
+
+  const handleModelDrillDown = (model: string) => {
+    drillDownToSessions({ model });
+    route('/sessions');
+  };
+
+  const handleDateDrillDown = (date: string) => {
+    drillDownToSessions({ date });
+    route('/sessions');
+  };
+
+  const handleTierDrillDown = (tier: 'flash' | 'focus' | 'deep' | 'epic') => {
+    drillDownToSessions({ tier });
+    route('/sessions');
+  };
+
+  const handleBranchDrillDown = () => {
+    drillDownToSessions({ depth: 'branch' });
+    route('/sessions');
+  };
 
   return (
     <div className="space-y-6">
@@ -68,10 +91,15 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
           </div>
         </div>
 
-        <div className="bg-zinc-900/70 border border-zinc-800 rounded-lg p-4">
-          <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider flex items-center justify-between">
+        <button
+          type="button"
+          onClick={handleBranchDrillDown}
+          className="w-full text-left bg-zinc-900/70 hover:bg-zinc-900/90 border border-zinc-800 hover:border-amber-500/50 rounded-lg p-4 cursor-pointer transition group outline-none focus:ring-1 focus:ring-amber-500/50"
+          title="点击下钻查看所有分叉与重试会话"
+        >
+          <div className="text-xs font-medium text-zinc-400 group-hover:text-amber-400 uppercase tracking-wider flex items-center justify-between">
             <span>思维摩擦力</span>
-            <span className="text-[10px] text-zinc-500 font-mono">[{activeRangeLabel}]</span>
+            <span className="text-[10px] text-zinc-500 font-mono">[{activeRangeLabel}] ↗</span>
           </div>
           <div className="mt-1.5 text-2xl font-bold text-amber-400 tracking-tight">
             {metrics.friction_stats?.branch_ratio ?? '0%'}
@@ -80,7 +108,7 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
             {metrics.friction_stats?.branch_sessions ?? 0} 场分叉 (
             {metrics.friction_stats?.total_retries ?? 0} 次重试)
           </div>
-        </div>
+        </button>
       </section>
 
       {/* 每日时序趋势综合图 */}
@@ -152,7 +180,11 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
               </span>
             </div>
           </div>
-          <TokenTrendChart data={metrics.daily_trends} mode={trendMode} />
+          <TokenTrendChart
+            data={metrics.daily_trends}
+            mode={trendMode}
+            onSelectDate={handleDateDrillDown}
+          />
         </section>
       )}
 
@@ -166,9 +198,12 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
                 <span>心智时长梯队切片</span>
               </h2>
               <p className="text-xs text-zinc-500 mb-3">
-                单次任务从首轮交互到最后收尾的时间窗口跨度
+                单次任务从首轮交互到最后收尾的时间窗口跨度 (点击切片下钻)
               </p>
-              <DurationTiersChart tiers={metrics.duration_tiers} />
+              <DurationTiersChart
+                tiers={metrics.duration_tiers}
+                onSelectTier={handleTierDrillDown}
+              />
             </section>
           )}
 
@@ -178,8 +213,13 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
                 <Bot size={15} className="text-indigo-400" />
                 <span>模型偏好分布</span>
               </h2>
-              <p className="text-xs text-zinc-500 mb-3">各 Gemini 模型在所选周期内的调用场次</p>
-              <ModelDistributionChart distribution={metrics.model_distribution} />
+              <p className="text-xs text-zinc-500 mb-3">
+                各 Gemini 模型在所选周期内的调用场次 (点击柱体下钻)
+              </p>
+              <ModelDistributionChart
+                distribution={metrics.model_distribution}
+                onSelectModel={handleModelDrillDown}
+              />
             </section>
           )}
         </div>

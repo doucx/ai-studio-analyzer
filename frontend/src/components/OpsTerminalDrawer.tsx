@@ -36,6 +36,7 @@ export function OpsTerminalDrawer() {
     setAutoScroll(isAtBottom);
   };
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 需在日志条目新增时触发吸底随动
   useEffect(() => {
     if (autoScroll && terminalBodyRef.current) {
       terminalBodyRef.current.scrollTop = terminalBodyRef.current.scrollHeight;

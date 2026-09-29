@@ -9,9 +9,10 @@ export type TrendMode = 'tokens' | 'chunks' | 'sessions';
 interface Props {
   data: DailyTrendItem[];
   mode?: TrendMode;
+  onSelectDate?: (date: string) => void;
 }
 
-export function TokenTrendChart({ data, mode = 'tokens' }: Props) {
+export function TokenTrendChart({ data, mode = 'tokens', onSelectDate }: Props) {
   const chartConfig = useMemo<ChartConfiguration<'line' | 'bar'>>(() => {
     const labels = data.map((d) => d.date);
 
@@ -65,6 +66,21 @@ export function TokenTrendChart({ data, mode = 'tokens' }: Props) {
           responsive: true,
           maintainAspectRatio: false,
           interaction: { mode: 'index', intersect: false },
+          onHover: (event, elements) => {
+            if (event.native?.target) {
+              (event.native.target as HTMLElement).style.cursor = elements.length
+                ? 'pointer'
+                : 'default';
+            }
+          },
+          onClick: (_event, elements) => {
+            if (elements.length > 0 && onSelectDate) {
+              const idx = elements[0].index;
+              if (labels[idx]) {
+                onSelectDate(labels[idx]);
+              }
+            }
+          },
           plugins: {
             legend: {
               position: 'top',
@@ -138,6 +154,21 @@ export function TokenTrendChart({ data, mode = 'tokens' }: Props) {
           responsive: true,
           maintainAspectRatio: false,
           interaction: { mode: 'index', intersect: false },
+          onHover: (event, elements) => {
+            if (event.native?.target) {
+              (event.native.target as HTMLElement).style.cursor = elements.length
+                ? 'pointer'
+                : 'default';
+            }
+          },
+          onClick: (_event, elements) => {
+            if (elements.length > 0 && onSelectDate) {
+              const idx = elements[0].index;
+              if (labels[idx]) {
+                onSelectDate(labels[idx]);
+              }
+            }
+          },
           plugins: {
             legend: { display: false },
             tooltip: {
@@ -196,6 +227,21 @@ export function TokenTrendChart({ data, mode = 'tokens' }: Props) {
         responsive: true,
         maintainAspectRatio: false,
         interaction: { mode: 'index', intersect: false },
+        onHover: (event, elements) => {
+          if (event.native?.target) {
+            (event.native.target as HTMLElement).style.cursor = elements.length
+              ? 'pointer'
+              : 'default';
+          }
+        },
+        onClick: (_event, elements) => {
+          if (elements.length > 0 && onSelectDate) {
+            const idx = elements[0].index;
+            if (labels[idx]) {
+              onSelectDate(labels[idx]);
+            }
+          }
+        },
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -228,7 +274,7 @@ export function TokenTrendChart({ data, mode = 'tokens' }: Props) {
         },
       },
     };
-  }, [data, mode]);
+  }, [data, mode, onSelectDate]);
 
   return <BaseChart config={chartConfig} heightClass="h-72" />;
 }

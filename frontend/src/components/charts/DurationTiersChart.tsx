@@ -10,9 +10,10 @@ interface Props {
     deep: [number, string];
     epic: [number, string];
   };
+  onSelectTier?: (tierKey: 'flash' | 'focus' | 'deep' | 'epic') => void;
 }
 
-export function DurationTiersChart({ tiers }: Props) {
+export function DurationTiersChart({ tiers, onSelectTier }: Props) {
   const chartConfig = useMemo<ChartConfiguration<'doughnut'>>(() => {
     const labels = ['即时快问 (<10m)', '聚焦推进 (10~60m)', '深度攻坚 (1~6h)', '跨日长线 (>6h)'];
     const dataValues = [tiers.flash[0], tiers.focus[0], tiers.deep[0], tiers.epic[0]];
@@ -40,6 +41,27 @@ export function DurationTiersChart({ tiers }: Props) {
         responsive: true,
         maintainAspectRatio: false,
         cutout: '70%',
+        onHover: (event, elements) => {
+          if (event.native?.target) {
+            (event.native.target as HTMLElement).style.cursor = elements.length
+              ? 'pointer'
+              : 'default';
+          }
+        },
+        onClick: (_event, elements) => {
+          if (elements.length > 0 && onSelectTier) {
+            const tierKeys: ('flash' | 'focus' | 'deep' | 'epic')[] = [
+              'flash',
+              'focus',
+              'deep',
+              'epic',
+            ];
+            const idx = elements[0].index;
+            if (tierKeys[idx]) {
+              onSelectTier(tierKeys[idx]);
+            }
+          }
+        },
         plugins: {
           legend: {
             position: 'bottom',
@@ -58,14 +80,14 @@ export function DurationTiersChart({ tiers }: Props) {
                 const total = dataValues.reduce((a, b) => a + b, 0);
                 const val = Number(context.raw) || 0;
                 const pct = total > 0 ? ((val / total) * 100).toFixed(1) : '0';
-                return ` ${context.label}: ${val} 场 (${pct}%)`;
+                return ` ${context.label}: ${val} 场 (${pct}%) · 点击下钻`;
               },
             },
           },
         },
       },
     };
-  }, [tiers]);
+  }, [tiers, onSelectTier]);
 
   return <BaseChart config={chartConfig} heightClass="h-64" />;
 }

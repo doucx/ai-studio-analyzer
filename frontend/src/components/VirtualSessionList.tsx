@@ -112,7 +112,7 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
         <div className="relative">
           <input
             type="text"
-            placeholder="全文检索，或输入 chunk:2、c:>5 按块搜索..."
+            placeholder="全文检索，支持 date:2025-01-01、tier:deep、c:>5..."
             value={currentKeyword}
             onInput={(e) => {
               handleSearchInput((e.target as HTMLInputElement).value);

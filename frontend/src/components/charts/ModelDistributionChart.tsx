@@ -5,9 +5,10 @@ import { CHART_PALETTE, defaultDarkScales, defaultDarkTooltipOptions } from './b
 
 interface Props {
   distribution: Record<string, number>;
+  onSelectModel?: (model: string) => void;
 }
 
-export function ModelDistributionChart({ distribution }: Props) {
+export function ModelDistributionChart({ distribution, onSelectModel }: Props) {
   const chartConfig = useMemo<ChartConfiguration<'bar'>>(() => {
     const entries = Object.entries(distribution).sort((a, b) => b[1] - a[1]);
     const labels = entries.map(([m]) => m.replace('models/', ''));
@@ -32,13 +33,28 @@ export function ModelDistributionChart({ distribution }: Props) {
         indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
+        onHover: (event, elements) => {
+          if (event.native?.target) {
+            (event.native.target as HTMLElement).style.cursor = elements.length
+              ? 'pointer'
+              : 'default';
+          }
+        },
+        onClick: (_event, elements) => {
+          if (elements.length > 0 && onSelectModel) {
+            const idx = elements[0].index;
+            if (labels[idx]) {
+              onSelectModel(labels[idx]);
+            }
+          }
+        },
         plugins: {
           legend: { display: false },
           tooltip: {
             ...defaultDarkTooltipOptions,
             callbacks: {
               label(context) {
-                return ` 会话数: ${context.raw} 场`;
+                return ` 会话数: ${context.raw} 场 (点击下钻查看)`;
               },
             },
           },
@@ -61,7 +77,7 @@ export function ModelDistributionChart({ distribution }: Props) {
         },
       },
     };
-  }, [distribution]);
+  }, [distribution, onSelectModel]);
 
   return <BaseChart config={chartConfig} heightClass="h-64" />;
 }
