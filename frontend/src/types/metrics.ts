@@ -69,6 +69,24 @@ export interface MetricsSummary {
   message?: string;
 }
 
+export interface SearchLineItem {
+  line_no: number;
+  is_hit: boolean;
+  text: string;
+}
+
+export interface SearchSiblingPreview {
+  role: 'user' | 'model' | 'thinking' | string;
+  text: string;
+}
+
+export interface SearchMatchItem {
+  turn_index: number;
+  role: 'user' | 'model' | 'thinking' | string;
+  lines: SearchLineItem[];
+  sibling?: SearchSiblingPreview | null;
+}
+
 export interface SessionItem {
   file_id: string;
   name: string;
@@ -86,6 +104,7 @@ export interface SessionItem {
   modified_time: string | null;
   created_time: string | null;
   snippet?: string;
+  search_matches?: SearchMatchItem[];
 }
 
 export interface ConversationTurnItem {

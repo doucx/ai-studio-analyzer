@@ -51,8 +51,12 @@ export function SessionsRoute() {
     };
   }, [selectedId, sessions]);
 
-  const handleSelectSession = (s: SessionItem) => {
-    route(`/sessions/${s.file_id}`);
+  const handleSelectSession = (s: SessionItem, turnIndex?: number) => {
+    if (turnIndex) {
+      route(`/sessions/${s.file_id}#turn-${turnIndex}`);
+    } else {
+      route(`/sessions/${s.file_id}`);
+    }
   };
 
   const handleCloseDetail = () => {

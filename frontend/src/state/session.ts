@@ -13,7 +13,7 @@ export const sessionsLoadingSignal = signal<boolean>(true);
 export const sidebarCollapsedSignal = signal<boolean>(false);
 
 // 视图与检索增强状态
-export const isExpandedViewSignal = signal<boolean>(false); // 全屏/灯箱大画幅会话检索长廊
+export const isExpandedViewSignal = signal<boolean>(true); // 全屏/灯箱大画幅会话检索长廊 (常态开启)
 export const isMultiLineSearchSignal = signal<boolean>(false); // 多行搜索编辑器开关
 export const searchScopeSignal = signal<SearchScope>('range'); // 'range' 在时间区间内筛选, 'all' 全库穿透
 

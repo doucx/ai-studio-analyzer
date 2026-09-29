@@ -3,9 +3,6 @@ import {
   Calendar,
   Globe,
   Loader2,
-  Maximize2,
-  Minimize2,
-  PanelLeftClose,
   Sparkles,
 } from 'lucide-preact';
 import { useRef, useState } from 'preact/hooks';
@@ -28,19 +25,19 @@ import {
   selectedModelSignal,
   sessionsSignal,
   sortBySignal,
-  toggleExpandedView,
-  toggleSidebar,
 } from '../state/session';
 import type { SessionItem } from '../types/metrics';
 
 interface Props {
   sessions?: SessionItem[];
   selectedId: string | null;
-  onSelect: (session: SessionItem) => void;
+  onSelect: (session: SessionItem, turnIndex?: number) => void;
 }
 
-const ITEM_HEIGHT = 86; // 每项固定高度 86px
+const ITEM_HEIGHT = 86; // 常规列表项高度 86px
 const EXPANDED_ITEM_HEIGHT = 112; // 展开灯箱模式下高度 112px
+const FTS_ITEM_HEIGHT = 158; // 搜索模式下 rg 风格上下文项高度
+const FTS_EXPANDED_ITEM_HEIGHT = 178; // 展开灯箱模式下 rg 上下文项高度
 const BUFFER = 5; // 视口外缓冲项数
 
 const DEPTH_OPTIONS: { key: DepthFilter; label: string; tip: string }[] = [
@@ -70,7 +67,10 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
   const currentDepth = depthFilterSignal.value;
   const currentSort = sortBySignal.value;
 
-  const rowHeight = isExpanded ? EXPANDED_ITEM_HEIGHT : ITEM_HEIGHT;
+  const isFtsActive = currentKeyword.trim().length >= 2 && ftsResultsSignal.value !== null;
+  const baseHeight = isFtsActive ? FTS_ITEM_HEIGHT : ITEM_HEIGHT;
+  const expandedHeight = isFtsActive ? FTS_EXPANDED_ITEM_HEIGHT : EXPANDED_ITEM_HEIGHT;
+  const rowHeight = isExpanded ? expandedHeight : baseHeight;
   const totalHeight = filteredSessions.length * rowHeight;
   const containerHeight = containerRef.current?.clientHeight || 650;
 
@@ -164,31 +164,6 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
               <option value="tokens">Token 能耗</option>
               <option value="chunks">Chunk 数量</option>
             </select>
-
-            {/* 灯箱模式切换按钮 */}
-            <button
-              type="button"
-              onClick={toggleExpandedView}
-              className={`p-1 rounded transition border cursor-pointer ${
-                isExpanded
-                  ? 'bg-indigo-600 text-white border-indigo-500'
-                  : 'text-zinc-400 hover:text-zinc-200 bg-zinc-800/80 hover:bg-zinc-700 border-zinc-700/60'
-              }`}
-              title={isExpanded ? '收拢为侧栏视口' : '展开为全屏大画幅会话灯箱'}
-            >
-              {isExpanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-            </button>
-
-            {!isExpanded && (
-              <button
-                type="button"
-                onClick={toggleSidebar}
-                className="p-1 text-zinc-400 hover:text-zinc-200 bg-zinc-800/80 hover:bg-zinc-700 border border-zinc-700/60 rounded transition cursor-pointer"
-                title="收起会话历史列表"
-              >
-                <PanelLeftClose size={13} />
-              </button>
-            )}
           </div>
         </div>
 
@@ -336,11 +311,12 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
             >
               {visibleItems.map((s) => {
                 const isSelected = selectedId === s.file_id;
+                const matchTurnIndex = s.search_matches?.[0]?.turn_index;
                 return (
                   <button
                     type="button"
                     key={s.file_id}
-                    onClick={() => onSelect(s)}
+                    onClick={() => onSelect(s, matchTurnIndex)}
                     style={{ height: `${rowHeight}px` }}
                     className={`w-full text-left p-3 cursor-pointer transition flex flex-col justify-between border-b border-zinc-800/30 outline-none focus:bg-zinc-800/60 ${
                       isSelected
@@ -365,7 +341,56 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
                       </span>
                     </div>
 
-                    {s.snippet ? (
+                    {s.search_matches && s.search_matches.length > 0 ? (
+                      <div className="w-full my-1 rounded bg-black/50 border border-zinc-800 font-mono text-[11px] overflow-hidden">
+                        {/* 命中 Chunk 元数据与伴随回复 */}
+                        <div className="px-2 py-0.5 bg-zinc-950/80 border-b border-zinc-800/80 flex items-center justify-between text-[10px]">
+                          <span className="flex items-center gap-1 font-semibold">
+                            <span
+                              className={
+                                s.search_matches[0].role === 'user'
+                                  ? 'text-indigo-400'
+                                  : s.search_matches[0].role === 'thinking'
+                                    ? 'text-emerald-400'
+                                    : 'text-sky-400'
+                              }
+                            >
+                              #{s.search_matches[0].turn_index} {s.search_matches[0].role.toUpperCase()}
+                            </span>
+                            <span className="text-zinc-500 font-normal">匹配片段</span>
+                          </span>
+                          {s.search_matches[0].sibling && (
+                            <span
+                              className="text-zinc-500 truncate max-w-[190px] select-none text-[9.5px]"
+                              title={s.search_matches[0].sibling.text}
+                            >
+                              ↳ {s.search_matches[0].sibling.role === 'model' ? '回复' : '提问'}: {s.search_matches[0].sibling.text}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* 类 rg -C 行号与上下文流 */}
+                        <div className="py-0.5 divide-y divide-zinc-900/50">
+                          {s.search_matches[0].lines.map((l) => (
+                            <div
+                              key={l.line_no}
+                              className={`flex items-start px-2 py-0.2 leading-tight ${
+                                l.is_hit ? 'bg-indigo-950/30 text-zinc-100' : 'text-zinc-500'
+                              }`}
+                            >
+                              <span className="w-6 shrink-0 text-right pr-2 select-none text-[9.5px] font-mono text-zinc-600">
+                                {l.line_no}{l.is_hit ? ':' : '-'}
+                              </span>
+                              <div
+                                className="flex-1 truncate"
+                                // biome-ignore lint/security/noDangerouslySetInnerHtml: 呈现行级 FTS 高亮标记 (<mark>)
+                                dangerouslySetInnerHTML={{ __html: l.text }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : s.snippet ? (
                       <p
                         className={`text-[11px] text-zinc-200 font-mono w-full bg-black/30 px-2 py-1 rounded border border-zinc-800/60 leading-relaxed overflow-hidden ${
                           isExpanded ? 'line-clamp-2' : 'truncate'

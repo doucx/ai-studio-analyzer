@@ -328,6 +328,101 @@ def list_sessions(
     ]
 
 
+def _extract_rg_matches(
+    raw_data: dict,
+    query: str,
+    context_lines: int = 2,
+    max_matches: int = 1,
+) -> list[dict]:
+    """从原始会话中提取包含搜索词的 turn 及其类似 rg -C 上下文"""
+    if not raw_data or not query:
+        return []
+
+    chunks = raw_data.get("chunkedPrompt", {}).get("chunks", [])
+    if not chunks and "contents" in raw_data:
+        chunks = []
+        for c in raw_data.get("contents", []):
+            parts = c.get("parts", [])
+            text = "\n".join(p.get("text", "") for p in parts if "text" in p)
+            chunks.append({"role": c.get("role", "user"), "text": text})
+
+    terms = [term for term in query.strip().split() if term]
+    if not terms:
+        return []
+
+    matches = []
+    for idx, c in enumerate(chunks):
+        role = c.get("role", "user")
+        is_thought = bool(c.get("isThought", False))
+        text = c.get("text", "") or ""
+
+        text_lower = text.lower()
+        matched_term = next((t for t in terms if t.lower() in text_lower), None)
+        if not matched_term:
+            continue
+
+        lines = text.splitlines()
+        hit_indices = [
+            i for i, line in enumerate(lines) if any(t.lower() in line.lower() for t in terms)
+        ]
+        if not hit_indices:
+            continue
+
+        hit_idx = hit_indices[0]
+        start_line = max(0, hit_idx - context_lines)
+        end_line = min(len(lines), hit_idx + context_lines + 1)
+
+        line_items = []
+        for l_num in range(start_line, end_line):
+            is_hit = l_num in hit_indices
+            raw_line = lines[l_num]
+            display_line = raw_line
+            for t in terms:
+                pos = display_line.lower().find(t.lower())
+                if pos >= 0:
+                    matched_slice = display_line[pos : pos + len(t)]
+                    display_line = (
+                        display_line[:pos]
+                        + f'<mark class="bg-indigo-500/40 text-indigo-200 font-semibold px-0.5 rounded">{matched_slice}</mark>'
+                        + display_line[pos + len(t) :]
+                    )
+
+            line_items.append({
+                "line_no": l_num + 1,
+                "is_hit": is_hit,
+                "text": display_line,
+            })
+
+        sibling_preview = None
+        if role == "user" and idx + 1 < len(chunks):
+            next_t = chunks[idx + 1].get("text", "") or ""
+            if next_t.strip():
+                sibling_preview = {
+                    "role": chunks[idx + 1].get("role", "model"),
+                    "text": next_t.strip().replace("\n", " ")[:90],
+                }
+        elif role == "model" and idx > 0:
+            prev_t = chunks[idx - 1].get("text", "") or ""
+            if prev_t.strip():
+                sibling_preview = {
+                    "role": chunks[idx - 1].get("role", "user"),
+                    "text": prev_t.strip().replace("\n", " ")[:90],
+                }
+
+        role_display = "thinking" if is_thought else role
+        matches.append({
+            "turn_index": idx + 1,
+            "role": role_display,
+            "lines": line_items,
+            "sibling": sibling_preview,
+        })
+
+        if len(matches) >= max_matches:
+            break
+
+    return matches
+
+
 @router.get("/sessions/search")
 def search_sessions(
     q: str,
@@ -348,7 +443,7 @@ def search_sessions(
     else:
         start_iso, end_iso, start_d, end_d = _resolve_time_bounds(range, start, end)
 
-    return cache.search_fts(
+    results = cache.search_fts(
         query=q,
         limit=limit,
         offset=offset,
@@ -359,6 +454,19 @@ def search_sessions(
         model=model,
         depth=depth,
     )
+
+    if q and results:
+        for item in results:
+            fid = item.get("file_id")
+            raw_data = cache.get(fid) if fid else None
+            if raw_data:
+                item["search_matches"] = _extract_rg_matches(
+                    raw_data, q, context_lines=2, max_matches=1
+                )
+            else:
+                item["search_matches"] = []
+
+    return results
 
 
 @router.get("/sessions/{file_id}")
