@@ -27,6 +27,7 @@ import {
   selectedTierSignal,
   sessionsSignal,
   sortBySignal,
+  toggleSearchScope,
 } from '../state/session';
 import type { SessionItem } from '../types/metrics';
 
@@ -115,12 +116,7 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
             {/* 范围/全库穿透切换 */}
             <button
               type="button"
-              onClick={() => {
-                searchScopeSignal.value = searchScope === 'range' ? 'all' : 'range';
-                if (currentKeyword.trim().length >= 2) {
-                  handleSearchInput(currentKeyword);
-                }
-              }}
+              onClick={toggleSearchScope}
               className={`p-1 rounded text-xs transition border cursor-pointer flex items-center gap-1 ${
                 searchScope === 'all'
                   ? 'bg-amber-950/80 text-amber-300 border-amber-800'
@@ -128,8 +124,8 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
               }`}
               title={
                 searchScope === 'all'
-                  ? '当前处于【全库穿透检索】模式（忽略上方时间切片）'
-                  : '当前处于【时间区间内初筛】模式，点击可穿透检索全库'
+                  ? '当前处于【全库穿透】模式：忽略全局时间范围限制，模型、时长梯队及日期筛选均覆盖全库所有历史会话'
+                  : '当前处于【区间初筛】模式：按顶栏时间切片范围展示，点击可穿透检索全库历史'
               }
             >
               <Globe size={12} className={searchScope === 'all' ? 'text-amber-400' : ''} />

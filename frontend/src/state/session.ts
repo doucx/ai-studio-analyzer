@@ -90,24 +90,24 @@ export const filteredSessionsSignal = computed(() => {
     .filter((s) => {
       const chunks = s.chunk_count ?? s.turn_count;
 
-      // 1. 显式下钻/自选日期过滤
+      // 1. 显式下钻/自选日期过滤 (无论是否 FTS 均生效)
       if (explicitDate) {
         const mDate = s.modified_time ? s.modified_time.slice(0, 10) : '';
         const cDate = s.created_time ? s.created_time.slice(0, 10) : '';
         if (mDate !== explicitDate && cDate !== explicitDate) return false;
       }
 
-      // 如果来自 FTS 结果，后端已下推 model 与 depth 过滤，无需在此再次截断
+      // 2. 心智时长梯队筛选 (无论是否 FTS 均精确校验)
+      if (tier !== 'all' && !matchDurationTier(s.duration_seconds, tier)) {
+        return false;
+      }
+
+      // 3. 模型、深度与短词模糊匹配 (如果来自 FTS 结果，后端已下推 model 与 depth 过滤)
       if (!isFtsActive) {
         // 模型筛选
         if (model !== 'all') {
           const rawModel = s.model.replace('models/', '');
           if (rawModel !== model) return false;
-        }
-
-        // 心智时长梯队筛选 (自选或大盘切片下钻)
-        if (tier !== 'all' && !matchDurationTier(s.duration_seconds, tier)) {
-          return false;
         }
 
         // Chunk 梯队胶囊与摩擦力筛选
@@ -152,14 +152,19 @@ export async function fetchSessions(
   start = customStartDateSignal.value,
   end = customEndDateSignal.value,
 ) {
-  refreshFtsSearch(range);
+  const isAllScope = searchScopeSignal.value === 'all';
+  const effectiveRange = isAllScope ? 'all' : range;
+  const effectiveStart = isAllScope ? null : start;
+  const effectiveEnd = isAllScope ? null : end;
+
+  refreshFtsSearch(effectiveRange);
   if (sessionsSignal.value.length === 0) {
     sessionsLoadingSignal.value = true;
   }
   try {
-    let url = `/api/sessions?range=${range}`;
-    if (start) url += `&start=${encodeURIComponent(start)}`;
-    if (end) url += `&end=${encodeURIComponent(end)}`;
+    let url = `/api/sessions?range=${effectiveRange}`;
+    if (effectiveStart) url += `&start=${encodeURIComponent(effectiveStart)}`;
+    if (effectiveEnd) url += `&end=${encodeURIComponent(effectiveEnd)}`;
     const res = await fetch(url);
     if (res.ok) {
       const data = await res.json();
@@ -170,6 +175,11 @@ export async function fetchSessions(
   } finally {
     sessionsLoadingSignal.value = false;
   }
+}
+
+export function toggleSearchScope() {
+  searchScopeSignal.value = searchScopeSignal.value === 'range' ? 'all' : 'range';
+  fetchSessions();
 }
 
 export function selectSession(session: SessionItem | null) {
