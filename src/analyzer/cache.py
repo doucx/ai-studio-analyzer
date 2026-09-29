@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import sqlite3
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
@@ -19,7 +20,28 @@ class SQLiteCache:
         self.cache_dir = cache_dir
         self.db_path = os.path.join(cache_dir, db_name)
         os.makedirs(cache_dir, exist_ok=True)
+        self._maintenance_lock = threading.Lock()
+        self._maintenance_owner: int | None = None
         self._init_db()
+
+    def enter_maintenance_mode(self):
+        """进入独占维护模式，仅当前线程允许执行写操作"""
+        with self._maintenance_lock:
+            self._maintenance_owner = threading.get_ident()
+
+    def exit_maintenance_mode(self):
+        """退出独占维护模式"""
+        with self._maintenance_lock:
+            self._maintenance_owner = None
+
+    def _check_maintenance_write(self):
+        """写入操作前置安全检查：处于维护模式且非持有者线程时阻断写入"""
+        with self._maintenance_lock:
+            if (
+                self._maintenance_owner is not None
+                and self._maintenance_owner != threading.get_ident()
+            ):
+                raise RuntimeError("数据库当前处于独占维护重整模式，已阻断并发写操作。")
 
     @contextmanager
     def _get_connection(self):
@@ -126,6 +148,7 @@ class SQLiteCache:
 
     def put(self, file_id: str, modified_time: str, data: dict[str, Any]):
         """写入或更新单个文件缓存"""
+        self._check_maintenance_write()
         payload_str = json.dumps(data, ensure_ascii=False)
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -195,6 +218,7 @@ class SQLiteCache:
 
     def upsert_session_index(self, s: Any):
         """将单个会话摘要物化写入索引表"""
+        self._check_maintenance_write()
         st = s.start_time or s.modified_time
         date_str = st.strftime("%Y-%m-%d") if st else None
         first_prompt = getattr(s, "first_effective_prompt", None) or (
@@ -367,6 +391,7 @@ class SQLiteCache:
         2. 单轮消息截断限制，防止单轮巨型日志/代码击穿分词器；
         3. 单会话总字符硬上限截断 (默认 40,000 字符，取首尾保留关键上下文)，阻断 Trigram 倒排膨胀。
         """
+        self._check_maintenance_write()
         turn_texts = []
         for idx, t in enumerate(getattr(s, "turns", []), start=1):
             p_type = getattr(t, "payload_type", "text")

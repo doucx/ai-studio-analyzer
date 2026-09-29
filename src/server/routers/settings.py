@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 
 from src.analyzer.config import load_config, save_config, test_proxy_connection
 from src.analyzer.drive import DriveClient
+from src.analyzer.ops import ops_runner
 from src.analyzer.sync import fetch_remote_files
 from src.server.routers.common import cache
 
@@ -33,6 +34,10 @@ def notify_sync_event(event_type: str, payload: dict):
 
 
 def run_sync_task(limit: int | None, all_files: bool):
+    if ops_runner.is_busy():
+        logger.info("检测到当前有受控运维任务正在执行，放弃本次后台增量同步。")
+        return
+
     sync_status["is_syncing"] = True
     sync_status["error"] = None
 
@@ -102,6 +107,12 @@ def trigger_sync(
     background_tasks: BackgroundTasks, limit: int = 50, all_files: bool = False
 ):
     """异步触发云端增量同步任务"""
+    if ops_runner.is_busy():
+        return {
+            "status": "busy",
+            "message": f"系统正在执行核心运维任务 [{ops_runner.current_task or '系统重整'}]，已自动挂起日常增量同步",
+        }
+
     if sync_status["is_syncing"]:
         return {"status": "busy", "message": "增量同步正在进行中，请勿重复触发"}
 

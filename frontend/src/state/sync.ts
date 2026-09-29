@@ -4,6 +4,7 @@ export const syncInProgressSignal = signal<boolean>(false);
 export const syncProgressTextSignal = signal<string>('');
 export const syncVersionSignal = signal<number>(0);
 
+import { isJobRunningSignal } from './ops';
 import { addToast } from './toast';
 
 export function isOnline(): boolean {
@@ -11,6 +12,10 @@ export function isOnline(): boolean {
 }
 
 export async function triggerSync(limit = 50) {
+  if (isJobRunningSignal.value) {
+    // 运维任务执行期间静默跳过自动增量同步
+    return;
+  }
   if (!isOnline()) {
     // 离线模式：静默跳过，避免弹出红色打扰 Toast
     return;

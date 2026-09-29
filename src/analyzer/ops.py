@@ -182,6 +182,7 @@ def run_reindex_task(
     emit_log(job_id, f"🚀 开始执行索引与全文检索引擎重建 (批次规模: {batch_size})")
 
     try:
+        cache.enter_maintenance_mode()
         # 1. 获取所有待处理的 file_id
         emit_log(job_id, "正在扫描 file_cache 表元数据...")
         with cache._get_connection() as conn:
@@ -335,6 +336,7 @@ def run_reindex_task(
         emit_log(job_id, f"❌ 重建异常失败: {exc}", level="error")
         ops_runner.broadcast(job_id, "error", {"error": str(exc)})
     finally:
+        cache.exit_maintenance_mode()
         ops_runner.release_job()
 
 
