@@ -33,6 +33,7 @@ import {
   runSchemaDiagnostic,
   schemaDiagnosticsSignal,
   schemaLoadingSignal,
+  terminalOpenSignal,
   triggerOpsCheckpoint,
   triggerOpsReindex,
   triggerOpsSync,
@@ -88,9 +89,15 @@ export function SettingsRoute() {
   const isSchemaLoading = schemaLoadingSignal.value;
   const outlierSession = outlierDrawerSessionSignal.value;
   const vacuumResult = vacuumResultSignal.value;
+  const isTerminalOpen = terminalOpenSignal.value;
 
   return (
-    <div className="max-w-6xl mx-auto w-full p-4 md:p-6 pb-24 space-y-6 relative">
+    <div
+      className={`w-full p-4 md:p-6 pb-24 transition-all duration-300 relative ${
+        isTerminalOpen ? 'lg:pr-[430px] xl:pr-[470px]' : ''
+      }`}
+    >
+      <div className="max-w-6xl mx-auto space-y-6">
       {/* 头部标题与保存指示条 */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
         <div>
@@ -1050,6 +1057,8 @@ export function SettingsRoute() {
           </div>
         </div>
       )}
+
+      </div>
 
       {/* 常驻运维终端抽屉 */}
       <OpsTerminalDrawer />
