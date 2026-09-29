@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 import requests
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ def _resolve_time_bounds(
         )
         return None, None, start_d, today_local
     if range_key == "this_year":
-        this_year_start = f"{datetime.now().year}-01-01"
+        this_year_start = f"{datetime.now().astimezone().year}-01-01"
         return None, None, this_year_start, today_local
 
     return None, None, None, None
@@ -334,7 +335,7 @@ def _extract_rg_matches(
     context_lines: int = 2,
     max_matches: int = 1,
 ) -> list[dict]:
-    """从原始会话中提取包含搜索词的 turn 及其类似 rg -C 上下文"""
+    """从原始会话中提取包含多行或多关键词匹配项的 turn 及其类似 rg -C 上下文"""
     if not raw_data or not query:
         return []
 
@@ -346,7 +347,15 @@ def _extract_rg_matches(
             text = "\n".join(p.get("text", "") for p in parts if "text" in p)
             chunks.append({"role": c.get("role", "user"), "text": text})
 
-    terms = [term for term in query.strip().split() if term]
+    # 多行时按有效行提取；单行时按分词提取；按长度降序排序避免子串截断
+    query_lines = [l.strip() for l in query.strip().splitlines() if len(l.strip()) >= 2]
+    if len(query_lines) > 1:
+        terms = query_lines
+    else:
+        terms = [t.strip() for t in query.strip().split() if len(t.strip()) >= 2]
+
+    # 按长度降序排布，避免较短子串优先覆盖较长短语
+    terms = sorted(set(terms), key=len, reverse=True)
     if not terms:
         return []
 
@@ -363,7 +372,9 @@ def _extract_rg_matches(
 
         lines = text.splitlines()
         hit_indices = [
-            i for i, line in enumerate(lines) if any(t.lower() in line.lower() for t in terms)
+            i
+            for i, line in enumerate(lines)
+            if any(t.lower() in line.lower() for t in terms)
         ]
         if not hit_indices:
             continue
@@ -387,11 +398,13 @@ def _extract_rg_matches(
                         + display_line[pos + len(t) :]
                     )
 
-            line_items.append({
-                "line_no": l_num + 1,
-                "is_hit": is_hit,
-                "text": display_line,
-            })
+            line_items.append(
+                {
+                    "line_no": l_num + 1,
+                    "is_hit": is_hit,
+                    "text": display_line,
+                }
+            )
 
         sibling_preview = None
         if role == "user" and idx + 1 < len(chunks):
@@ -410,12 +423,14 @@ def _extract_rg_matches(
                 }
 
         role_display = "thinking" if is_thought else role
-        matches.append({
-            "turn_index": idx + 1,
-            "role": role_display,
-            "lines": line_items,
-            "sibling": sibling_preview,
-        })
+        matches.append(
+            {
+                "turn_index": idx + 1,
+                "role": role_display,
+                "lines": line_items,
+                "sibling": sibling_preview,
+            }
+        )
 
         if len(matches) >= max_matches:
             break
@@ -423,8 +438,19 @@ def _extract_rg_matches(
     return matches
 
 
-@router.get("/sessions/search")
-def search_sessions(
+class SearchRequest(BaseModel):
+    q: str
+    range: str = "all"
+    start: str | None = None
+    end: str | None = None
+    model: str | None = None
+    depth: str | None = None
+    scope: str = "range"
+    limit: int = 50
+    offset: int = 0
+
+
+def _execute_session_search(
     q: str,
     range: str = "all",
     start: str | None = None,
@@ -435,9 +461,6 @@ def search_sessions(
     limit: int = 50,
     offset: int = 0,
 ):
-    """
-    基于 SQLite FTS5 全文索引的高性能深度检索接口，支持范围筛选与全库穿透 (scope=all)。
-    """
     if scope == "all":
         start_iso, end_iso, start_d, end_d = None, None, None, None
     else:
@@ -467,6 +490,48 @@ def search_sessions(
                 item["search_matches"] = []
 
     return results
+
+
+@router.get("/sessions/search")
+def search_sessions_get(
+    q: str,
+    range: str = "all",
+    start: str | None = None,
+    end: str | None = None,
+    model: str | None = None,
+    depth: str | None = None,
+    scope: str = "range",
+    limit: int = 50,
+    offset: int = 0,
+):
+    """基于 SQLite FTS5 全文索引的高性能深度检索接口 (GET 方式)"""
+    return _execute_session_search(
+        q=q,
+        range=range,
+        start=start,
+        end=end,
+        model=model,
+        depth=depth,
+        scope=scope,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.post("/sessions/search")
+def search_sessions_post(req: SearchRequest):
+    """基于 SQLite FTS5 全文索引的高性能深度检索接口 (POST 方式，杜绝 URL 超长 431)"""
+    return _execute_session_search(
+        q=req.q,
+        range=req.range,
+        start=req.start,
+        end=req.end,
+        model=req.model,
+        depth=req.depth,
+        scope=req.scope,
+        limit=req.limit,
+        offset=req.offset,
+    )
 
 
 @router.get("/sessions/{file_id}")

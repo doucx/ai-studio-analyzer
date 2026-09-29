@@ -71,9 +71,7 @@ export function OpsTerminalDrawer() {
       >
         <Terminal size={14} className="text-indigo-400 shrink-0" />
         <span className="font-semibold">{isOpen ? '收起终端' : '运维终端'}</span>
-        {isRunning && (
-          <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping shrink-0" />
-        )}
+        {isRunning && <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping shrink-0" />}
         {isOpen ? (
           <ChevronRight size={13} className="text-zinc-400 shrink-0" />
         ) : (

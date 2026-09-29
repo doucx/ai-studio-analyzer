@@ -213,7 +213,10 @@ function HeaderBar() {
                 {/* 辅助微调输入框与操作动作条 */}
                 <div className="grid grid-cols-2 gap-3 pt-1 border-t border-zinc-800/60">
                   <div className="space-y-1">
-                    <label htmlFor="temp-start-date" className="text-[10px] text-zinc-400 block font-mono">
+                    <label
+                      htmlFor="temp-start-date"
+                      className="text-[10px] text-zinc-400 block font-mono"
+                    >
                       起始日期 (Start)
                     </label>
                     <input
@@ -226,7 +229,10 @@ function HeaderBar() {
                   </div>
 
                   <div className="space-y-1">
-                    <label htmlFor="temp-end-date" className="text-[10px] text-zinc-400 block font-mono">
+                    <label
+                      htmlFor="temp-end-date"
+                      className="text-[10px] text-zinc-400 block font-mono"
+                    >
                       截止日期 (End)
                     </label>
                     <input

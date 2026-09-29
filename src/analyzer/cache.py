@@ -421,6 +421,83 @@ class SQLiteCache:
             )
             conn.commit()
 
+    @staticmethod
+    def _clean_code_token(tok: str) -> str:
+        """剥离代码单词两端的标点符号，提取纯净标识符与子串"""
+        # 剥离常见的包裹符号与结尾分隔符: ; , : ' " ` ( ) [ ] { }
+        stripped = tok.strip(" \t\r\n;,:'\"`()[]{}")
+        return stripped.replace('"', '""')
+
+    @classmethod
+    def _build_fts_query_candidates(cls, query: str) -> list[str]:
+        """
+        将单行或多行查询安全编译为渐进式的 FTS5 表达式候选列表：
+        支持代码标识符解耦清洗、精确短语、关键行 AND 共现与 OR 模糊召回。
+        """
+        if not query or not query.strip():
+            return []
+
+        raw_lines = [
+            line.strip() for line in query.strip().splitlines() if line.strip()
+        ]
+        if not raw_lines:
+            return []
+
+        # 分支 1：多行代码块 / 长篇 Prompt / 异常调用栈
+        if len(raw_lines) > 1:
+            valid_subphrases = []
+            for line in raw_lines:
+                cleaned = line.strip()
+                # 过滤纯框线符号噪点行 (如连续横线、全制表符)
+                if len(set(cleaned)) <= 2 and len(cleaned) > 5:
+                    continue
+                if len(cleaned) >= 2:
+                    escaped = cleaned.replace('"', '""')
+                    valid_subphrases.append(f'"{escaped}"')
+
+            if not valid_subphrases:
+                first_escaped = raw_lines[0].replace('"', '""')
+                valid_subphrases = [f'"{first_escaped}"']
+
+            and_expr = " AND ".join(valid_subphrases[:6])
+            or_expr = " OR ".join(valid_subphrases[:8])
+
+            candidates = [and_expr]
+            if or_expr != and_expr:
+                candidates.append(or_expr)
+            return candidates
+
+        # 分支 2：单行查询 (重点：对代码和 import/表达式进行标点解耦)
+        single = raw_lines[0]
+        escaped_single = single.replace('"', '""')
+
+        # 提取剥离了标点的纯净标识符 tokens
+        raw_words = single.split()
+        clean_tokens = []
+        for w in raw_words:
+            c = cls._clean_code_token(w)
+            if len(c) >= 2:
+                clean_tokens.append(c)
+
+        candidates = []
+        # 1. 优先尝试整行精确短语
+        candidates.append(f'"{escaped_single}"')
+
+        # 2. 如果存在多个词项，构造解耦后的纯标识符 AND 表达式 (攻克 import 语句与带标点代码)
+        if len(clean_tokens) > 1:
+            and_expr = " AND ".join(f'"{t}"' for t in clean_tokens[:8])
+            if and_expr not in candidates:
+                candidates.append(and_expr)
+
+            # 3. 构造 OR 模糊降级表达式
+            or_expr = " OR ".join(f'"{t}"' for t in clean_tokens[:10])
+            if or_expr not in candidates:
+                candidates.append(or_expr)
+        elif len(clean_tokens) == 1 and clean_tokens[0] != escaped_single:
+            candidates.append(f'"{clean_tokens[0]}"')
+
+        return candidates
+
     def search_fts(
         self,
         query: str,
@@ -433,88 +510,132 @@ class SQLiteCache:
         model: str | None = None,
         depth: str | None = None,
     ) -> list[dict[str, Any]]:
-        """基于 FTS5 Trigram 与 BM25 进行全文检索，支持时间闭区间、模型与深度全下推过滤"""
-        # 支持多行或多关键词匹配，去除连续空白
-        clean_query = " ".join(query.strip().split()).replace('"', '""')
-        if not clean_query:
+        """基于 FTS5 Trigram、标题加权与时间新鲜度混合打分的全文检索"""
+        candidates = self._build_fts_query_candidates(query)
+        if not candidates:
             return []
 
-        fts_match_expr = f'"{clean_query}"'
-        where_conditions = ["session_fts MATCH ?"]
-        params: list[Any] = [fts_match_expr]
+        base_conditions = []
+        base_params: list[Any] = []
 
         if start_date and end_date:
-            where_conditions.append("s.date >= ? AND s.date <= ?")
-            params.extend([start_date, end_date])
+            base_conditions.append("s.date >= ? AND s.date <= ?")
+            base_params.extend([start_date, end_date])
         elif start_date:
-            where_conditions.append("s.date >= ?")
-            params.append(start_date)
+            base_conditions.append("s.date >= ?")
+            base_params.append(start_date)
         elif end_date:
-            where_conditions.append("s.date <= ?")
-            params.append(end_date)
+            base_conditions.append("s.date <= ?")
+            base_params.append(end_date)
         elif range_start_iso and range_end_iso:
-            where_conditions.append("(s.modified_time >= ? AND s.modified_time <= ?)")
-            params.extend([range_start_iso, range_end_iso])
+            base_conditions.append("(s.modified_time >= ? AND s.modified_time <= ?)")
+            base_params.extend([range_start_iso, range_end_iso])
         elif range_start_iso:
-            where_conditions.append("(s.modified_time >= ? OR s.created_time >= ?)")
-            params.extend([range_start_iso, range_start_iso])
+            base_conditions.append("(s.modified_time >= ? OR s.created_time >= ?)")
+            base_params.extend([range_start_iso, range_start_iso])
 
         if model and model != "all":
             clean_m = model.replace("models/", "")
-            where_conditions.append("(s.model = ? OR s.model = ?)")
-            params.extend([clean_m, f"models/{clean_m}"])
+            base_conditions.append("(s.model = ? OR s.model = ?)")
+            base_params.extend([clean_m, f"models/{clean_m}"])
 
         if depth and depth != "all":
             if depth == "single":
-                where_conditions.append("s.turn_count <= 2")
+                base_conditions.append("s.turn_count <= 2")
             elif depth == "few":
-                where_conditions.append("s.turn_count >= 3 AND s.turn_count <= 6")
+                base_conditions.append("s.turn_count >= 3 AND s.turn_count <= 6")
             elif depth == "many":
-                where_conditions.append("s.turn_count >= 7")
+                base_conditions.append("s.turn_count >= 7")
             elif depth == "branch":
-                where_conditions.append("s.has_branching = 1")
+                base_conditions.append("s.has_branching = 1")
 
-        where_sql = " AND ".join(where_conditions)
-
-        sql = f"""
-            SELECT 
-                f.file_id,
-                bm25(session_fts) AS rank,
-                snippet(session_fts, 3, '<mark class="bg-indigo-500/30 text-indigo-300 font-semibold px-0.5 rounded">', '</mark>', '...', 28) AS snippet,
-                s.name,
-                s.model,
-                s.turn_count,
-                s.total_tokens,
-                s.thought_tokens,
-                s.duration_human,
-                s.duration_seconds,
-                s.has_branching,
-                s.branch_count,
-                s.first_prompt,
-                s.modified_time,
-                s.created_time
-            FROM session_fts f
-            JOIN session_index s ON f.file_id = s.file_id
-            WHERE {where_sql}
-            ORDER BY rank
-            LIMIT ? OFFSET ?;
-        """
-        params.extend([limit, offset])
+        # 适当扩大底层拉取规模以保证内存时间加权混合排序空间 (最小 60 条)
+        fetch_limit = max(60, limit + offset + 20)
 
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            try:
-                cursor.execute("PRAGMA busy_timeout = 3000;")
-                cursor.execute(sql, tuple(params))
-                rows = cursor.fetchall()
-                results = []
-                for r in rows:
-                    item = dict(r)
-                    item["has_branching"] = bool(item.get("has_branching", 0))
-                    results.append(item)
-                return results
-            except sqlite3.OperationalError:
-                return []
+            cursor.execute("PRAGMA busy_timeout = 3000;")
+
+            # 依序尝试候选表达式（精确 -> 标识符 AND 共现 -> OR 模糊打分）
+            for fts_match_expr in candidates:
+                where_conditions = ["session_fts MATCH ?"] + base_conditions
+                where_sql = " AND ".join(where_conditions)
+                current_params = [fts_match_expr] + base_params + [fetch_limit]
+
+                # 列权重配置: file_id(0.0), title(6.0 强置顶), sys_inst(1.2), content(1.0)
+                sql = f"""
+                    SELECT 
+                        f.file_id,
+                        bm25(session_fts, 0.0, 6.0, 1.2, 1.0) AS raw_rank,
+                        snippet(session_fts, 3, '<mark class="bg-indigo-500/30 text-indigo-300 font-semibold px-0.5 rounded">', '</mark>', '...', 28) AS snippet,
+                        s.name,
+                        s.model,
+                        s.turn_count,
+                        s.total_tokens,
+                        s.thought_tokens,
+                        s.duration_human,
+                        s.duration_seconds,
+                        s.has_branching,
+                        s.branch_count,
+                        s.first_prompt,
+                        s.modified_time,
+                        s.created_time
+                    FROM session_fts f
+                    JOIN session_index s ON f.file_id = s.file_id
+                    WHERE {where_sql}
+                    ORDER BY raw_rank
+                    LIMIT ?;
+                """
+
+                try:
+                    cursor.execute(sql, tuple(current_params))
+                    rows = cursor.fetchall()
+                    if rows:
+                        import math
+                        from datetime import UTC, datetime
+
+                        now_dt = datetime.now(UTC)
+                        scored_items = []
+
+                        for r in rows:
+                            item = dict(r)
+                            item["has_branching"] = bool(item.get("has_branching", 0))
+
+                            # 计算时间新鲜度衰减因子 (Recency Decay)
+                            # bm25 负数越小越优，此处综合为 composite_score（越小越优）
+                            m_str = item.get("modified_time") or item.get(
+                                "created_time"
+                            )
+                            days_ago = 180.0  # 默认兜底半年
+                            if m_str:
+                                try:
+                                    dt = datetime.fromisoformat(m_str)
+                                    if dt.tzinfo is None:
+                                        dt = dt.replace(tzinfo=UTC)
+                                    days_ago = max(
+                                        0.0, (now_dt - dt).total_seconds() / 86400.0
+                                    )
+                                except (ValueError, TypeError):
+                                    pass
+
+                            # raw_rank 为负数 (如 -15.0 到 -0.5)
+                            # 时间惩罚因子：随天数对数平滑增加（越久远轻微增加 rank）
+                            time_penalty = math.log1p(days_ago) * 0.35
+                            composite_score = item["raw_rank"] + time_penalty
+                            scored_items.append((composite_score, item))
+
+                        # 按综合得分升序排序（越小越排前面）
+                        scored_items.sort(key=lambda x: x[0])
+                        final_results = [item for _, item in scored_items]
+                        return final_results[offset : offset + limit]
+
+                except sqlite3.OperationalError as err:
+                    logger.warning(
+                        "FTS 检索语法执行异常: %s, 表达式: %s", err, fts_match_expr
+                    )
+                    continue
+
+        return []
 
 
 # 保持别名映射，保证上层调用无缝兼容

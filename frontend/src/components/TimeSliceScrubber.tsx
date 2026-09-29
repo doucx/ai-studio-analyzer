@@ -11,12 +11,7 @@ interface Props {
   onRangeChange: (start: string, end: string) => void;
 }
 
-export function TimeSliceScrubber({
-  dailyTrends,
-  startDate,
-  endDate,
-  onRangeChange,
-}: Props) {
+export function TimeSliceScrubber({ dailyTrends, startDate, endDate, onRangeChange }: Props) {
   const [metric, setMetric] = useState<ScrubberMetric>('tokens');
   const trackRef = useRef<HTMLDivElement | null>(null);
 
@@ -49,9 +44,9 @@ export function TimeSliceScrubber({
   }, [dates, endDate]);
 
   // 3. 计算波形曲线几何路径
-  const { pathData, maxVal, currentTotal } = useMemo(() => {
+  const { pathData, currentTotal } = useMemo(() => {
     if (sortedData.length === 0) {
-      return { pathData: '', maxVal: 1, currentTotal: 0 };
+      return { pathData: '', currentTotal: 0 };
     }
 
     const values = sortedData.map((d) => {
@@ -85,7 +80,7 @@ export function TimeSliceScrubber({
     const subValues = values.slice(startIndex, endIndex + 1);
     const total = subValues.reduce((acc, curr) => acc + curr, 0);
 
-    return { pathData: areaD, maxVal: max, currentTotal: total };
+    return { pathData: areaD, currentTotal: total };
   }, [sortedData, metric, startIndex, endIndex]);
 
   // 4. 百分比位置计算
@@ -104,10 +99,7 @@ export function TimeSliceScrubber({
   };
 
   // 6. 指针交互处理器 (支持边界拉伸与选区平移)
-  const handlePointerDown = (
-    e: PointerEvent,
-    mode: 'start' | 'end' | 'pan'
-  ) => {
+  const handlePointerDown = (e: PointerEvent, mode: 'start' | 'end' | 'pan') => {
     e.preventDefault();
     e.stopPropagation();
     try {
@@ -146,9 +138,7 @@ export function TimeSliceScrubber({
       const deltaRatio = deltaX / rect.width;
       const deltaIndices = Math.round(deltaRatio * (dates.length - 1));
 
-      const span =
-        dragAnchorRef.current.initialEndIndex -
-        dragAnchorRef.current.initialStartIndex;
+      const span = dragAnchorRef.current.initialEndIndex - dragAnchorRef.current.initialStartIndex;
 
       let newStart = dragAnchorRef.current.initialStartIndex + deltaIndices;
       let newEnd = dragAnchorRef.current.initialEndIndex + deltaIndices;
@@ -241,6 +231,7 @@ export function TimeSliceScrubber({
         {/* 背景微缩波形图 (SVG) */}
         {sortedData.length > 0 ? (
           <svg
+            aria-hidden="true"
             viewBox="0 0 1000 120"
             preserveAspectRatio="none"
             className="absolute inset-0 w-full h-full pointer-events-none opacity-80"
@@ -280,6 +271,7 @@ export function TimeSliceScrubber({
         />
 
         {/* 中间高亮选区窗口 (零几何延迟，支持抓握平移) */}
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: 仅用于阻断内部点击向外部扩散 */}
         <div
           role="presentation"
           tabIndex={-1}
@@ -298,9 +290,12 @@ export function TimeSliceScrubber({
         />
 
         {/* 左边界交互条 (纯边线 + 宽热区 + cursor-ew-resize，阻止所有冒泡) */}
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: 指针抓握拖拽交互 */}
         <div
           role="slider"
           aria-label="起始日期边界"
+          aria-valuemin={0}
+          aria-valuemax={Math.max(0, dates.length - 1)}
           aria-valuenow={startIndex}
           tabIndex={0}
           onClick={(e) => e.stopPropagation()}
@@ -331,9 +326,12 @@ export function TimeSliceScrubber({
         </div>
 
         {/* 右边界交互条 (纯边线 + 宽热区 + cursor-ew-resize，阻止所有冒泡) */}
+        {/* biome-ignore lint/a11y/useKeyWithClickEvents: 指针抓握拖拽交互 */}
         <div
           role="slider"
           aria-label="截止日期边界"
+          aria-valuemin={0}
+          aria-valuemax={Math.max(0, dates.length - 1)}
           aria-valuenow={endIndex}
           tabIndex={0}
           onClick={(e) => e.stopPropagation()}
@@ -368,9 +366,7 @@ export function TimeSliceScrubber({
       {dates.length > 0 && (
         <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono px-0.5">
           <span>{dates[0]}</span>
-          <span className="text-zinc-400">
-            {dates[Math.floor(dates.length / 2)]}
-          </span>
+          <span className="text-zinc-400">{dates[Math.floor(dates.length / 2)]}</span>
           <span>{dates[dates.length - 1]}</span>
         </div>
       )}

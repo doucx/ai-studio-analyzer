@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals';
-import type { DailyTimelineItem, MetricsSummary } from '../types/metrics';
+import type { DailyTimelineItem, DailyTrendItem, MetricsSummary } from '../types/metrics';
 
 export type TimeRange = '1d' | '7d' | '30d' | '90d' | 'this_year' | 'all';
 

@@ -1,10 +1,4 @@
-import {
-  AlignLeft,
-  Calendar,
-  Globe,
-  Loader2,
-  Sparkles,
-} from 'lucide-preact';
+import { Globe, Loader2 } from 'lucide-preact';
 import { useRef, useState } from 'preact/hooks';
 import {
   type DepthFilter,
@@ -18,7 +12,6 @@ import {
   handleSearchInput,
   isExpandedViewSignal,
   isFilterActiveSignal,
-  isMultiLineSearchSignal,
   isSearchingFtsSignal,
   resetFilters,
   searchKeywordSignal,
@@ -56,7 +49,6 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
   const [scrollTop, setScrollTop] = useState(0);
 
   const isExpanded = isExpandedViewSignal.value;
-  const isMultiLine = isMultiLineSearchSignal.value;
   const searchScope = searchScopeSignal.value;
   const explicitDate = filterDateSignal.value;
 
@@ -150,50 +142,21 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
           </div>
         </div>
 
-        {/* 第二行：FTS 全文检索输入（支持单行/多行自然语言及代码块搜索切换） */}
+        {/* 第二行：FTS 全文检索输入（常态化多行文本域，支持短标题/多行代码/调用栈自由输入） */}
         <div className="relative">
-          {isMultiLine ? (
-            <textarea
-              rows={3}
-              placeholder="多行深度检索：支持粘贴长篇 Prompt、异常调用栈或代码片段..."
-              value={currentKeyword}
-              onInput={(e) => {
-                handleSearchInput((e.target as HTMLTextAreaElement).value);
-                setScrollTop(0);
-                if (containerRef.current) containerRef.current.scrollTop = 0;
-              }}
-              className="w-full bg-zinc-950 border border-zinc-800 focus:border-indigo-500 rounded p-2 text-xs font-mono text-zinc-200 placeholder-zinc-500 outline-none transition resize-none leading-relaxed"
-            />
-          ) : (
-            <input
-              type="text"
-              placeholder="全文毫秒级检索：输入代码关键词、报错信息或对话主题..."
-              value={currentKeyword}
-              onInput={(e) => {
-                handleSearchInput((e.target as HTMLInputElement).value);
-                setScrollTop(0);
-                if (containerRef.current) containerRef.current.scrollTop = 0;
-              }}
-              className="w-full bg-zinc-950 border border-zinc-800 focus:border-indigo-500 rounded px-2.5 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 outline-none transition pr-16"
-            />
-          )}
+          <textarea
+            rows={3}
+            placeholder="支持标题速查 (1~2字) 或直接粘贴长篇 Prompt、异常调用栈与代码块 (≥3字穿透全库)..."
+            value={currentKeyword}
+            onInput={(e) => {
+              handleSearchInput((e.target as HTMLTextAreaElement).value);
+              setScrollTop(0);
+              if (containerRef.current) containerRef.current.scrollTop = 0;
+            }}
+            className="w-full bg-zinc-950 border border-zinc-800 focus:border-indigo-500 rounded p-2.5 pr-8 text-xs font-mono text-zinc-200 placeholder-zinc-500 outline-none transition resize-none leading-relaxed"
+          />
 
-          <div className="absolute right-2 top-2 flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                isMultiLineSearchSignal.value = !isMultiLine;
-              }}
-              className={`p-0.5 rounded text-[10px] transition cursor-pointer ${
-                isMultiLine
-                  ? 'text-indigo-400 bg-indigo-950 border border-indigo-800/60'
-                  : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-              title={isMultiLine ? '切换为单行输入' : '切换为多行复杂检索框'}
-            >
-              <AlignLeft size={13} />
-            </button>
-
+          <div className="absolute right-2.5 top-2.5 flex items-center gap-1.5">
             {isSearchingFtsSignal.value ? (
               <Loader2 size={13} className="text-indigo-400 animate-spin pointer-events-none" />
             ) : currentKeyword ? (
@@ -202,7 +165,8 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
                 onClick={() => {
                   handleSearchInput('');
                 }}
-                className="text-xs text-zinc-500 hover:text-zinc-300 cursor-pointer"
+                className="text-xs text-zinc-500 hover:text-zinc-300 cursor-pointer p-0.5 rounded"
+                title="清空搜索内容"
               >
                 ✕
               </button>
@@ -238,7 +202,8 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
           <select
             value={currentTier}
             onChange={(e) => {
-              selectedTierSignal.value = (e.target as HTMLSelectElement).value as DurationTierFilter;
+              selectedTierSignal.value = (e.target as HTMLSelectElement)
+                .value as DurationTierFilter;
               setScrollTop(0);
               if (containerRef.current) containerRef.current.scrollTop = 0;
             }}
@@ -373,7 +338,8 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
                                     : 'text-sky-400'
                               }
                             >
-                              #{s.search_matches[0].turn_index} {s.search_matches[0].role.toUpperCase()}
+                              #{s.search_matches[0].turn_index}{' '}
+                              {s.search_matches[0].role.toUpperCase()}
                             </span>
                             <span className="text-zinc-500 font-normal">匹配片段</span>
                           </span>
@@ -382,7 +348,8 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
                               className="text-zinc-500 truncate max-w-[190px] select-none text-[9.5px]"
                               title={s.search_matches[0].sibling.text}
                             >
-                              ↳ {s.search_matches[0].sibling.role === 'model' ? '回复' : '提问'}: {s.search_matches[0].sibling.text}
+                              ↳ {s.search_matches[0].sibling.role === 'model' ? '回复' : '提问'}:{' '}
+                              {s.search_matches[0].sibling.text}
                             </span>
                           )}
                         </div>
@@ -397,7 +364,8 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
                               }`}
                             >
                               <span className="w-6 shrink-0 text-right pr-2 select-none text-[9.5px] font-mono text-zinc-600">
-                                {l.line_no}{l.is_hit ? ':' : '-'}
+                                {l.line_no}
+                                {l.is_hit ? ':' : '-'}
                               </span>
                               <div
                                 className="flex-1 truncate"
