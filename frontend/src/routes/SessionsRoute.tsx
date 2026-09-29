@@ -98,7 +98,6 @@ export function SessionsRoute() {
           </div>
         ) : currentSession ? (
           <SessionDetailPanel
-            key={currentSession.file_id}
             session={currentSession}
             onClose={handleCloseDetail}
           />

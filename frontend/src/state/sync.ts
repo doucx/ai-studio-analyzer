@@ -6,7 +6,15 @@ export const syncVersionSignal = signal<number>(0);
 
 import { addToast } from './toast';
 
+export function isOnline(): boolean {
+  return typeof navigator === 'undefined' || navigator.onLine !== false;
+}
+
 export async function triggerSync(limit = 50) {
+  if (!isOnline()) {
+    // 离线模式：静默跳过，避免弹出红色打扰 Toast
+    return;
+  }
   syncInProgressSignal.value = true;
   syncProgressTextSignal.value = '准备同步...';
   try {
@@ -22,13 +30,17 @@ export async function triggerSync(limit = 50) {
     } else {
       syncInProgressSignal.value = false;
       syncProgressTextSignal.value = '';
-      addToast(`触发同步请求失败 (HTTP ${res.status})`, 'error');
+      if (isOnline()) {
+        addToast(`触发同步请求失败 (HTTP ${res.status})`, 'error');
+      }
     }
   } catch (err) {
     console.error('触发同步失败:', err);
     syncInProgressSignal.value = false;
     syncProgressTextSignal.value = '';
-    addToast(`网络异常，无法连接同步服务: ${String(err)}`, 'error');
+    if (isOnline()) {
+      addToast(`网络异常，无法连接同步服务: ${String(err)}`, 'error');
+    }
   }
 }
 
@@ -52,13 +64,15 @@ export function setupSyncEventListener(onSyncComplete: () => void): () => void {
 
     try {
       const result = JSON.parse(e.data);
-      addToast(
-        `增量同步完成：扫描 ${result.total_scanned} 篇，新增拉取 ${result.downloaded} 篇 (缓存总计: ${result.cache_total})`,
-        'success',
-        5000,
-      );
+      if (result.downloaded > 0) {
+        addToast(
+          `增量同步完成：扫描 ${result.total_scanned} 篇，新增拉取 ${result.downloaded} 篇 (缓存总计: ${result.cache_total})`,
+          'success',
+          5000,
+        );
+      }
     } catch {
-      addToast('增量同步已顺利完成', 'success');
+      // 忽略解析错误，避免在无新增时产生多余通知
     }
   });
 
@@ -66,6 +80,10 @@ export function setupSyncEventListener(onSyncComplete: () => void): () => void {
     console.error('同步异常:', e.data);
     syncInProgressSignal.value = false;
     syncProgressTextSignal.value = '';
+
+    if (!isOnline()) {
+      return;
+    }
 
     let errorDetail = e.data;
     try {
@@ -92,6 +110,7 @@ export function setupAutoSyncOnFocus(intervalMs = 90_000, limit = 20): () => voi
 
   const handleCheckSync = () => {
     if (syncInProgressSignal.value) return;
+    if (!isOnline()) return;
     const now = Date.now();
     if (now - lastSyncTime >= intervalMs) {
       lastSyncTime = now;

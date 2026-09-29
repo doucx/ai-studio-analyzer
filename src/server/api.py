@@ -51,6 +51,8 @@ def _get_range_start_iso(range_key: str) -> Optional[str]:
     if range_key == "all":
         return None
     now = datetime.now(timezone.utc)
+    if range_key == "1d":
+        return (now - timedelta(days=1)).isoformat()
     if range_key == "7d":
         return (now - timedelta(days=7)).isoformat()
     if range_key == "30d":

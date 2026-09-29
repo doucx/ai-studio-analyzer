@@ -1,9 +1,10 @@
 import { signal } from '@preact/signals';
 import type { DailyTimelineItem, MetricsSummary } from '../types/metrics';
 
-export type TimeRange = '7d' | '30d' | '90d' | 'this_year' | 'all';
+export type TimeRange = '1d' | '7d' | '30d' | '90d' | 'this_year' | 'all';
 
 export const TIME_RANGE_OPTIONS: { key: TimeRange; label: string }[] = [
+  { key: '1d', label: '1天' },
   { key: '7d', label: '7天' },
   { key: '30d', label: '30天' },
   { key: '90d', label: '90天' },

@@ -359,11 +359,10 @@ export function SessionDetailPanel({ session, onClose }: Props) {
     [session.file_id],
   );
 
-  // 1. 初次进入或切换会话时全屏加载，并重置旧详情数据以避免数据脏读
+  // 1. 切换会话时保留现有对话内容，加载完成后原子性替换，彻底消灭切换闪烁
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
-    setDetail(null);
     fetchSessionDetail(false, controller.signal);
     return () => {
       controller.abort();
@@ -539,27 +538,21 @@ export function SessionDetailPanel({ session, onClose }: Props) {
           </div>
         </div>
 
-        {loading ? (
-          <div className="py-24 text-center text-xs text-zinc-500 animate-pulse">
-            正在从本地 SQLite 加载完整对话轮次...
-          </div>
-        ) : (
-          <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-            {detail?.system_instruction ? (
-              <SystemInstructionCard instruction={detail.system_instruction} />
-            ) : null}
-            {detail?.turns && detail.turns.length > 0 ? (
-              detail.turns.map((turn, idx) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: 对话轮次流按时间严格保序，无需进行动态重排
-                <TurnMessage key={`turn-${idx}`} turn={turn} index={idx} />
-              ))
-            ) : (
-              <div className="py-16 text-center text-zinc-500 text-xs">
-                暂无对话内容或数据未同步
-              </div>
-            )}
-          </div>
-        )}
+        <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+          {detail?.system_instruction ? (
+            <SystemInstructionCard instruction={detail.system_instruction} />
+          ) : null}
+          {detail?.turns && detail.turns.length > 0 ? (
+            detail.turns.map((turn, idx) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: 对话轮次流按时间严格保序，无需进行动态重排
+              <TurnMessage key={`turn-${idx}`} turn={turn} index={idx} />
+            ))
+          ) : !detail && loading ? null : (
+            <div className="py-16 text-center text-zinc-500 text-xs">
+              暂无对话内容或数据未同步
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
