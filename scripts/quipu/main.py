@@ -3,14 +3,16 @@ Quipu Bridge - 统一认知对齐、生命周期与存储水合 CLI 工具箱
 """
 
 import argparse
+import sqlite3
 from datetime import datetime
-from tqdm import tqdm
 
 from core import (
     AlignmentProbe,
     QuipuRepositoryManager,
     read_git_plan_content,
 )
+from tqdm import tqdm
+
 from src.analyzer.cache import SQLiteCache
 
 
@@ -47,7 +49,10 @@ def cmd_status(args):
     print("-" * 75)
     print("🕒 最近 Plan 样本状态 (最新 8 场):")
     for p in status["recent_plans"]:
-        dt_str = datetime.fromtimestamp(p["timestamp"]).strftime("%Y-%m-%d %H:%M")
+        local_tz = datetime.now().astimezone().tzinfo
+        dt_str = datetime.fromtimestamp(p["timestamp"], tz=local_tz).strftime(
+            "%Y-%m-%d %H:%M"
+        )
         c_mark = "✅" if p["has_cache"] else "❌"
         i_mark = "✅" if p["has_intent"] else "⚪"
         summary = (p["summary"][:42] + "..") if len(p["summary"]) > 42 else p["summary"]
@@ -289,8 +294,8 @@ def cmd_sync(args):
                                 (git_content, node["commit_hash"]),
                             )
                             hydrated_cache_count += 1
-                        except Exception:
-                            pass
+                        except sqlite3.Error as err:
+                            tqdm.write(f"⚠️ 补水缓存跳过: {err}")
 
             if not plan_content or len(plan_content) < 20:
                 skipped_count += 1

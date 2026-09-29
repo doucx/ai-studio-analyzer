@@ -166,6 +166,7 @@
 ```python
 import base64
 
+
 def extract_prompts_and_costs(raw_json: dict):
     # 1. 过滤非标准/损坏文件
     if "chunkedPrompt" not in raw_json:
@@ -173,30 +174,32 @@ def extract_prompts_and_costs(raw_json: dict):
 
     model = raw_json.get("runSettings", {}).get("model", "unknown")
     sys_instruction = raw_json.get("systemInstruction", {}).get("text", "")
-    
+
     user_prompts = []
     total_tokens = 0
-    
+
     for chunk in raw_json.get("chunkedPrompt", {}).get("chunks", []):
         role = chunk.get("role")
         total_tokens += chunk.get("tokenCount", 0)
-        
+
         # 仅关注用户提问
         if role == "user":
             # 场景 A: 纯文本输入
             if "text" in chunk:
                 user_prompts.append(chunk["text"].strip())
-            
+
             # 场景 B: Base64 附件文件
             elif "inlineFile" in chunk:
                 file_info = chunk["inlineFile"]
                 if "text" in file_info.get("mimeType", ""):
                     try:
-                        decoded_text = base64.b64decode(file_info["data"]).decode("utf-8", errors="ignore")
+                        decoded_text = base64.b64decode(file_info["data"]).decode(
+                            "utf-8", errors="ignore"
+                        )
                         user_prompts.append(decoded_text[:200] + "... [附件文本]")
                     except Exception:
                         user_prompts.append("[无法解码的附件]")
-                        
+
             # 场景 C: 云盘文件引用
             elif "driveDocument" in chunk:
                 doc_id = chunk["driveDocument"].get("id")
@@ -207,6 +210,6 @@ def extract_prompts_and_costs(raw_json: dict):
         "system_instruction_len": len(sys_instruction),
         "total_tokens": total_tokens,
         "first_prompt": user_prompts[0] if user_prompts else "",
-        "all_user_prompts": user_prompts
+        "all_user_prompts": user_prompts,
     }
 ```

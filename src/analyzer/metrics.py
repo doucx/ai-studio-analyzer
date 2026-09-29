@@ -1,8 +1,9 @@
-from typing import List, Dict, Any
+from typing import Any
+
 import pandas as pd
 
 
-def calculate_session_metrics(sessions: List[Any]) -> Dict[str, Any]:
+def calculate_session_metrics(sessions: list[Any]) -> dict[str, Any]:
     """
     基于 pandas 的稳健认知与交互指标引擎：
     兼容 PromptSession 实例列表或来自 session_index 表的字典列表。

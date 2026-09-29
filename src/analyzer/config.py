@@ -1,14 +1,18 @@
 import json
+import logging
 import os
 import time
-from typing import Any, Dict
+from typing import Any
+
 import requests
+
+logger = logging.getLogger(__name__)
 
 CACHE_DIR = ".cache"
 CONFIG_FILE_PATH = os.path.join(CACHE_DIR, "config.json")
 LEGACY_CONFIG_FILE_PATH = "config.json"
 
-DEFAULT_CONFIG: Dict[str, Any] = {
+DEFAULT_CONFIG: dict[str, Any] = {
     "proxy_url": "http://127.0.0.1:7890",
     "token_path": "token.json",
     "creds_path": "credentials.json",
@@ -23,13 +27,13 @@ DEFAULT_CONFIG: Dict[str, Any] = {
 }
 
 
-def _write_config_to_disk(cfg: Dict[str, Any]) -> None:
+def _write_config_to_disk(cfg: dict[str, Any]) -> None:
     os.makedirs(os.path.dirname(CONFIG_FILE_PATH), exist_ok=True)
     with open(CONFIG_FILE_PATH, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=2, ensure_ascii=False)
 
 
-def load_config() -> Dict[str, Any]:
+def load_config() -> dict[str, Any]:
     """读取本地配置，若不存在则使用默认配置初始化，并迁移根目录旧配置"""
     # 优先平滑兼容旧位置配置
     if not os.path.exists(CONFIG_FILE_PATH) and os.path.exists(LEGACY_CONFIG_FILE_PATH):
@@ -40,8 +44,8 @@ def load_config() -> Dict[str, Any]:
                 merged.update(legacy_cfg)
                 _write_config_to_disk(merged)
                 return merged
-        except Exception:
-            pass
+        except (json.JSONDecodeError, OSError) as err:
+            logger.debug("读取兼容配置失败: %s", err)
 
     if not os.path.exists(CONFIG_FILE_PATH):
         _write_config_to_disk(DEFAULT_CONFIG)
@@ -53,12 +57,12 @@ def load_config() -> Dict[str, Any]:
             merged = dict(DEFAULT_CONFIG)
             merged.update(user_config)
             return merged
-    except Exception as exc:
+    except (json.JSONDecodeError, OSError) as exc:
         print(f"⚠️ 读取配置文件异常，回退至默认配置: {exc}")
         return dict(DEFAULT_CONFIG)
 
 
-def save_config(new_config: Dict[str, Any]) -> Dict[str, Any]:
+def save_config(new_config: dict[str, Any]) -> dict[str, Any]:
     """持久化保存配置到 .cache/config.json"""
     current = dict(DEFAULT_CONFIG)
     target_path = (
@@ -73,15 +77,15 @@ def save_config(new_config: Dict[str, Any]) -> Dict[str, Any]:
         try:
             with open(target_path, "r", encoding="utf-8") as f:
                 current.update(json.load(f))
-        except Exception:
-            pass
+        except (json.JSONDecodeError, OSError) as err:
+            logger.debug("读取旧配置进行合并失败: %s", err)
 
     current.update(new_config)
     _write_config_to_disk(current)
     return current
 
 
-def test_proxy_connection(proxy_url: str) -> Dict[str, Any]:
+def test_proxy_connection(proxy_url: str) -> dict[str, Any]:
     """测试指定代理访问 Google 服务的连通性与往返延迟 (稳定返回 HTTP 200)"""
     target_url = "https://www.google.com/robots.txt"
     proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else None
@@ -106,10 +110,10 @@ def test_proxy_connection(proxy_url: str) -> Dict[str, Any]:
                 "latency_ms": elapsed_ms,
                 "message": f"返回非预期状态码: HTTP {resp.status_code}",
             }
-    except Exception as exc:
+    except requests.RequestException as exc:
         elapsed_ms = round((time.time() - t0) * 1000)
         return {
             "ok": False,
             "latency_ms": elapsed_ms,
-            "message": f"连接失败: {str(exc)}",
+            "message": f"连接失败: {exc!s}",
         }

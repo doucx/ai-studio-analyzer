@@ -4,23 +4,22 @@ Quipu ↔ AI Studio 认知溯源核心引擎与基础设施模块
 
 import difflib
 import os
-from pathlib import Path
 import re
 import sqlite3
 import subprocess
 import sys
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional, Set, Tuple
-
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
 # 将项目根目录注入 sys.path，保证无论在何处执行均能定位 src 模块
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.analyzer.cache import SQLiteCache # noqa E402
-from src.analyzer.models import PromptSession # noqa E402
-from src.analyzer.parser import parse_prompt_json # noqa E402
+from src.analyzer.cache import SQLiteCache
+from src.analyzer.models import PromptSession
+from src.analyzer.parser import parse_prompt_json
 
 PATH_PATTERN = re.compile(
     r"[a-zA-Z0-9_\u4e00-\u9fa5\.\-]+/[a-zA-Z0-9_\u4e00-\u9fa5\.\-\/]+\.[a-zA-Z0-9]+"
@@ -42,7 +41,7 @@ def get_quipu_db_path(quipu_dir: str) -> str:
     return db_path
 
 
-def read_git_plan_content(quipu_dir: str, commit_hash: str) -> Optional[str]:
+def read_git_plan_content(quipu_dir: str, commit_hash: str) -> str | None:
     """通过 Git 从快照 commit 的树根目录提取 content.md 正文"""
     try:
         res = subprocess.run(
@@ -53,11 +52,11 @@ def read_git_plan_content(quipu_dir: str, commit_hash: str) -> Optional[str]:
             check=True,
         )
         return res.stdout
-    except Exception:
+    except (subprocess.SubprocessError, OSError):
         return None
 
 
-def extract_paths(text: str) -> Set[str]:
+def extract_paths(text: str) -> set[str]:
     matches = PATH_PATTERN.findall(text)
     return {m.strip() for m in matches if not m.startswith("http") and "/" in m}
 
@@ -79,7 +78,7 @@ def text_similarity(a: str, b: str, max_chars: int = 2500) -> float:
     return difflib.SequenceMatcher(None, a[:max_chars], b[:max_chars]).quick_ratio()
 
 
-def set_jaccard(set_a: Set[str], set_b: Set[str]) -> float:
+def set_jaccard(set_a: set[str], set_b: set[str]) -> float:
     if not set_a or not set_b:
         return 0.0
     intersection = len(set_a & set_b)
@@ -89,7 +88,7 @@ def set_jaccard(set_a: Set[str], set_b: Set[str]) -> float:
 
 def resolve_effective_user_prompt(
     session: PromptSession, model_turn_idx: int
-) -> Tuple[str, bool]:
+) -> tuple[str, bool]:
     user_turns = []
     for i in range(model_turn_idx):
         t = session.turns[i]
@@ -123,20 +122,18 @@ class AlignmentProbe:
         self.cache = analyzer_cache
         self.window_hours = window_hours
 
-    def match_node(self, node: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def match_node(self, node: dict[str, Any]) -> dict[str, Any] | None:
         q_time_float = float(node["timestamp"])
-        q_dt_utc = datetime.fromtimestamp(q_time_float, tz=timezone.utc)
+        q_dt_utc = datetime.fromtimestamp(q_time_float, tz=UTC)
         q_dt_local = datetime.fromtimestamp(q_time_float).astimezone()
 
         plan_content = node.get("plan_md_cache") or ""
         q_title = extract_title(plan_content) or node.get("summary", "")
         q_paths = extract_paths(plan_content)
 
-        t_max_iso = datetime.fromtimestamp(
-            q_time_float + 600, tz=timezone.utc
-        ).isoformat()
+        t_max_iso = datetime.fromtimestamp(q_time_float + 600, tz=UTC).isoformat()
         t_min_iso = datetime.fromtimestamp(
-            q_time_float - (self.window_hours * 3600), tz=timezone.utc
+            q_time_float - (self.window_hours * 3600), tz=UTC
         ).isoformat()
 
         sql = """
@@ -191,11 +188,11 @@ class AlignmentProbe:
                 turn_time_utc = turn.timestamp
                 if turn_time_utc:
                     if turn_time_utc.tzinfo is None:
-                        turn_time_utc = turn_time_utc.replace(tzinfo=timezone.utc)
-                    turn_time_utc = turn_time_utc.astimezone(timezone.utc)
+                        turn_time_utc = turn_time_utc.replace(tzinfo=UTC)
+                    turn_time_utc = turn_time_utc.astimezone(UTC)
                 else:
                     turn_time_utc = (
-                        session.modified_time.astimezone(timezone.utc)
+                        session.modified_time.astimezone(UTC)
                         if session.modified_time
                         else None
                     )
@@ -294,7 +291,7 @@ class QuipuRepositoryManager:
         """)
         conn.commit()
 
-    def get_status(self) -> Dict[str, Any]:
+    def get_status(self) -> dict[str, Any]:
         """获取目标仓库的状态统计与完整率"""
         with self.get_connection() as conn:
             self.ensure_private_data_schema(conn)

@@ -1,9 +1,15 @@
 import asyncio
 import json
-from datetime import datetime, timedelta, timezone
-from typing import Optional, Set
+import logging
+import sqlite3
+from datetime import UTC, datetime, timedelta
+
+import requests
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
+
+logger = logging.getLogger(__name__)
+
 from src.analyzer.cache import SQLiteCache
 from src.analyzer.config import load_config, save_config, test_proxy_connection
 from src.analyzer.drive import DriveClient
@@ -15,7 +21,7 @@ router = APIRouter(prefix="/api")
 cache = SQLiteCache(cache_dir=".cache")
 
 
-def _format_seconds_human(total_sec: float | int) -> str:
+def _format_seconds_human(total_sec: float) -> str:
     total_sec = int(total_sec)
     if total_sec < 60:
         return f"{total_sec}s"
@@ -35,7 +41,7 @@ def _format_seconds_human(total_sec: float | int) -> str:
 sync_status = {"is_syncing": False, "last_result": None, "error": None}
 
 # SSE 订阅客户端队列池
-_sync_event_queues: Set[asyncio.Queue] = set()
+_sync_event_queues: set[asyncio.Queue] = set()
 
 
 def notify_sync_event(event_type: str, payload: dict):
@@ -43,14 +49,14 @@ def notify_sync_event(event_type: str, payload: dict):
     for q in list(_sync_event_queues):
         try:
             q.put_nowait({"event": event_type, "data": payload})
-        except Exception:
-            pass
+        except (asyncio.QueueFull, ValueError) as err:
+            logger.debug("广播 SSE 队列已满或异常: %s", err)
 
 
-def _get_range_start_iso(range_key: str) -> Optional[str]:
+def _get_range_start_iso(range_key: str) -> str | None:
     if range_key == "all":
         return None
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if range_key == "1d":
         return (now - timedelta(days=1)).isoformat()
     if range_key == "7d":
@@ -60,11 +66,11 @@ def _get_range_start_iso(range_key: str) -> Optional[str]:
     if range_key == "90d":
         return (now - timedelta(days=90)).isoformat()
     if range_key == "this_year":
-        return datetime(now.year, 1, 1, tzinfo=timezone.utc).isoformat()
+        return datetime(now.year, 1, 1, tzinfo=UTC).isoformat()
     return None
 
 
-def _run_sync_task(limit: Optional[int], all_files: bool):
+def _run_sync_task(limit: int | None, all_files: bool):
     sync_status["is_syncing"] = True
     sync_status["error"] = None
 
@@ -97,7 +103,13 @@ def _run_sync_task(limit: Optional[int], all_files: bool):
         }
 
         notify_sync_event("sync_done", sync_status["last_result"])
-    except Exception as exc:
+    except (
+        RuntimeError,
+        OSError,
+        sqlite3.Error,
+        requests.RequestException,
+        ValueError,
+    ) as exc:
         sync_status["error"] = str(exc)
         notify_sync_event("sync_error", {"error": str(exc)})
     finally:
@@ -105,7 +117,7 @@ def _run_sync_task(limit: Optional[int], all_files: bool):
 
 
 @router.get("/daily/timeline")
-def get_daily_timeline(days: Optional[int] = None):
+def get_daily_timeline(days: int | None = None):
     """
     按本地日历日期聚合返回所有会话的每日时间线 (一次性拉取，规避 N+1 轮询)。
     若会话包含跨多个自然日的交互 Chunk，自动派发到每一天的记录中，并将总耗时平均分摊。
@@ -125,21 +137,21 @@ def get_daily_timeline(days: Optional[int] = None):
         if active_dates_str:
             try:
                 date_time_map = json.loads(active_dates_str)
-            except Exception:
-                pass
+            except (json.JSONDecodeError, TypeError) as err:
+                logger.debug("解析 active_dates 失败: %s", err)
 
         # 兼容尚未重建索引的旧数据兜底
         if not date_time_map:
             mtime_str = idx["modified_time"] or idx["created_time"]
             if mtime_str:
                 try:
-                    dt_utc = datetime.fromisoformat(mtime_str.replace("Z", "+00:00"))
+                    dt_utc = datetime.fromisoformat(mtime_str)
                     dt_local = dt_utc.astimezone(local_tz)
                     date_time_map[dt_local.strftime("%Y-%m-%d")] = dt_local.strftime(
                         "%H:%M"
                     )
-                except Exception:
-                    pass
+                except (ValueError, TypeError, OverflowError) as err:
+                    logger.debug("解析 mtime 兼容日期失败: %s", err)
 
         if not date_time_map:
             continue
@@ -237,7 +249,7 @@ def get_metrics(range: str = "all"):
 
 
 @router.get("/sessions")
-def list_sessions(range: str = "all", limit: Optional[int] = None):
+def list_sessions(range: str = "all", limit: int | None = None):
     """
     基于 session_index 极速返回会话列表，供前端 5000+ 虚拟滚动使用（耗时 <15ms）。
     """
@@ -359,14 +371,14 @@ def reindex_cache():
             if count % 500 == 0:
                 try:
                     cache.checkpoint(truncate=False)
-                except Exception:
-                    pass
+                except sqlite3.Error as err:
+                    logger.debug("Reindex 阶段性 Checkpoint 失败: %s", err)
 
     # 4. 彻底合并 WAL 并进行磁盘空间整理
     try:
         cache.checkpoint(truncate=True)
         cache.vacuum()
-    except Exception as exc:
+    except sqlite3.Error as exc:
         print(f"⚠️ Reindex Checkpoint/Vacuum 异常: {exc}")
 
     return {"status": "success", "reindexed_count": count}
@@ -441,7 +453,7 @@ async def sync_events(request: Request):
                 try:
                     msg = await asyncio.wait_for(queue.get(), timeout=15.0)
                     yield f"event: {msg['event']}\ndata: {json.dumps(msg['data'], ensure_ascii=False)}\n\n"
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # 心跳保持
                     yield ": ping\n\n"
         finally:

@@ -7,9 +7,15 @@ AI Studio 离线索引重建与诊断探针工具 (带 tqdm 细粒度进度条�
 """
 
 import argparse
+import json
+import logging
 import os
+import sqlite3
 import time
+
 from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 from src.analyzer.cache import SQLiteCache
 from src.analyzer.parser import parse_prompt_json
@@ -111,15 +117,16 @@ def main():
                     success_count += 1
                 else:
                     parse_failed_count += 1
-            except Exception:
+            except (sqlite3.Error, json.JSONDecodeError, ValueError, KeyError) as err:
+                logger.debug("解析会话失败: %s", err)
                 parse_failed_count += 1
 
             # 周期性平抑 WAL 体积
             if idx % args.batch_checkpoint == 0:
                 try:
                     cache.checkpoint(truncate=False)
-                except Exception:
-                    pass
+                except sqlite3.Error as err:
+                    logger.debug("周期性 Checkpoint 失败: %s", err)
 
             # 刷新状态栏监控指标 (每 20 条采样一次文件大小，降低系统调用开销)
             if idx % 20 == 0 or idx == total_files:
@@ -149,7 +156,7 @@ def main():
         print(
             f"✅ Checkpoint 完成 (busy={busy}, log_pages={log_pages}, ckpt_pages={ckpt_pages})"
         )
-    except Exception as e:
+    except sqlite3.Error as e:
         print(f"⚠️ Checkpoint 异常: {e}")
 
     if not args.no_vacuum:
@@ -158,7 +165,7 @@ def main():
         try:
             cache.vacuum()
             print(f"✅ VACUUM 完成 (耗时: {time.time() - t_vac:.2f}s)")
-        except Exception as e:
+        except sqlite3.Error as e:
             print(f"⚠️ VACUUM 异常: {e}")
 
     print("\n" + "=" * 65)

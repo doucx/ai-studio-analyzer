@@ -97,10 +97,7 @@ export function SessionsRoute() {
             正在载入会话工作台索引...
           </div>
         ) : currentSession ? (
-          <SessionDetailPanel
-            session={currentSession}
-            onClose={handleCloseDetail}
-          />
+          <SessionDetailPanel session={currentSession} onClose={handleCloseDetail} />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center p-12 text-center border border-zinc-800/80 bg-zinc-900/30 rounded-lg">
             <div className="p-3.5 rounded-full bg-zinc-900 border border-zinc-800 text-indigo-400 mb-3">

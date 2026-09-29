@@ -11,7 +11,6 @@ import os
 import sqlite3
 import sys
 import time
-from typing import Dict, List, Optional
 
 
 def format_bytes(size: float) -> str:
@@ -22,13 +21,13 @@ def format_bytes(size: float) -> str:
     return f"{size:.2f} TB"
 
 
-def format_num(n: int | float) -> str:
+def format_num(n: float) -> str:
     if isinstance(n, int):
         return f"{n:,}"
     return f"{n:,.1f}"
 
 
-def get_quantiles(values: List[float]) -> Dict[str, float]:
+def get_quantiles(values: list[float]) -> dict[str, float]:
     if not values:
         return {"min": 0, "p10": 0, "p50": 0, "p75": 0, "p90": 0, "p99": 0, "max": 0}
     s = sorted(values)
@@ -102,11 +101,11 @@ def main():
     print(f"  - 完整性校验 (Quick Check):  {check_res} (耗时: {check_time:.2f}s)")
 
     # 2. 表级一致性诊断
-    def get_table_count(name: str) -> Optional[int]:
+    def get_table_count(name: str) -> int | None:
         try:
             cursor.execute(f"SELECT COUNT(*) FROM {name};")
             return cursor.fetchone()[0]
-        except Exception:
+        except sqlite3.Error:
             return None
 
     raw_count = get_table_count("file_cache") or 0

@@ -548,9 +548,7 @@ export function SessionDetailPanel({ session, onClose }: Props) {
               <TurnMessage key={`turn-${idx}`} turn={turn} index={idx} />
             ))
           ) : !detail && loading ? null : (
-            <div className="py-16 text-center text-zinc-500 text-xs">
-              暂无对话内容或数据未同步
-            </div>
+            <div className="py-16 text-center text-zinc-500 text-xs">暂无对话内容或数据未同步</div>
           )}
         </div>
       </div>

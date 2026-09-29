@@ -1,6 +1,7 @@
 import os
+from typing import Any
+
 import requests
-from typing import Optional, List, Dict, Any
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -15,9 +16,9 @@ class DriveClient:
 
     def __init__(
         self,
-        proxy_url: Optional[str] = None,
-        token_path: Optional[str] = None,
-        creds_path: Optional[str] = None,
+        proxy_url: str | None = None,
+        token_path: str | None = None,
+        creds_path: str | None = None,
     ):
         cfg = load_config()
         self.proxy_url = (
@@ -66,7 +67,7 @@ class DriveClient:
         resp.raise_for_status()
         return resp
 
-    def find_ai_studio_folder(self) -> Optional[str]:
+    def find_ai_studio_folder(self) -> str | None:
         """查找 'Google AI Studio' 或 'MakerSuite' 文件夹 ID"""
         query = "mimeType = 'application/vnd.google-apps.folder' and (name = 'Google AI Studio' or name = 'MakerSuite') and trashed = false"
         url = "https://www.googleapis.com/drive/v3/files"
@@ -78,10 +79,10 @@ class DriveClient:
 
     def list_files(
         self,
-        folder_id: Optional[str] = None,
-        max_results: Optional[int] = None,
+        folder_id: str | None = None,
+        max_results: int | None = None,
         order_by: str = "modifiedTime desc",
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         分页拉取文件夹内文件元数据。
         支持 order_by（默认按修改时间降序，优先拉取最新对话）和 max_results（达到上限提前退出）。
@@ -126,10 +127,10 @@ class DriveClient:
 
         return files
 
-    def download_json(self, file_id: str) -> Optional[Dict[str, Any]]:
+    def download_json(self, file_id: str) -> dict[str, Any] | None:
         """从云端下载文件并反序列化为 JSON 字典"""
         url = f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media"
         try:
             return self._request("GET", url).json()
-        except Exception:
+        except (requests.RequestException, ValueError):
             return None

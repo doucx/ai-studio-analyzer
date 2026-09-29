@@ -1,8 +1,12 @@
 import json
+import logging
 import os
 import sqlite3
-from typing import Dict, Any, Optional, Iterator, Tuple, List
+from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class SQLiteCache:
@@ -105,7 +109,7 @@ class SQLiteCache:
             )
             return cursor.fetchone() is not None
 
-    def get(self, file_id: str) -> Optional[Dict[str, Any]]:
+    def get(self, file_id: str) -> dict[str, Any] | None:
         """从 SQLite 读取缓存内容并反序列化"""
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -116,11 +120,11 @@ class SQLiteCache:
             if row:
                 try:
                     return json.loads(row["data"])
-                except Exception:
+                except (json.JSONDecodeError, TypeError):
                     return None
         return None
 
-    def put(self, file_id: str, modified_time: str, data: Dict[str, Any]):
+    def put(self, file_id: str, modified_time: str, data: dict[str, Any]):
         """写入或更新单个文件缓存"""
         payload_str = json.dumps(data, ensure_ascii=False)
         with self._get_connection() as conn:
@@ -146,7 +150,7 @@ class SQLiteCache:
             row = cursor.fetchone()
             return row["total"] if row else 0
 
-    def checkpoint(self, truncate: bool = True) -> Tuple[int, int, int]:
+    def checkpoint(self, truncate: bool = True) -> tuple[int, int, int]:
         """
         显式将 WAL 脏页完整刷回主数据库文件并释放磁盘空间。
         :param truncate: 是否截断 WAL 文件归零
@@ -172,7 +176,7 @@ class SQLiteCache:
             conn.commit()
         self._init_db()
 
-    def iter_all_data(self) -> Iterator[Tuple[str, str, Dict[str, Any]]]:
+    def iter_all_data(self) -> Iterator[tuple[str, str, dict[str, Any]]]:
         """流式迭代全量缓存记录，避免一次性消耗过多内存"""
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -185,7 +189,8 @@ class SQLiteCache:
                     try:
                         parsed = json.loads(row["data"])
                         yield row["file_id"], row["modified_time"], parsed
-                    except Exception:
+                    except (json.JSONDecodeError, TypeError) as err:
+                        logger.debug("读取缓存解析失败: %s", err)
                         continue
 
     def upsert_session_index(self, s: Any):
@@ -210,8 +215,8 @@ class SQLiteCache:
                     t_str = t_local.strftime("%H:%M")
                     if d_str not in date_time_map or t_str > date_time_map[d_str]:
                         date_time_map[d_str] = t_str
-                except Exception:
-                    pass
+                except (ValueError, TypeError, OverflowError) as err:
+                    logger.debug("转换 turn 时间戳失败: %s", err)
 
         if not date_time_map:
             m_dt = s.modified_time or s.created_time
@@ -221,8 +226,8 @@ class SQLiteCache:
                     date_time_map[dt_local.strftime("%Y-%m-%d")] = dt_local.strftime(
                         "%H:%M"
                     )
-                except Exception:
-                    pass
+                except (ValueError, TypeError, OverflowError) as err:
+                    logger.debug("转换会话时间戳失败: %s", err)
 
         import json
 
@@ -291,9 +296,9 @@ class SQLiteCache:
 
     def query_indices(
         self,
-        range_start_iso: Optional[str] = None,
-        limit: Optional[int] = None,
-    ) -> List[Dict[str, Any]]:
+        range_start_iso: str | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
         """基于时间条件毫秒级检索会话索引列表"""
         sql = "SELECT * FROM session_index"
         params = []
@@ -384,8 +389,8 @@ class SQLiteCache:
         query: str,
         limit: int = 50,
         offset: int = 0,
-        range_start_iso: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        range_start_iso: str | None = None,
+    ) -> list[dict[str, Any]]:
         """基于 FTS5 Trigram 与 BM25 进行全文检索，并提取上下文命中片段 (Snippet)"""
         clean_query = query.strip().replace('"', '""')
         if not clean_query:
@@ -393,7 +398,7 @@ class SQLiteCache:
 
         fts_match_expr = f'"{clean_query}"'
         where_conditions = ["session_fts MATCH ?"]
-        params: List[Any] = [fts_match_expr]
+        params: list[Any] = [fts_match_expr]
 
         if range_start_iso:
             where_conditions.append("(s.modified_time >= ? OR s.created_time >= ?)")

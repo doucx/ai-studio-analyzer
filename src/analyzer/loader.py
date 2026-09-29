@@ -2,16 +2,16 @@
 AI Studio 本地对象加载模块 (纯离线从 SQLite 加载数据)
 """
 
-from typing import List, Optional
 from tqdm import tqdm
+
 from .cache import SQLiteCache
 from .models import PromptSession
 from .parser import parse_prompt_json
 
 
 def load_cached_sessions(
-    cache: SQLiteCache, limit: Optional[int] = None, show_progress: bool = True
-) -> List[PromptSession]:
+    cache: SQLiteCache, limit: int | None = None, show_progress: bool = True
+) -> list[PromptSession]:
     """
     从本地 SQLite 数据库离线加载已解析的会话列表。
 
@@ -27,7 +27,7 @@ def load_cached_sessions(
     target_count = (
         total_in_db if (limit is None or limit <= 0) else min(limit, total_in_db)
     )
-    sessions: List[PromptSession] = []
+    sessions: list[PromptSession] = []
 
     iterator = cache.iter_all_data()
     if show_progress:

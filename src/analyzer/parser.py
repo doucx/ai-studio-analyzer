@@ -1,7 +1,12 @@
 import base64
+import binascii
+import logging
 from datetime import datetime
-from typing import Optional, Dict, Any
-from .models import PromptSession, ConversationTurn
+from typing import Any
+
+from .models import ConversationTurn, PromptSession
+
+logger = logging.getLogger(__name__)
 
 
 def is_valid_prompt_file(name: str) -> bool:
@@ -9,9 +14,7 @@ def is_valid_prompt_file(name: str) -> bool:
     if name.startswith("Paste "):
         return False
     lower = name.lower()
-    if lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif")):
-        return False
-    return True
+    return not lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".gif"))
 
 
 def is_text_mime(mime: str) -> bool:
@@ -33,8 +36,8 @@ def is_text_mime(mime: str) -> bool:
 
 
 def parse_prompt_json(
-    file_meta: Optional[Dict[str, Any]], raw_data: Dict[str, Any]
-) -> Optional[PromptSession]:
+    file_meta: dict[str, Any] | None, raw_data: dict[str, Any]
+) -> PromptSession | None:
     """
     将 Google AI Studio 原始 JSON 转化为结构化的 PromptSession 对象。
     兼容 chunkedPrompt 结构以及新版 Gemini contents 结构，
@@ -80,11 +83,9 @@ def parse_prompt_json(
             chunk_time = None
             if "createTime" in c:
                 try:
-                    chunk_time = datetime.fromisoformat(
-                        c["createTime"].replace("Z", "+00:00")
-                    )
-                except Exception:
-                    pass
+                    chunk_time = datetime.fromisoformat(c["createTime"])
+                except (ValueError, TypeError) as err:
+                    logger.debug("解析 chunk 时间戳失败: %s", err)
 
             text = ""
             payload_type = "text"
@@ -109,8 +110,8 @@ def parse_prompt_json(
                 try:
                     if raw_b64:
                         raw_bytes = base64.b64decode(raw_b64)
-                except Exception:
-                    pass
+                except (ValueError, binascii.Error) as err:
+                    logger.debug("解码附件 base64 失败: %s", err)
 
                 byte_size = len(raw_bytes)
                 extra_meta = {
@@ -122,7 +123,7 @@ def parse_prompt_json(
                 if is_text_mime(mime):
                     try:
                         text = raw_bytes.decode("utf-8", errors="replace")
-                    except Exception:
+                    except UnicodeDecodeError:
                         text = "[无法按 UTF-8 解码的文本附件]"
                 else:
                     text = f"[{mime} 媒体/二进制附件 ({byte_size} bytes)]"
@@ -179,20 +180,16 @@ def parse_prompt_json(
     )
     if raw_created:
         try:
-            created_time = datetime.fromisoformat(
-                str(raw_created).replace("Z", "+00:00")
-            )
-        except Exception:
-            pass
+            created_time = datetime.fromisoformat(str(raw_created))
+        except (ValueError, TypeError) as err:
+            logger.debug("解析 createdTime 失败: %s", err)
 
     raw_modified = file_meta.get("modifiedTime") or raw_data.get("modifiedTime")
     if raw_modified:
         try:
-            modified_time = datetime.fromisoformat(
-                str(raw_modified).replace("Z", "+00:00")
-            )
-        except Exception:
-            pass
+            modified_time = datetime.fromisoformat(str(raw_modified))
+        except (ValueError, TypeError) as err:
+            logger.debug("解析 modifiedTime 失败: %s", err)
 
     # 解析名称
     name = (

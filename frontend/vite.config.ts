@@ -2,7 +2,6 @@ import preact from '@preact/preset-vite';
 import { defineConfig, loadEnv } from 'vite';
 
 export default defineConfig(({ mode }) => {
-  
   return {
     plugins: [preact()],
     server: {

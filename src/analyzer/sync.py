@@ -2,10 +2,13 @@
 AI Studio 远程增量同步模块 (类 git fetch/pull 网络层)
 """
 
-from typing import Callable, List, Optional, Tuple
+import sqlite3
+from collections.abc import Callable
+
 from tqdm import tqdm
-from .drive import DriveClient
+
 from .cache import SQLiteCache
+from .drive import DriveClient
 from .models import PromptSession
 from .parser import is_valid_prompt_file, parse_prompt_json
 
@@ -13,10 +16,10 @@ from .parser import is_valid_prompt_file, parse_prompt_json
 def fetch_remote_files(
     client: DriveClient,
     cache: SQLiteCache,
-    limit: Optional[int] = 50,
+    limit: int | None = 50,
     all_files: bool = False,
-    progress_callback: Optional[Callable[[int, int, int, int], None]] = None,
-) -> Tuple[int, int, List[PromptSession]]:
+    progress_callback: Callable[[int, int, int, int], None] | None = None,
+) -> tuple[int, int, list[PromptSession]]:
     """
     增量拉取云盘最近修改的文件并写入 SQLite 缓存。
 
@@ -42,7 +45,7 @@ def fetch_remote_files(
 
     download_count = 0
     cache_hit_count = 0
-    updated_sessions: List[PromptSession] = []
+    updated_sessions: list[PromptSession] = []
     total_valid = len(valid_files)
 
     with tqdm(valid_files, desc="云盘增量同步", unit="file") as pbar:
@@ -80,7 +83,7 @@ def fetch_remote_files(
     # 增量拉取与索引写入完成后，主动将 WAL 日志完整合并回主数据库并截断释放磁盘
     try:
         cache.checkpoint(truncate=True)
-    except Exception as exc:
+    except sqlite3.Error as exc:
         print(f"⚠️ WAL Checkpoint 异常: {exc}")
 
     return total_valid, cache_hit_count, updated_sessions

@@ -5,6 +5,7 @@ AI Studio 缓存数据 Schema 探针脚本 (直接基于 SQLite WAL 数据库，
 import json
 from collections import Counter, defaultdict
 from typing import Any
+
 from src.analyzer.cache import SQLiteCache
 
 
@@ -66,7 +67,7 @@ def inspect_cache_database(cache_dir: str = ".cache", str_truncate_limit: int = 
         chunks = data.get("chunkedPrompt", {}).get("chunks", [])
         for chunk in chunks:
             payload_types = [
-                k for k in chunk.keys() if k not in ("role", "tokenCount", "createTime")
+                k for k in chunk if k not in ("role", "tokenCount", "createTime")
             ]
             chunk_types_counter[", ".join(sorted(payload_types))] += 1
 

@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import List, Optional, Dict, Any
+from typing import Any
 
 
 @dataclass
@@ -12,11 +12,11 @@ class ConversationTurn:
     token_count: int = 0  # 该轮消耗的精确 Token 数量
     is_thought: bool = False  # 是否为 Gemini 2.0 Thinking 思考过程
     payload_type: str = "text"  # 'text' | 'inlineFile' | 'driveDocument' | 'other'
-    timestamp: Optional[datetime] = None
-    branch_parent: Optional[Any] = None  # 分支父节点引用
-    branch_children: List[Any] = field(default_factory=list)  # 派生出的分支列表
+    timestamp: datetime | None = None
+    branch_parent: Any | None = None  # 分支父节点引用
+    branch_children: list[Any] = field(default_factory=list)  # 派生出的分支列表
     is_edited: bool = False  # 是否为用户手动编辑过的历史节点
-    extra_metadata: Dict[str, Any] = field(default_factory=dict)
+    extra_metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -26,14 +26,14 @@ class PromptSession:
     file_id: str  # Google Drive 文件 ID
     name: str  # 对话/文件名称
     model: str  # 绑定的模型标识 (如 gemini-1.5-pro)
-    created_time: Optional[datetime]  # 云端创建时间
-    modified_time: Optional[datetime]  # 最后修改时间
-    turns: List[ConversationTurn]  # 会话的所有轮次
+    created_time: datetime | None  # 云端创建时间
+    modified_time: datetime | None  # 最后修改时间
+    turns: list[ConversationTurn]  # 会话的所有轮次
     system_instruction: str = ""  # 系统指令 / 前置协议
     system_instruction_tokens: int = 0  # 系统指令自身占用的 Token 数量
 
     @property
-    def start_time(self) -> Optional[datetime]:
+    def start_time(self) -> datetime | None:
         """推导会话起始时间：优先采用 created_time，其次推导自首个有效 Chunk 的时间戳"""
         if self.created_time:
             return self.created_time
@@ -41,7 +41,7 @@ class PromptSession:
         return min(turn_times) if turn_times else None
 
     @property
-    def end_time(self) -> Optional[datetime]:
+    def end_time(self) -> datetime | None:
         """推导会话结束时间：结合末轮 Chunk 时间与 modified_time 的最新值"""
         turn_times = [t.timestamp for t in self.turns if t.timestamp]
         max_turn_time = max(turn_times) if turn_times else None
@@ -65,7 +65,7 @@ class PromptSession:
         return round(est, 1)
 
     @property
-    def duration(self) -> Optional[timedelta]:
+    def duration(self) -> timedelta | None:
         """
         会话有效心智活跃时长 (Active Engagement Duration):
         消除 0s 假死现象并防范跨月闲置沉睡的无界累加 (如 74 天)。
@@ -127,7 +127,7 @@ class PromptSession:
         return timedelta(seconds=est)
 
     @property
-    def duration_seconds(self) -> Optional[float]:
+    def duration_seconds(self) -> float | None:
         """会话生命周期持续秒数 (未知或无效时返回 None)"""
         d = self.duration
         return round(d.total_seconds(), 1) if d is not None else None
@@ -152,7 +152,7 @@ class PromptSession:
         return " ".join(parts)
 
     @property
-    def user_prompts(self) -> List[str]:
+    def user_prompts(self) -> list[str]:
         """提取所有属于用户的有效发言文本"""
         return [turn.text for turn in self.turns if turn.role == "user"]
 
@@ -218,7 +218,7 @@ class PromptSession:
             if t.role == "model":
                 if not in_model_response:
                     # 刚进入模型回复阶段，[系统指令 + 所有前置上下文] 作为本次调用的 Prompt 输入
-                    total_api_tokens += (self.system_instruction_tokens + prefix_tokens)
+                    total_api_tokens += self.system_instruction_tokens + prefix_tokens
                     in_model_response = True
                 # 输出生成的 tokens
                 total_api_tokens += t.token_count
