@@ -127,7 +127,20 @@ def parse_prompt_json(
                         text = "[无法按 UTF-8 解码的文本附件]"
                 else:
                     text = f"[{mime} 媒体/二进制附件 ({byte_size} bytes)]"
-            # 分支 3: 常规纯文本交互
+            # 优先分支 3: 内联 Base64 编码图片
+            elif "inlineImage" in c:
+                img_info = c["inlineImage"]
+                mime = img_info.get("mimeType", "image/png")
+                raw_b64 = img_info.get("data", "")
+                byte_size = int(len(raw_b64) * 3 / 4) if raw_b64 else 0
+                payload_type = "inlineImage"
+                extra_meta = {
+                    "mime_type": mime,
+                    "byte_size": byte_size,
+                    "data": raw_b64,
+                }
+                text = f"[{mime} 图片附件 ({round(byte_size / 1024, 1)} KB)]"
+            # 分支 4: 常规纯文本交互
             elif "text" in c:
                 text = c.get("text", "")
                 payload_type = "text"

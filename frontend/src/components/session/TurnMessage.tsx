@@ -8,6 +8,7 @@ import {
   Download,
   ExternalLink,
   FileText,
+  Image as ImageIcon,
   Paperclip,
   User,
 } from 'lucide-preact';
@@ -76,6 +77,31 @@ function DownloadButton({ text, filename }: { text: string; filename: string }) 
       onClick={handleDownload}
       className="px-2 py-1 text-[11px] rounded transition flex items-center gap-1 border bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 border-zinc-700/60 cursor-pointer"
       title="下载文件附件"
+    >
+      <Download size={12} />
+      <span>下载</span>
+    </button>
+  );
+}
+
+function DownloadImageButton({
+  base64Data,
+  mimeType,
+  filename,
+}: { base64Data: string; mimeType: string; filename: string }) {
+  const handleDownload = () => {
+    const a = document.createElement('a');
+    a.href = `data:${mimeType};base64,${base64Data}`;
+    a.download = filename;
+    a.click();
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleDownload}
+      className="px-2 py-1 text-[11px] rounded transition flex items-center gap-1 border bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 border-zinc-700/60 cursor-pointer"
+      title="下载图片文件"
     >
       <Download size={12} />
       <span>下载</span>
@@ -253,6 +279,63 @@ export function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index
                 {turn.text.slice(0, 160)}...
               </button>
             )}
+          </div>
+        ) : turn.payload_type === 'inlineImage' ? (
+          <div className="rounded-lg border border-purple-900/40 bg-purple-950/20 overflow-hidden">
+            <div className="px-3.5 py-2.5 flex items-center justify-between bg-purple-950/40 border-b border-purple-900/30 text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <ImageIcon size={14} className="text-purple-400 shrink-0" />
+                <div className="min-w-0">
+                  <span className="font-semibold text-purple-300">
+                    图片附件 (inlineImage)
+                  </span>
+                  <span className="ml-2 font-mono text-[11px] text-purple-400/80">
+                    {turn.extra_metadata?.mime_type || 'image/png'}
+                    {turn.extra_metadata?.byte_size !== undefined &&
+                      ` · ${(turn.extra_metadata.byte_size / 1024).toFixed(1)} KB`}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setIsAttachmentOpen(!isAttachmentOpen)}
+                  className="px-2 py-1 text-[11px] font-mono rounded bg-purple-900/40 hover:bg-purple-900/60 text-purple-200 border border-purple-800/50 transition cursor-pointer flex items-center gap-1"
+                >
+                  {isAttachmentOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                  <span>{isAttachmentOpen ? '收起大图' : '展开大图'}</span>
+                </button>
+                {turn.extra_metadata?.data && (
+                  <DownloadImageButton
+                    base64Data={turn.extra_metadata.data}
+                    mimeType={turn.extra_metadata.mime_type || 'image/png'}
+                    filename={`image_turn_${index + 1}.${(turn.extra_metadata.mime_type || 'image/png').split('/')[1] || 'png'}`}
+                  />
+                )}
+              </div>
+            </div>
+
+            <div className="p-3 bg-black/40 flex justify-center items-center">
+              {turn.extra_metadata?.data ? (
+                <button
+                  type="button"
+                  onClick={() => setIsAttachmentOpen(!isAttachmentOpen)}
+                  className="p-0 border-0 bg-transparent cursor-pointer flex justify-center w-full"
+                  title={isAttachmentOpen ? '点击收起大图' : '点击展开大图'}
+                >
+                  <img
+                    src={`data:${turn.extra_metadata.mime_type || 'image/png'};base64,${turn.extra_metadata.data}`}
+                    alt={`Turn ${index + 1} Image Attachment`}
+                    className={`rounded border border-purple-900/30 object-contain transition-all duration-200 ${
+                      isAttachmentOpen ? 'max-h-[700px] w-auto' : 'max-h-48 hover:opacity-90'
+                    }`}
+                    loading="lazy"
+                  />
+                </button>
+              ) : (
+                <span className="text-zinc-500 text-xs font-mono">{turn.text}</span>
+              )}
+            </div>
           </div>
         ) : (
           <div

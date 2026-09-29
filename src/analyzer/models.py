@@ -160,15 +160,19 @@ class PromptSession:
     def first_effective_prompt(self) -> str:
         """
         推导会话的首轮核心用户提示词：
-        跳过纯内联附件，定位用户真实的意图提问；若首轮附带附件，则附带紧凑标签前缀。
+        跳过纯内联附件与图片，定位用户真实的意图提问；若首轮附带附件/图片，则附带紧凑标签前缀。
         """
         user_turns = [t for t in self.turns if t.role == "user"]
         if not user_turns:
             return ""
 
         first_turn = user_turns[0]
-        if first_turn.payload_type == "inlineFile":
-            mime = first_turn.extra_metadata.get("mime_type", "附件")
+        if first_turn.payload_type in ("inlineFile", "inlineImage"):
+            is_img = first_turn.payload_type == "inlineImage"
+            icon = "🖼️" if is_img else "📎"
+            mime = first_turn.extra_metadata.get(
+                "mime_type", "图片" if is_img else "附件"
+            )
             # 寻找后续首条真实文本提问
             subsequent_prompt = next(
                 (
@@ -179,8 +183,8 @@ class PromptSession:
                 "",
             )
             if subsequent_prompt:
-                return f"[📎 {mime}] {subsequent_prompt}"
-            return f"[📎 附件: {mime}]"
+                return f"[{icon} {mime}] {subsequent_prompt}"
+            return f"[{icon} {mime}]"
 
         return first_turn.text.strip()
 

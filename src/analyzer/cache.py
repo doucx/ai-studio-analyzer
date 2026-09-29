@@ -394,6 +394,13 @@ class SQLiteCache:
                 label = dname or mime or "inlineFile"
                 preview = text[:200].replace("\n", " ").strip() if text else ""
                 turn_texts.append(f"[附件: {label}] {preview}")
+            elif p_type == "inlineImage":
+                mime = (
+                    t.extra_metadata.get("mime_type", "image/png")
+                    if getattr(t, "extra_metadata", None)
+                    else "image/png"
+                )
+                turn_texts.append(f"[图片附件: {mime}]")
             elif p_type == "driveDocument":
                 turn_texts.append(f"[挂载云盘: {text[:200]}]")
 

@@ -120,6 +120,7 @@ export interface ConversationTurnItem {
     byte_size?: number;
     display_name?: string;
     doc_id?: string;
+    data?: string;
     [key: string]: unknown;
   };
 }
