@@ -1,6 +1,13 @@
+from collections import Counter, defaultdict
 from typing import Any
 
-import pandas as pd
+
+def _quantile(sorted_vals: list[float], pct: float) -> float:
+    """计算已升序排列数组的分位数"""
+    if not sorted_vals:
+        return 0.0
+    idx = int(len(sorted_vals) * pct)
+    return float(sorted_vals[min(idx, len(sorted_vals) - 1)])
 
 
 def calculate_session_metrics(
@@ -9,7 +16,7 @@ def calculate_session_metrics(
     single_date: str | None = None,
 ) -> dict[str, Any]:
     """
-    基于 pandas 的稳健认知与交互指标引擎：
+    轻量高性能认知与交互指标引擎 (纯 Python 原生实现，零第三方数据科学依赖)：
     兼容 PromptSession 实例列表或来自 session_index 表的字典列表，
     当为单日场景时支持自动切换为 24 小时槽位分时趋势。
     """
@@ -85,28 +92,28 @@ def calculate_session_metrics(
 
     total_sessions = len(sessions)
 
-    # 1. 构造结构化 DataFrame (自适应字典或 PromptSession 对象)
+    # 1. 结构化抽取标准化记录
     records = []
     first_item = sessions[0]
     if isinstance(first_item, dict):
         for d in sessions:
             dur_sec = d.get("duration_seconds")
-            dur_min = round(dur_sec / 60, 2) if dur_sec is not None else None
-            tot_tok = d.get("total_tokens", 0)
-            cum_tok = d.get("cumulative_tokens") or tot_tok
+            dur_min = round(dur_sec / 60.0, 2) if dur_sec is not None else None
+            tot_tok = int(d.get("total_tokens") or 0)
+            cum_tok = int(d.get("cumulative_tokens") or tot_tok)
             records.append(
                 {
                     "file_id": d["file_id"],
                     "date": d.get("date"),
-                    "turn_count": d.get("turn_count", 0),
+                    "turn_count": int(d.get("turn_count") or 0),
                     "duration_seconds": dur_sec,
                     "duration_minutes": dur_min,
                     "total_tokens": tot_tok,
                     "cumulative_tokens": cum_tok,
-                    "thought_tokens": d.get("thought_tokens", 0),
-                    "user_chars": d.get("user_char_count", 0),
+                    "thought_tokens": int(d.get("thought_tokens") or 0),
+                    "user_chars": int(d.get("user_char_count") or 0),
                     "has_branching": bool(d.get("has_branching", False)),
-                    "branch_count": d.get("branch_count", 0),
+                    "branch_count": int(d.get("branch_count") or 0),
                     "has_sys_instruction": bool(d.get("has_sys_instruction", False)),
                     "model": d.get("model", "unknown"),
                     "active_dates": d.get("active_dates"),
@@ -118,51 +125,61 @@ def calculate_session_metrics(
             st = s.start_time or s.modified_time
             date_str = st.strftime("%Y-%m-%d") if st else None
             dur_sec = s.duration_seconds
-            dur_min = round(dur_sec / 60, 2) if dur_sec is not None else None
-            tot_tok = s.total_tokens
-            cum_tok = getattr(s, "cumulative_api_tokens", tot_tok)
+            dur_min = round(dur_sec / 60.0, 2) if dur_sec is not None else None
+            tot_tok = int(s.total_tokens)
+            cum_tok = int(getattr(s, "cumulative_api_tokens", tot_tok))
             records.append(
                 {
                     "file_id": s.file_id,
                     "date": date_str,
-                    "turn_count": s.turn_count,
+                    "turn_count": int(s.turn_count),
                     "duration_seconds": dur_sec,
                     "duration_minutes": dur_min,
                     "total_tokens": tot_tok,
                     "cumulative_tokens": cum_tok,
-                    "thought_tokens": s.thought_tokens,
-                    "user_chars": s.total_user_chars,
-                    "has_branching": s.has_branching,
-                    "branch_count": s.branch_count,
+                    "thought_tokens": int(s.thought_tokens),
+                    "user_chars": int(s.total_user_chars),
+                    "has_branching": bool(s.has_branching),
+                    "branch_count": int(s.branch_count),
                     "has_sys_instruction": bool(s.system_instruction),
                     "model": s.model,
+                    "active_dates": None,
+                    "modified_time": s.modified_time.isoformat()
+                    if s.modified_time
+                    else None,
                 }
             )
 
-    df = pd.DataFrame(records)
+    # 2. 对话轮次分位数 (纯 Python 原生聚合)
+    turn_counts = [r["turn_count"] for r in records]
+    sorted_turns = sorted(turn_counts)
+    sum_turns = sum(turn_counts)
+    deep_count = sum(1 for t in turn_counts if t >= 5)
 
-    # 2. 对话轮次分位数
-    turn_s = df["turn_count"]
     turn_stats = {
-        "mean": round(float(turn_s.mean()), 2),
-        "median": round(float(turn_s.median()), 1),
-        "p75": round(float(turn_s.quantile(0.75)), 1),
-        "p90": round(float(turn_s.quantile(0.90)), 1),
-        "deep_count": int((turn_s >= 5).sum()),
-        "deep_ratio": f"{round(float((turn_s >= 5).mean()) * 100, 1)}%",
+        "mean": round(sum_turns / total_sessions, 2),
+        "median": round(_quantile(sorted_turns, 0.50), 1),
+        "p75": round(_quantile(sorted_turns, 0.75), 1),
+        "p90": round(_quantile(sorted_turns, 0.90), 1),
+        "deep_count": deep_count,
+        "deep_ratio": f"{round((deep_count / total_sessions) * 100, 1)}%",
     }
 
-    # 3. 会话时长 (Duration) 分位数与长尾过滤 (仅统计有效交互时长 >= 10 秒的非空会话)
-    meaningful_df = df[df["duration_seconds"].notna() & (df["duration_seconds"] >= 10)]
-    if not meaningful_df.empty:
-        dur_s = meaningful_df["duration_minutes"]
+    # 3. 会话时长 (Duration) 分位数与长尾过滤 (>= 10秒为有效会话)
+    valid_durs = [
+        r["duration_minutes"]
+        for r in records
+        if r["duration_seconds"] is not None and r["duration_seconds"] >= 10
+    ]
+    if valid_durs:
+        sorted_durs = sorted(valid_durs)
         dur_stats = {
-            "mean": round(float(dur_s.mean()), 1),
-            "median": round(float(dur_s.median()), 1),
-            "p75": round(float(dur_s.quantile(0.75)), 1),
-            "p90": round(float(dur_s.quantile(0.90)), 1),
-            "max": round(float(dur_s.max()), 1),
-            "valid_count": len(meaningful_df),
+            "mean": round(sum(sorted_durs) / len(sorted_durs), 1),
+            "median": round(_quantile(sorted_durs, 0.50), 1),
+            "p75": round(_quantile(sorted_durs, 0.75), 1),
+            "p90": round(_quantile(sorted_durs, 0.90), 1),
+            "max": round(sorted_durs[-1], 1),
+            "valid_count": len(sorted_durs),
         }
     else:
         dur_stats = {
@@ -174,42 +191,35 @@ def calculate_session_metrics(
             "valid_count": 0,
         }
 
-    # 多轮深入会话 (≥2 轮) 专属时长统计
-    multi_turn_df = df[
-        (df["turn_count"] >= 2)
-        & df["duration_seconds"].notna()
-        & (df["duration_seconds"] >= 10)
+    # 多轮深入会话 (>= 2轮 且 >= 10秒) 时长统计
+    multi_durs = [
+        r["duration_minutes"]
+        for r in records
+        if r["turn_count"] >= 2
+        and r["duration_seconds"] is not None
+        and r["duration_seconds"] >= 10
     ]
-    if not multi_turn_df.empty:
-        m_dur_s = multi_turn_df["duration_minutes"]
+    if multi_durs:
+        sorted_m_durs = sorted(multi_durs)
         multi_dur_stats = {
-            "mean": round(float(m_dur_s.mean()), 1),
-            "median": round(float(m_dur_s.median()), 1),
-            "p75": round(float(m_dur_s.quantile(0.75)), 1),
-            "p90": round(float(m_dur_s.quantile(0.90)), 1),
+            "mean": round(sum(sorted_m_durs) / len(sorted_m_durs), 1),
+            "median": round(_quantile(sorted_m_durs, 0.50), 1),
+            "p75": round(_quantile(sorted_m_durs, 0.75), 1),
+            "p90": round(_quantile(sorted_m_durs, 0.90), 1),
         }
     else:
         multi_dur_stats = {"mean": 0.0, "median": 0.0, "p75": 0.0, "p90": 0.0}
 
-    # 时长心智梯队划分 (仅基于具有有效时长的样本，避免未知样本充当即时快问)
-    valid_dur_df = df[df["duration_minutes"].notna()]
-    valid_dur_total = len(valid_dur_df) if not valid_dur_df.empty else total_sessions
-    denom = valid_dur_total if valid_dur_total > 0 else 1
+    # 时长梯队切片
+    all_valid_mins = [
+        r["duration_minutes"] for r in records if r["duration_minutes"] is not None
+    ]
+    denom = len(all_valid_mins) if all_valid_mins else total_sessions
 
-    tier_flash = int((valid_dur_df["duration_minutes"] < 10).sum())  # 即时快问 (<10m)
-    tier_focus = int(
-        (
-            (valid_dur_df["duration_minutes"] >= 10)
-            & (valid_dur_df["duration_minutes"] < 60)
-        ).sum()
-    )  # 聚焦推进 (10~60m)
-    tier_deep = int(
-        (
-            (valid_dur_df["duration_minutes"] >= 60)
-            & (valid_dur_df["duration_minutes"] < 360)
-        ).sum()
-    )  # 深度攻坚 (1~6h)
-    tier_epic = int((valid_dur_df["duration_minutes"] >= 360).sum())  # 跨日长线 (>6h)
+    tier_flash = sum(1 for m in all_valid_mins if m < 10)
+    tier_focus = sum(1 for m in all_valid_mins if 10 <= m < 60)
+    tier_deep = sum(1 for m in all_valid_mins if 60 <= m < 360)
+    tier_epic = sum(1 for m in all_valid_mins if m >= 360)
 
     duration_tiers = {
         "flash": (tier_flash, f"{round(tier_flash / denom * 100, 1)}%"),
@@ -219,10 +229,11 @@ def calculate_session_metrics(
     }
 
     # 4. Token 消耗分位数与累计推理算力
-    tok_s = df["total_tokens"]
-    total_tokens = int(tok_s.sum())
-    total_thought_tokens = int(df["thought_tokens"].sum())
-    total_cumulative_tokens = int(df["cumulative_tokens"].sum())
+    tok_vals = [r["total_tokens"] for r in records]
+    sorted_toks = sorted(tok_vals)
+    total_tokens = sum(tok_vals)
+    total_thought_tokens = sum(r["thought_tokens"] for r in records)
+    total_cumulative_tokens = sum(r["cumulative_tokens"] for r in records)
     expansion_factor = (
         f"{round(total_cumulative_tokens / total_tokens, 2)}x"
         if total_tokens > 0
@@ -233,10 +244,10 @@ def calculate_session_metrics(
         "total": total_tokens,
         "cumulative_total": total_cumulative_tokens,
         "expansion_factor": expansion_factor,
-        "mean": round(float(tok_s.mean()), 0),
-        "median": round(float(tok_s.median()), 0),
-        "p75": round(float(tok_s.quantile(0.75)), 0),
-        "p90": round(float(tok_s.quantile(0.90)), 0),
+        "mean": round(total_tokens / total_sessions, 0),
+        "median": round(_quantile(sorted_toks, 0.50), 0),
+        "p75": round(_quantile(sorted_toks, 0.75), 0),
+        "p90": round(_quantile(sorted_toks, 0.90), 0),
         "total_thought": total_thought_tokens,
         "thought_ratio": f"{round(total_thought_tokens / total_tokens * 100, 2)}%"
         if total_tokens > 0
@@ -244,15 +255,15 @@ def calculate_session_metrics(
     }
 
     # 5. 思维摩擦力与分支
-    branch_count = int(df["has_branching"].sum())
+    branch_sessions = sum(1 for r in records if r["has_branching"])
     friction_stats = {
-        "branch_sessions": branch_count,
-        "branch_ratio": f"{round(branch_count / total_sessions * 100, 1)}%",
-        "total_retries": int(df["branch_count"].sum()),
+        "branch_sessions": branch_sessions,
+        "branch_ratio": f"{round(branch_sessions / total_sessions * 100, 1)}%",
+        "total_retries": sum(r["branch_count"] for r in records),
     }
 
-    # 6. 模型偏好分布
-    model_dist = df["model"].value_counts().to_dict()
+    # 6. 模型偏好分布 (使用 Counter 替代 value_counts)
+    model_dist = dict(Counter(r["model"] for r in records).most_common())
 
     # 7. 时序走势聚合：若为单日场景则生成 24 个小时槽位分布，否则按日聚合
     daily_trends = []
@@ -305,44 +316,53 @@ def calculate_session_metrics(
 
         daily_trends = hourly_buckets
     else:
-        valid_dates_df = df[df["date"].notna()]
-        if not valid_dates_df.empty:
-            grouped = (
-                valid_dates_df.groupby("date")
-                .agg(
-                    total_tokens=("total_tokens", "sum"),
-                    cumulative_tokens=("cumulative_tokens", "sum"),
-                    thought_tokens=("thought_tokens", "sum"),
-                    sessions=("file_id", "count"),
-                    turns=("turn_count", "sum"),
-                )
-                .reset_index()
-                .sort_values("date")
-            )
+        # 使用哈希表替代 DataFrame.groupby('date')，保持 O(N) 极速升序聚合
+        date_map = defaultdict(
+            lambda: {
+                "total_tokens": 0,
+                "cumulative_tokens": 0,
+                "thought_tokens": 0,
+                "sessions": 0,
+                "turns": 0,
+            }
+        )
 
-            for _, row in grouped.iterrows():
-                daily_trends.append(
-                    {
-                        "date": str(row["date"]),
-                        "total_tokens": int(row["total_tokens"]),
-                        "cumulative_tokens": int(row["cumulative_tokens"]),
-                        "thought_tokens": int(row["thought_tokens"]),
-                        "sessions": int(row["sessions"]),
-                        "turns": int(row["turns"]),
-                    }
-                )
+        for r in records:
+            d_str = r.get("date")
+            if not d_str:
+                continue
+            entry = date_map[d_str]
+            entry["total_tokens"] += r["total_tokens"]
+            entry["cumulative_tokens"] += r["cumulative_tokens"]
+            entry["thought_tokens"] += r["thought_tokens"]
+            entry["sessions"] += 1
+            entry["turns"] += r["turn_count"]
+
+        sorted_dates = sorted(date_map.keys())
+        for d_str in sorted_dates:
+            item = date_map[d_str]
+            daily_trends.append(
+                {
+                    "date": d_str,
+                    "total_tokens": item["total_tokens"],
+                    "cumulative_tokens": item["cumulative_tokens"],
+                    "thought_tokens": item["thought_tokens"],
+                    "sessions": item["sessions"],
+                    "turns": item["turns"],
+                }
+            )
 
     return {
         "total_sessions": total_sessions,
-        "total_turns": int(turn_s.sum()),
-        "total_user_chars": int(df["user_chars"].sum()),
+        "total_turns": sum_turns,
+        "total_user_chars": sum(r["user_chars"] for r in records),
         "turn_stats": turn_stats,
         "dur_stats": dur_stats,
         "multi_dur_stats": multi_dur_stats,
         "duration_tiers": duration_tiers,
         "tok_stats": tok_stats,
         "friction_stats": friction_stats,
-        "sys_instruction_count": int(df["has_sys_instruction"].sum()),
+        "sys_instruction_count": sum(1 for r in records if r["has_sys_instruction"]),
         "model_distribution": model_dist,
         "daily_trends": daily_trends,
         "trend_granularity": "hour" if is_single_day else "day",
