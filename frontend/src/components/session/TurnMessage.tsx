@@ -16,9 +16,28 @@ import { marked } from 'marked';
 import { useMemo, useState } from 'preact/hooks';
 import type { ConversationTurnItem } from '../../types/metrics';
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 marked.setOptions({
   breaks: true,
   gfm: true,
+});
+
+// 覆盖 HTML 处理逻辑，确保对话中直接输入的 HTML 字符串不被实例化为 DOM
+marked.use({
+  renderer: {
+    html(token: { text: string } | string) {
+      const raw = typeof token === 'string' ? token : token?.text || '';
+      return escapeHtml(raw);
+    },
+  },
 });
 
 function CopyButton({ text, className = '' }: { text: string; className?: string }) {
@@ -109,7 +128,13 @@ function DownloadImageButton({
   );
 }
 
-export function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index: number }) {
+interface TurnMessageProps {
+  turn: ConversationTurnItem;
+  index: number;
+  renderMarkdown?: boolean;
+}
+
+export function TurnMessage({ turn, index, renderMarkdown = true }: TurnMessageProps) {
   const [isThinkingOpen, setIsThinkingOpen] = useState(false);
   const [isAttachmentOpen, setIsAttachmentOpen] = useState(false);
 
@@ -120,12 +145,13 @@ export function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index
   }, [turn.payload_type, turn.text]);
 
   const htmlContent = useMemo(() => {
+    if (!renderMarkdown) return '';
     try {
       return marked.parse(turn.text || '');
     } catch {
       return turn.text;
     }
-  }, [turn.text]);
+  }, [turn.text, renderMarkdown]);
 
   const isUser = turn.role === 'user';
   const isThought = turn.is_thought;
@@ -335,12 +361,16 @@ export function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index
               )}
             </div>
           </div>
-        ) : (
+        ) : renderMarkdown ? (
           <div
             className="prose-chat max-w-none"
-            // biome-ignore lint/security/noDangerouslySetInnerHtml: 渲染本地 Markdown 解析
+            // biome-ignore lint/security/noDangerouslySetInnerHtml: 渲染转义过滤后的安全 Markdown
             dangerouslySetInnerHTML={{ __html: htmlContent as string }}
           />
+        ) : (
+          <div className="text-xs text-zinc-200 font-mono whitespace-pre-wrap leading-relaxed select-text bg-black/30 p-3.5 rounded border border-zinc-800/60">
+            {turn.text}
+          </div>
         )}
       </div>
     </div>

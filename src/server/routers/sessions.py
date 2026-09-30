@@ -2,6 +2,7 @@
 会话工作台列表、详情、FTS 全文检索与原始数据导出路由
 """
 
+import html
 import json
 import logging
 from typing import Any
@@ -28,6 +29,64 @@ class SearchRequest(BaseModel):
     scope: str = "range"
     limit: int = 50
     offset: int = 0
+
+
+def safe_highlight_line(line: str, terms: list[str]) -> str:
+    """安全转义 HTML 特殊字符，仅允许高亮 <mark> 标签存在，彻底杜绝 HTML 标签注入"""
+    if not line:
+        return ""
+    if not terms:
+        return html.escape(line)
+
+    line_lower = line.lower()
+    matches: list[tuple[int, int]] = []
+    for t in terms:
+        t_len = len(t)
+        if t_len == 0:
+            continue
+        start = 0
+        while True:
+            pos = line_lower.find(t.lower(), start)
+            if pos == -1:
+                break
+            matches.append((pos, pos + t_len))
+            start = pos + 1
+
+    if not matches:
+        return html.escape(line)
+
+    # 按起始位置升序排序并合并重叠匹配区间
+    matches.sort(key=lambda x: (x[0], -x[1]))
+    merged: list[list[int]] = []
+    for start_pos, end_pos in matches:
+        if not merged:
+            merged.append([start_pos, end_pos])
+        else:
+            prev = merged[-1]
+            if start_pos <= prev[1]:
+                prev[1] = max(prev[1], end_pos)
+            else:
+                merged.append([start_pos, end_pos])
+
+    result: list[str] = []
+    last_idx = 0
+    mark_start = (
+        '<mark class="bg-indigo-500/40 text-indigo-200 font-semibold px-0.5 rounded">'
+    )
+    mark_end = "</mark>"
+
+    for start_pos, end_pos in merged:
+        if start_pos > last_idx:
+            result.append(html.escape(line[last_idx:start_pos]))
+        result.append(mark_start)
+        result.append(html.escape(line[start_pos:end_pos]))
+        result.append(mark_end)
+        last_idx = end_pos
+
+    if last_idx < len(line):
+        result.append(html.escape(line[last_idx:]))
+
+    return "".join(result)
 
 
 def extract_rg_matches(
@@ -85,17 +144,7 @@ def extract_rg_matches(
         line_items = []
         for l_num in range(start_line, end_line):
             is_hit = l_num in hit_indices
-            display_line = lines[l_num]
-            for t in terms:
-                pos = display_line.lower().find(t.lower())
-                if pos >= 0:
-                    matched_slice = display_line[pos : pos + len(t)]
-                    display_line = (
-                        display_line[:pos]
-                        + f'<mark class="bg-indigo-500/40 text-indigo-200 font-semibold px-0.5 rounded">{matched_slice}</mark>'
-                        + display_line[pos + len(t) :]
-                    )
-
+            display_line = safe_highlight_line(lines[l_num], terms if is_hit else [])
             line_items.append(
                 {
                     "line_no": l_num + 1,

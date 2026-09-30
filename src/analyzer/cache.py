@@ -1,3 +1,4 @@
+import html
 import json
 import logging
 import os
@@ -595,11 +596,12 @@ class SQLiteCache:
                 current_params = [fts_match_expr] + base_params + [fetch_limit]
 
                 # 列权重配置: file_id(0.0), title(6.0 强置顶), sys_inst(1.2), content(1.0)
+                # 使用临时哨兵字符 \u0001 和 \u0002 标记命中项，避免文本中的原始 HTML 标签注入
                 sql = f"""
                     SELECT 
                         f.file_id,
                         bm25(session_fts, 0.0, 6.0, 1.2, 1.0) AS raw_rank,
-                        snippet(session_fts, 3, '<mark class="bg-indigo-500/30 text-indigo-300 font-semibold px-0.5 rounded">', '</mark>', '...', 28) AS snippet,
+                        snippet(session_fts, 3, '\u0001', '\u0002', '...', 28) AS raw_snippet,
                         s.name,
                         s.model,
                         s.turn_count,
@@ -632,6 +634,14 @@ class SQLiteCache:
                         for r in rows:
                             item = dict(r)
                             item["has_branching"] = bool(item.get("has_branching", 0))
+
+                            # 对 Snippet 文本转义后再恢复合法 <mark> 标签
+                            raw_snip = item.pop("raw_snippet", "") or ""
+                            escaped_snip = html.escape(raw_snip)
+                            item["snippet"] = escaped_snip.replace(
+                                "\u0001",
+                                '<mark class="bg-indigo-500/30 text-indigo-300 font-semibold px-0.5 rounded">',
+                            ).replace("\u0002", "</mark>")
 
                             # 计算时间新鲜度衰减因子 (Recency Decay)
                             # bm25 负数越小越优，此处综合为 composite_score（越小越优）

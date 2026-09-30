@@ -16,6 +16,7 @@ export function SessionDetailPanel({ session, onClose }: Props) {
   const [loading, setLoading] = useState<boolean>(true);
   const [_refreshing, setRefreshing] = useState<boolean>(false);
   const [showMetadata, setShowMetadata] = useState<boolean>(true);
+  const [renderMarkdown, setRenderMarkdown] = useState<boolean>(true);
   const hasScrolledRef = useRef<string | null>(null);
 
   const aiStudioUrl = `https://aistudio.google.com/prompts/${session.file_id}`;
@@ -128,10 +129,22 @@ export function SessionDetailPanel({ session, onClose }: Props) {
           <button
             type="button"
             onClick={() => setShowMetadata(!showMetadata)}
-            className="px-2.5 py-1 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded border border-zinc-700/80 transition"
+            className="px-2.5 py-1 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded border border-zinc-700/80 transition cursor-pointer"
             title="切换元数据卡片可见性"
           >
             {showMetadata ? '隐藏统计' : '显示统计'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setRenderMarkdown(!renderMarkdown)}
+            className={`px-2.5 py-1 text-xs font-medium rounded border transition cursor-pointer ${
+              renderMarkdown
+                ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700/80'
+                : 'bg-indigo-950/80 hover:bg-indigo-900 text-indigo-300 border-indigo-700/80 font-semibold shadow-sm'
+            }`}
+            title="切换对话流展示模式：富文本 Markdown 渲染 vs 原生纯文本/源码"
+          >
+            {renderMarkdown ? '纯文本' : '渲染 Markdown'}
           </button>
           <a
             href={aiStudioUrl}
@@ -241,8 +254,13 @@ export function SessionDetailPanel({ session, onClose }: Props) {
           ) : null}
           {detail?.turns && detail.turns.length > 0 ? (
             detail.turns.map((turn, idx) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: 对话轮次流按时间严格保序，无需进行动态重排
-              <TurnMessage key={`turn-${idx}`} turn={turn} index={idx} />
+              <TurnMessage
+                // biome-ignore lint/suspicious/noArrayIndexKey: 对话轮次流按时间严格保序，无需进行动态重排
+                key={`turn-${idx}`}
+                turn={turn}
+                index={idx}
+                renderMarkdown={renderMarkdown}
+              />
             ))
           ) : !detail && loading ? null : (
             <div className="py-16 text-center text-zinc-500 text-xs">暂无对话内容或数据未同步</div>
