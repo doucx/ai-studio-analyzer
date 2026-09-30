@@ -350,7 +350,7 @@ export async function runSchemaDiagnostic(sampleLimit?: number) {
 export function openOutlierSession(fileId: string, name: string) {
   outlierDrawerSessionSignal.value = {
     file_id: fileId,
-    name: name || '怪兽离群样本',
+    name: name || '离群样本',
     model: 'unknown',
     turn_count: 0,
     total_tokens: 0,

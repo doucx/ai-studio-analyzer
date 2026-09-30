@@ -215,15 +215,15 @@ export function DiagnosticsTab() {
             </div>
           </section>
 
-          {/* Top 3 离群怪兽样本排查 */}
+          {/* Top 3 离群极值会话排查 */}
           <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5 space-y-4">
             <div>
               <h3 className="text-sm font-semibold text-zinc-200 flex items-center gap-1.5">
                 <Flame size={15} className="text-red-400" />
-                <span>长尾离群怪兽样本排查 (Top Outliers)</span>
+                <span>离群极值会话排查 (Top Outliers)</span>
               </h3>
               <p className="text-xs text-zinc-500 mt-0.5">
-                排查易造成反序列化卡顿或算力激增的极端样本，点击任意卡片即可在右侧抽屉直接展开该会话。
+                排查单条体积、算力能耗或交互深度异常的极值样本，点击任意卡片可在右侧抽屉展开会话。
               </p>
             </div>
 

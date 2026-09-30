@@ -63,9 +63,6 @@ export function OperationsTab({
                 <RefreshCw size={15} className="text-indigo-400" />
                 <span>云端数据同步中心</span>
               </h3>
-              <span className="text-[10px] text-indigo-400 bg-indigo-950/80 px-1.5 py-0.5 rounded border border-indigo-800/60 font-mono">
-                Google Drive
-              </span>
             </div>
             <p className="text-xs text-zinc-400 leading-relaxed">
               增量扫描云端目标文件夹中的对话 JSON。支持拉取最近 50/100 篇或全量全盘对齐。
@@ -139,13 +136,9 @@ export function OperationsTab({
                 <Zap size={15} className="text-amber-400" />
                 <span>索引与 FTS 全文引擎重整</span>
               </h3>
-              <span className="text-[10px] text-amber-400 bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-800/60 font-mono">
-                SQLite FTS5 Trigram
-              </span>
             </div>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              重置 <code>session_index</code> 与 <code>session_fts</code>
-              ，支持按批次平稳提交 Checkpoint，平抑 WAL 膨胀。
+              重置会话二级索引与倒排全文检索表，支持按批次平稳提交 Checkpoint，平抑 WAL 膨胀。
             </p>
           </div>
 
@@ -197,13 +190,9 @@ export function OperationsTab({
                 <RotateCcw size={15} className="text-sky-400" />
                 <span>WAL 日志截断与主库合并</span>
               </h3>
-              <span className="text-[10px] text-sky-400 bg-sky-950/80 px-1.5 py-0.5 rounded border border-sky-800/60 font-mono">
-                PRAGMA TRUNCATE
-              </span>
             </div>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              显式执行 <code>wal_checkpoint(TRUNCATE)</code>，将 <code>cache.db-wal</code>{' '}
-              脏页完整写入主库并将日志归零释放磁盘空间。
+              将日志脏页完整写入主库并将日志归零释放磁盘空间。
             </p>
           </div>
 
@@ -228,13 +217,9 @@ export function OperationsTab({
                 <HardDrive size={15} className="text-emerald-400" />
                 <span>碎片整理与数据库物理瘦身</span>
               </h3>
-              <span className="text-[10px] text-emerald-400 bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800/60 font-mono">
-                VACUUM
-              </span>
             </div>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              清理 Freelist 闲置页面碎片，重构 B-Tree 物理连续性并压缩 <code>cache.db</code>{' '}
-              占用空间。
+              清理闲置页面碎片，重构物理存储连续性并压缩数据库占用空间。
             </p>
           </div>
 

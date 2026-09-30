@@ -147,7 +147,7 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
         <div className="relative">
           <textarea
             rows={3}
-            placeholder="支持标题速查 (1~2字) 或直接粘贴长篇 Prompt、异常调用栈与代码块 (≥3字穿透全库)..."
+            placeholder="输入关键词速查标题，或粘贴 Prompt、代码与异常调用栈检索全文..."
             value={currentKeyword}
             onInput={(e) => {
               handleSearchInput((e.target as HTMLTextAreaElement).value);

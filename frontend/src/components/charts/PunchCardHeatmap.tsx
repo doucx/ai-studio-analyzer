@@ -93,7 +93,7 @@ export function PunchCardHeatmap({ data, mode }: Props) {
                       tabIndex={-1}
                       onMouseEnter={() => setHoveredCell(cell)}
                       onMouseLeave={() => setHoveredCell(null)}
-                      className={`h-6 rounded-[3px] border transition-colors duration-100 cursor-pointer flex items-center justify-center text-[9px] font-mono ${colorClass} hover:brightness-125 hover:ring-2 hover:ring-white/90 z-0 hover:z-10`}
+                      className={`h-6 rounded-[3px] border transition-colors duration-100 cursor-default flex items-center justify-center text-[9px] font-mono ${colorClass} hover:brightness-125 hover:ring-2 hover:ring-white/90 z-0 hover:z-10`}
                       title={`${dayLabel} ${h.toString().padStart(2, '0')}:00 ~ ${h.toString().padStart(2, '0')}:59`}
                     />
                   );

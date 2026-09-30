@@ -12,7 +12,7 @@ export function OutlierDrawerModal() {
         <div className="flex items-center justify-between pb-3 border-b border-zinc-800 mb-4">
           <span className="text-xs font-mono text-amber-400 font-semibold flex items-center gap-1.5">
             <Flame size={14} />
-            <span>离群样本穿透审查: {outlierSession.name}</span>
+            <span>离群会话详情审查: {outlierSession.name}</span>
           </span>
           <button
             type="button"

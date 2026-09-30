@@ -129,15 +129,10 @@ export function HourlyActivityChart({ data, activeRangeLabel }: Props) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-sm font-semibold text-zinc-200">
-              24小时认知精力与交互分布 (Anki 时段统计模式)
-            </h2>
-            <span className="text-[10px] font-mono text-indigo-400 bg-indigo-950/80 px-1.5 py-0.5 rounded border border-indigo-800/60">
-              精确至 Chunk
-            </span>
+            <h2 className="text-sm font-semibold text-zinc-200">24小时认知精力与交互分布</h2>
           </div>
           <p className="text-xs text-zinc-500 mt-0.5">
-            统计【{activeRangeLabel}】周期内一天 24 个时段的心智精力活跃度，识别个人的推理黄金时段
+            统计【{activeRangeLabel}】周期内各时段的交互频度与算力消耗分布
           </p>
         </div>
 

@@ -44,9 +44,6 @@ export function SettingsRoute() {
             <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
               <Sliders size={20} className="text-indigo-400" />
               <span>系统与偏好设置</span>
-              <span className="text-[10px] font-mono uppercase bg-indigo-950/80 text-indigo-400 border border-indigo-800/60 px-1.5 py-0.5 rounded font-normal">
-                Settings
-              </span>
             </h1>
             <p className="text-xs text-zinc-400 mt-1">
               配置 Google API 代理、视口同步策略、心智审计模型超参数及界面交互偏好

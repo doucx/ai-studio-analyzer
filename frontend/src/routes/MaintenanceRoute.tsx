@@ -32,9 +32,6 @@ export function MaintenanceRoute() {
             <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
               <Wrench size={20} className="text-amber-400" />
               <span>系统运维与存储中心</span>
-              <span className="text-[10px] font-mono uppercase bg-amber-950/80 text-amber-400 border border-amber-800/60 px-1.5 py-0.5 rounded font-normal">
-                Maintenance & Ops
-              </span>
             </h1>
             <p className="text-xs text-zinc-400 mt-1">
               提供排他性写锁运维、SQLite FTS5 全文重建、WAL 归零截断、磁盘 VACUUM

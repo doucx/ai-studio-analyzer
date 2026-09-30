@@ -81,7 +81,7 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
 
         <div className="bg-zinc-900/70 border border-zinc-800 rounded-lg p-4">
           <div className="text-xs font-medium text-zinc-400 uppercase tracking-wider flex items-center justify-between">
-            <span>总 Token (静态上下文)</span>
+            <span>总 Token 规模</span>
             <span className="text-[10px] text-zinc-500 font-mono">[{activeRangeLabel}]</span>
           </div>
           <div className="mt-1.5 text-2xl font-bold text-emerald-400 tracking-tight">
@@ -224,7 +224,7 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
             <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5">
               <h2 className="text-sm font-semibold text-zinc-200 mb-1 flex items-center gap-1.5">
                 <Clock size={15} className="text-sky-400" />
-                <span>心智时长梯队切片</span>
+                <span>会话时长分布</span>
               </h2>
               <p className="text-xs text-zinc-500 mb-3">
                 单次任务从首轮交互到最后收尾的时间窗口跨度 (点击切片下钻)
@@ -240,7 +240,7 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
             <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5">
               <h2 className="text-sm font-semibold text-zinc-200 mb-1 flex items-center gap-1.5">
                 <Bot size={15} className="text-indigo-400" />
-                <span>模型偏好分布</span>
+                <span>模型调用分布</span>
               </h2>
               <p className="text-xs text-zinc-500 mb-3">
                 各 Gemini 模型在所选周期内的调用场次 (点击柱体下钻)

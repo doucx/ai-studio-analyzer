@@ -200,7 +200,7 @@ function HeaderBar() {
                 <div className="text-xs font-semibold text-zinc-200 flex items-center justify-between border-b border-zinc-800/80 pb-2.5">
                   <div className="flex items-center gap-2">
                     <Calendar size={14} className="text-indigo-400" />
-                    <span>时空波形切片器 (闭区间圈选)</span>
+                    <span>自定义时间区间选择</span>
                   </div>
                   {isCustomActive && (
                     <button
@@ -264,7 +264,7 @@ function HeaderBar() {
 
                 <div className="flex items-center justify-between pt-1 border-t border-zinc-800">
                   <span className="text-[11px] text-zinc-500 font-mono hidden sm:inline">
-                    提示: 拖动左右两端手柄或中间窗口可快速圈选
+                    提示: 拖动左右两端手柄或平移选区可快速圈选
                   </span>
                   <div className="flex items-center gap-2 ml-auto">
                     <button
