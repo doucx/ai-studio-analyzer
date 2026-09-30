@@ -1,5 +1,6 @@
 import { Globe, Loader2 } from 'lucide-preact';
 import { useRef, useState } from 'preact/hooks';
+import { formatLocalTime } from '../utils/date';
 import {
   type DepthFilter,
   type DurationTierFilter,
@@ -319,9 +320,19 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
                           分叉
                         </span>
                       )}
-                      <span className="text-[10px] text-zinc-500 font-mono whitespace-nowrap">
-                        {s.duration_human}
-                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-zinc-500 font-mono whitespace-nowrap">
+                        <span
+                          title={
+                            s.modified_time
+                              ? `最后修改: ${formatLocalTime(s.modified_time)}`
+                              : ''
+                          }
+                        >
+                          {formatLocalTime(s.modified_time, false)}
+                        </span>
+                        <span>·</span>
+                        <span>{s.duration_human}</span>
+                      </div>
                     </div>
 
                     {s.search_matches && s.search_matches.length > 0 ? (
