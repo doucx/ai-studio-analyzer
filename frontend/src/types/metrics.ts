@@ -34,6 +34,33 @@ export interface FrictionStats {
   total_retries: number;
 }
 
+export interface TokenBreakdown {
+  user_net_tokens: number;
+  context_file_tokens: number;
+  sys_instruction_tokens: number;
+  model_net_tokens: number;
+  thought_tokens: number;
+  user_chars: number;
+}
+
+export interface QuantileLadder {
+  min: number;
+  p10: number;
+  p50: number;
+  p75: number;
+  p90: number;
+  p99: number;
+  max: number;
+}
+
+export interface BreakdownQuantiles {
+  user_net: QuantileLadder;
+  context_files: QuantileLadder;
+  model_net: QuantileLadder;
+  thought: QuantileLadder;
+  user_chars: QuantileLadder;
+}
+
 export interface DailyTrendItem {
   date: string;
   total_tokens: number;
@@ -62,6 +89,8 @@ export interface MetricsSummary {
     epic: [number, string];
   };
   tok_stats: TokStats;
+  token_breakdown?: TokenBreakdown;
+  breakdown_quantiles?: BreakdownQuantiles;
   friction_stats: FrictionStats;
   sys_instruction_count: number;
   model_distribution: Record<string, number>;

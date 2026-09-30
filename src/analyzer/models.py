@@ -250,6 +250,33 @@ class PromptSession:
         return sum(t.token_count for t in self.turns if t.is_thought)
 
     @property
+    def user_net_tokens(self) -> int:
+        """用户纯提问与 Prompt 的 Token 消耗（剔除代码库与附件）"""
+        return sum(
+            t.token_count
+            for t in self.turns
+            if t.role == "user"
+            and t.payload_type not in ("inlineFile", "driveDocument", "inlineImage")
+        )
+
+    @property
+    def context_file_tokens(self) -> int:
+        """外部挂载代码库、文档与媒体附件的 Token 消耗"""
+        return sum(
+            t.token_count
+            for t in self.turns
+            if t.role == "user"
+            and t.payload_type in ("inlineFile", "driveDocument", "inlineImage")
+        )
+
+    @property
+    def model_net_tokens(self) -> int:
+        """模型纯回复正文消耗（剔除思考链）"""
+        return sum(
+            t.token_count for t in self.turns if t.role == "model" and not t.is_thought
+        )
+
+    @property
     def total_user_chars(self) -> int:
         """用户提问的总字符量"""
         return sum(len(text) for text in self.user_prompts)

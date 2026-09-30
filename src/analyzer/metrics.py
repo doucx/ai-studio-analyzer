@@ -77,6 +77,61 @@ def calculate_session_metrics(
                 "total_thought": 0,
                 "thought_ratio": "0%",
             },
+            "token_breakdown": {
+                "user_net_tokens": 0,
+                "context_file_tokens": 0,
+                "sys_instruction_tokens": 0,
+                "model_net_tokens": 0,
+                "thought_tokens": 0,
+                "user_chars": 0,
+            },
+            "breakdown_quantiles": {
+                "user_net": {
+                    "min": 0,
+                    "p10": 0,
+                    "p50": 0,
+                    "p75": 0,
+                    "p90": 0,
+                    "p99": 0,
+                    "max": 0,
+                },
+                "context_files": {
+                    "min": 0,
+                    "p10": 0,
+                    "p50": 0,
+                    "p75": 0,
+                    "p90": 0,
+                    "p99": 0,
+                    "max": 0,
+                },
+                "model_net": {
+                    "min": 0,
+                    "p10": 0,
+                    "p50": 0,
+                    "p75": 0,
+                    "p90": 0,
+                    "p99": 0,
+                    "max": 0,
+                },
+                "thought": {
+                    "min": 0,
+                    "p10": 0,
+                    "p50": 0,
+                    "p75": 0,
+                    "p90": 0,
+                    "p99": 0,
+                    "max": 0,
+                },
+                "user_chars": {
+                    "min": 0,
+                    "p10": 0,
+                    "p50": 0,
+                    "p75": 0,
+                    "p90": 0,
+                    "p99": 0,
+                    "max": 0,
+                },
+            },
             "friction_stats": {
                 "branch_sessions": 0,
                 "branch_ratio": "0.0%",
@@ -101,6 +156,9 @@ def calculate_session_metrics(
             dur_min = round(dur_sec / 60.0, 2) if dur_sec is not None else None
             tot_tok = int(d.get("total_tokens") or 0)
             cum_tok = int(d.get("cumulative_tokens") or tot_tok)
+            u_net = int(d.get("user_net_tokens") or 0)
+            c_files = int(d.get("context_file_tokens") or 0)
+            m_net = int(d.get("model_net_tokens") or 0)
             records.append(
                 {
                     "file_id": d["file_id"],
@@ -110,6 +168,9 @@ def calculate_session_metrics(
                     "duration_minutes": dur_min,
                     "total_tokens": tot_tok,
                     "cumulative_tokens": cum_tok,
+                    "user_net_tokens": u_net,
+                    "context_file_tokens": c_files,
+                    "model_net_tokens": m_net,
                     "thought_tokens": int(d.get("thought_tokens") or 0),
                     "user_chars": int(d.get("user_char_count") or 0),
                     "has_branching": bool(d.get("has_branching", False)),
@@ -137,6 +198,9 @@ def calculate_session_metrics(
                     "duration_minutes": dur_min,
                     "total_tokens": tot_tok,
                     "cumulative_tokens": cum_tok,
+                    "user_net_tokens": int(getattr(s, "user_net_tokens", 0)),
+                    "context_file_tokens": int(getattr(s, "context_file_tokens", 0)),
+                    "model_net_tokens": int(getattr(s, "model_net_tokens", 0)),
                     "thought_tokens": int(s.thought_tokens),
                     "user_chars": int(s.total_user_chars),
                     "has_branching": bool(s.has_branching),
@@ -254,6 +318,87 @@ def calculate_session_metrics(
         else "0%",
     }
 
+    # 4.1 Token 资产解构与各分量分位数阶梯
+    user_net_vals = [r["user_net_tokens"] for r in records]
+    context_file_vals = [r["context_file_tokens"] for r in records]
+    model_net_vals = [r["model_net_tokens"] for r in records]
+    thought_vals = [r["thought_tokens"] for r in records]
+    chars_vals = [r["user_chars"] for r in records]
+
+    sorted_user_net = sorted(user_net_vals)
+    sorted_context_file = sorted(context_file_vals)
+    sorted_model_net = sorted(model_net_vals)
+    sorted_thought = sorted(thought_vals)
+    sorted_chars = sorted(chars_vals)
+
+    sum_user_net = sum(user_net_vals)
+    sum_context_file = sum(context_file_vals)
+    sum_model_net = sum(model_net_vals)
+    sum_user_chars = sum(chars_vals)
+    # 系统提示词差额提取
+    sum_sys_instruction = max(
+        0,
+        total_tokens
+        - (sum_user_net + sum_context_file + sum_model_net + total_thought_tokens),
+    )
+
+    token_breakdown = {
+        "user_net_tokens": sum_user_net,
+        "context_file_tokens": sum_context_file,
+        "sys_instruction_tokens": sum_sys_instruction,
+        "model_net_tokens": sum_model_net,
+        "thought_tokens": total_thought_tokens,
+        "user_chars": sum_user_chars,
+    }
+
+    breakdown_quantiles = {
+        "user_net": {
+            "min": sorted_user_net[0] if sorted_user_net else 0,
+            "p10": _quantile(sorted_user_net, 0.10),
+            "p50": _quantile(sorted_user_net, 0.50),
+            "p75": _quantile(sorted_user_net, 0.75),
+            "p90": _quantile(sorted_user_net, 0.90),
+            "p99": _quantile(sorted_user_net, 0.99),
+            "max": sorted_user_net[-1] if sorted_user_net else 0,
+        },
+        "context_files": {
+            "min": sorted_context_file[0] if sorted_context_file else 0,
+            "p10": _quantile(sorted_context_file, 0.10),
+            "p50": _quantile(sorted_context_file, 0.50),
+            "p75": _quantile(sorted_context_file, 0.75),
+            "p90": _quantile(sorted_context_file, 0.90),
+            "p99": _quantile(sorted_context_file, 0.99),
+            "max": sorted_context_file[-1] if sorted_context_file else 0,
+        },
+        "model_net": {
+            "min": sorted_model_net[0] if sorted_model_net else 0,
+            "p10": _quantile(sorted_model_net, 0.10),
+            "p50": _quantile(sorted_model_net, 0.50),
+            "p75": _quantile(sorted_model_net, 0.75),
+            "p90": _quantile(sorted_model_net, 0.90),
+            "p99": _quantile(sorted_model_net, 0.99),
+            "max": sorted_model_net[-1] if sorted_model_net else 0,
+        },
+        "thought": {
+            "min": sorted_thought[0] if sorted_thought else 0,
+            "p10": _quantile(sorted_thought, 0.10),
+            "p50": _quantile(sorted_thought, 0.50),
+            "p75": _quantile(sorted_thought, 0.75),
+            "p90": _quantile(sorted_thought, 0.90),
+            "p99": _quantile(sorted_thought, 0.99),
+            "max": sorted_thought[-1] if sorted_thought else 0,
+        },
+        "user_chars": {
+            "min": sorted_chars[0] if sorted_chars else 0,
+            "p10": _quantile(sorted_chars, 0.10),
+            "p50": _quantile(sorted_chars, 0.50),
+            "p75": _quantile(sorted_chars, 0.75),
+            "p90": _quantile(sorted_chars, 0.90),
+            "p99": _quantile(sorted_chars, 0.99),
+            "max": sorted_chars[-1] if sorted_chars else 0,
+        },
+    }
+
     # 5. 思维摩擦力与分支
     branch_sessions = sum(1 for r in records if r["has_branching"])
     friction_stats = {
@@ -362,6 +507,8 @@ def calculate_session_metrics(
         "duration_tiers": duration_tiers,
         "tok_stats": tok_stats,
         "friction_stats": friction_stats,
+        "token_breakdown": token_breakdown,
+        "breakdown_quantiles": breakdown_quantiles,
         "sys_instruction_count": sum(1 for r in records if r["has_sys_instruction"]),
         "model_distribution": model_dist,
         "daily_trends": daily_trends,

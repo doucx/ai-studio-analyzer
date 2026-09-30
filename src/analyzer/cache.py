@@ -96,12 +96,16 @@ class SQLiteCache:
                 );
             """)
             # 增量字段平滑迁移
-            try:
-                cursor.execute(
-                    "ALTER TABLE session_index ADD COLUMN cumulative_tokens INTEGER DEFAULT 0;"
-                )
-            except sqlite3.OperationalError:
-                pass
+            for col in [
+                "cumulative_tokens INTEGER DEFAULT 0",
+                "user_net_tokens INTEGER DEFAULT 0",
+                "context_file_tokens INTEGER DEFAULT 0",
+                "model_net_tokens INTEGER DEFAULT 0",
+            ]:
+                try:
+                    cursor.execute(f"ALTER TABLE session_index ADD COLUMN {col};")
+                except sqlite3.OperationalError:
+                    pass
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_sidx_mtime 
                 ON session_index(modified_time DESC);
@@ -286,6 +290,9 @@ class SQLiteCache:
         active_dates_json = json.dumps(date_time_map) if date_time_map else "{}"
 
         cum_tokens = getattr(s, "cumulative_api_tokens", s.total_tokens)
+        u_net = getattr(s, "user_net_tokens", 0)
+        c_files = getattr(s, "context_file_tokens", 0)
+        m_net = getattr(s, "model_net_tokens", 0)
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -294,8 +301,9 @@ class SQLiteCache:
                     file_id, name, model, turn_count, total_tokens, thought_tokens,
                     user_char_count, duration_seconds, duration_human, has_branching,
                     branch_count, has_sys_instruction, first_prompt, created_time,
-                    modified_time, date, active_dates, cumulative_tokens
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    modified_time, date, active_dates, cumulative_tokens,
+                    user_net_tokens, context_file_tokens, model_net_tokens
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(file_id) DO UPDATE SET
                     name = excluded.name,
                     model = excluded.model,
@@ -313,7 +321,10 @@ class SQLiteCache:
                     modified_time = excluded.modified_time,
                     date = excluded.date,
                     active_dates = excluded.active_dates,
-                    cumulative_tokens = excluded.cumulative_tokens;
+                    cumulative_tokens = excluded.cumulative_tokens,
+                    user_net_tokens = excluded.user_net_tokens,
+                    context_file_tokens = excluded.context_file_tokens,
+                    model_net_tokens = excluded.model_net_tokens;
             """,
                 (
                     s.file_id,
@@ -334,6 +345,9 @@ class SQLiteCache:
                     date_str,
                     active_dates_json,
                     cum_tokens,
+                    u_net,
+                    c_files,
+                    m_net,
                 ),
             )
             conn.commit()
