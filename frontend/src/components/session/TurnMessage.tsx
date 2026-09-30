@@ -21,7 +21,7 @@ marked.setOptions({
   gfm: true,
 });
 
-function CopyButton({ text }: { text: string }) {
+function CopyButton({ text, className = '' }: { text: string; className?: string }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -38,21 +38,21 @@ function CopyButton({ text }: { text: string }) {
     <button
       type="button"
       onClick={handleCopy}
-      className={`px-2 py-1 text-[11px] rounded transition flex items-center gap-1 border ${
+      className={`px-2 py-1 text-[11px] rounded transition-all duration-150 flex items-center gap-1 border shadow-sm cursor-pointer select-none shrink-0 ${
         copied
-          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800'
-          : 'bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 border-zinc-700/60'
-      }`}
+          ? 'bg-emerald-950/90 text-emerald-300 border-emerald-700/80 shadow-emerald-950/40'
+          : 'bg-zinc-800/90 hover:bg-zinc-700 text-zinc-300 hover:text-white border-zinc-700/70 hover:border-zinc-500'
+      } ${className}`}
       title="复制本轮纯文本内容"
     >
       {copied ? (
         <>
-          <Check size={12} className="text-emerald-400" />
+          <Check size={12} className="text-emerald-400 shrink-0" />
           <span>已复制</span>
         </>
       ) : (
         <>
-          <Copy size={12} />
+          <Copy size={12} className="text-zinc-400 shrink-0" />
           <span>复制</span>
         </>
       )}
@@ -136,7 +136,7 @@ export function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index
         id={`turn-${index + 1}`}
         className="rounded-lg border border-emerald-900/30 bg-emerald-950/15 overflow-hidden scroll-mt-4"
       >
-        <div className="px-3.5 py-2 flex items-center justify-between bg-emerald-950/30 border-b border-emerald-900/20 text-xs text-emerald-400 font-mono">
+        <div className="sticky top-0 z-10 px-3.5 py-2 flex items-center justify-between bg-emerald-950/90 backdrop-blur-md border-b border-emerald-900/30 text-xs text-emerald-400 font-mono">
           <button
             type="button"
             className="flex items-center gap-2 cursor-pointer select-none hover:text-emerald-300 transition bg-transparent border-none p-0 text-emerald-400 font-mono"
@@ -179,10 +179,10 @@ export function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index
           : 'bg-zinc-900/50 border-zinc-800'
       }`}
     >
-      <div className="px-4 py-2.5 flex items-center justify-between border-b border-zinc-800/60 text-xs">
-        <div className="flex items-center gap-2">
+      <div className="sticky top-0 z-10 px-4 py-2 flex items-center justify-between border-b border-zinc-800/80 bg-zinc-900/95 backdrop-blur-md rounded-t-lg text-xs">
+        <div className="flex items-center gap-2 min-w-0">
           <span
-            className={`font-semibold uppercase text-[11px] px-2 py-0.5 rounded font-mono flex items-center gap-1 ${
+            className={`font-semibold uppercase text-[11px] px-2 py-0.5 rounded font-mono flex items-center gap-1 shrink-0 ${
               isUser
                 ? 'bg-indigo-950 text-indigo-300 border border-indigo-800/60'
                 : 'bg-zinc-800 text-zinc-300 border border-zinc-700/60'
@@ -191,14 +191,14 @@ export function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index
             {isUser ? <User size={11} /> : <Bot size={11} />}
             <span>{isUser ? 'User' : 'Model'}</span>
           </span>
-          <span className="text-zinc-500 text-[11px] font-mono">#{index + 1}</span>
+          <span className="text-zinc-500 text-[11px] font-mono shrink-0">#{index + 1}</span>
           {turn.token_count > 0 && (
-            <span className="text-[11px] text-zinc-500 font-mono">
+            <span className="text-[11px] text-zinc-500 font-mono truncate">
               {turn.token_count.toLocaleString()} tokens
             </span>
           )}
           {turn.is_edited && (
-            <span className="text-[10px] text-amber-400 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-800/40">
+            <span className="text-[10px] text-amber-400 bg-amber-950/60 px-1.5 py-0.5 rounded border border-amber-800/40 shrink-0">
               已编辑重试
             </span>
           )}
