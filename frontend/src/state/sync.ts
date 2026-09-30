@@ -64,12 +64,12 @@ export function setupSyncEventListener(onSyncComplete: () => void): () => void {
   eventSource.addEventListener('sync_done', (e) => {
     syncInProgressSignal.value = false;
     syncProgressTextSignal.value = '';
-    syncVersionSignal.value += 1;
-    onSyncComplete();
 
+    let downloaded = 0;
     try {
       const result = JSON.parse(e.data);
-      if (result.downloaded > 0) {
+      downloaded = Number(result?.downloaded) || 0;
+      if (downloaded > 0) {
         addToast(
           `增量同步完成：扫描 ${result.total_scanned} 篇，新增拉取 ${result.downloaded} 篇 (缓存总计: ${result.cache_total})`,
           'success',
@@ -78,6 +78,12 @@ export function setupSyncEventListener(onSyncComplete: () => void): () => void {
       }
     } catch {
       // 忽略解析错误，避免在无新增时产生多余通知
+    }
+
+    // 仅在实际拉取到新增/变更内容时才触发全量数据重载与版本自增，避免无变化时图表刷新闪烁
+    if (downloaded > 0) {
+      syncVersionSignal.value += 1;
+      onSyncComplete();
     }
   });
 
