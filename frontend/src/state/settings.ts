@@ -12,6 +12,11 @@ export interface SystemConfig {
   typing_chars_per_sec: number;
   reading_tokens_per_sec: number;
   base_chunk_seconds: number;
+  deep_threshold_turns: number;
+  search_debounce_ms: number;
+  default_time_range: '1d' | '7d' | '30d' | '90d' | 'this_year' | 'all';
+  default_show_metadata: boolean;
+  default_render_markdown: boolean;
 }
 
 export const defaultConfig: SystemConfig = {
@@ -26,6 +31,11 @@ export const defaultConfig: SystemConfig = {
   typing_chars_per_sec: 5.0,
   reading_tokens_per_sec: 8.0,
   base_chunk_seconds: 15.0,
+  deep_threshold_turns: 7,
+  search_debounce_ms: 300,
+  default_time_range: 'all',
+  default_show_metadata: true,
+  default_render_markdown: true,
 };
 
 export const configSignal = signal<SystemConfig>(defaultConfig);

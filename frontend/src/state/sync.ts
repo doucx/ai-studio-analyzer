@@ -110,12 +110,20 @@ export function setupSyncEventListener(onSyncComplete: () => void): () => void {
  * 视口唤醒与窗口焦点感知自动同步监听器
  * 仅当用户切换回本标签页且距离上次同步超过 intervalMs 时静默触发
  */
-export function setupAutoSyncOnFocus(intervalMs = 90_000, limit = 20): () => void {
+import { configSignal } from './settings';
+
+export function setupAutoSyncOnFocus(): () => void {
   let lastSyncTime = Date.now();
 
   const handleCheckSync = () => {
+    const cfg = configSignal.value;
+    if (!cfg.auto_sync_enabled) return;
     if (syncInProgressSignal.value) return;
     if (!isOnline()) return;
+
+    const intervalMs = (cfg.auto_sync_interval || 90) * 1000;
+    const limit = cfg.auto_sync_limit || 20;
+
     const now = Date.now();
     if (now - lastSyncTime >= intervalMs) {
       lastSyncTime = now;

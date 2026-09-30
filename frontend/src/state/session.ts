@@ -1,6 +1,7 @@
 import { computed, signal } from '@preact/signals';
 import type { SessionItem } from '../types/metrics';
 import { customEndDateSignal, customStartDateSignal, timeRangeSignal } from './metrics';
+import { configSignal } from './settings';
 
 export type DepthFilter = 'all' | 'single' | 'few' | 'many' | 'branch';
 export type DurationTierFilter = 'all' | 'flash' | 'focus' | 'deep' | 'epic';
@@ -350,9 +351,10 @@ export function handleSearchInput(keyword: string) {
   }
 
   isSearchingFtsSignal.value = true;
+  const debounceDelay = configSignal.value.search_debounce_ms || 300;
   searchDebounceTimer = setTimeout(() => {
     executeFtsSearch(keyword, timeRangeSignal.value);
-  }, 300);
+  }, debounceDelay);
 }
 
 export function resetFilters() {

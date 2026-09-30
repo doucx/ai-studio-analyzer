@@ -105,6 +105,29 @@ export function MetricsTab({ form, setForm }: Props) {
             交互间隔超过此阈值视作中断搁置，不计入连续生命周期，防止将隔夜闲置误判为耗时。
           </p>
         </div>
+
+        <div className="space-y-1.5">
+          <label htmlFor="deep-turns-input" className="text-xs text-zinc-400">
+            长线深度攻坚判定阈值 (Chunks 数量)
+          </label>
+          <input
+            id="deep-turns-input"
+            type="number"
+            min="3"
+            max="30"
+            value={form.deep_threshold_turns ?? 7}
+            onInput={(e) =>
+              setForm({
+                ...form,
+                deep_threshold_turns: Number((e.target as HTMLInputElement).value),
+              })
+            }
+            className="w-full bg-zinc-950 border border-zinc-800 focus:border-indigo-500 rounded px-3 py-1.5 text-xs font-mono text-zinc-200 outline-none"
+          />
+          <p className="text-[11px] text-zinc-500">
+            会话包含的数据块（Chunks）达到或超过此阈值即被归类为“深度攻坚”长线会话。
+          </p>
+        </div>
       </div>
     </div>
   );

@@ -1,6 +1,5 @@
 import { Globe, Loader2 } from 'lucide-preact';
 import { useRef, useState } from 'preact/hooks';
-import { formatLocalTime } from '../utils/date';
 import {
   type DepthFilter,
   type DurationTierFilter,
@@ -24,6 +23,7 @@ import {
   toggleSearchScope,
 } from '../state/session';
 import type { SessionItem } from '../types/metrics';
+import { formatLocalTime } from '../utils/date';
 
 interface Props {
   sessions?: SessionItem[];
@@ -323,9 +323,7 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
                       <div className="flex items-center gap-1.5 shrink-0 text-[10px] text-zinc-500 font-mono whitespace-nowrap">
                         <span
                           title={
-                            s.modified_time
-                              ? `最后修改: ${formatLocalTime(s.modified_time)}`
-                              : ''
+                            s.modified_time ? `最后修改: ${formatLocalTime(s.modified_time)}` : ''
                           }
                         >
                           {formatLocalTime(s.modified_time, false)}

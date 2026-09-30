@@ -96,23 +96,52 @@ export function GeneralTab({ form, setForm }: Props) {
               className="w-full bg-zinc-950 border border-zinc-800 focus:border-indigo-500 rounded px-3 py-1.5 text-xs font-mono text-zinc-200 outline-none"
             />
           </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="creds-path-input" className="text-xs text-zinc-400">
+              OAuth 凭据文件路径 (Credentials File)
+            </label>
+            <input
+              id="creds-path-input"
+              type="text"
+              value={form.creds_path}
+              onInput={(e) =>
+                setForm({ ...form, creds_path: (e.target as HTMLInputElement).value })
+              }
+              className="w-full bg-zinc-950 border border-zinc-800 focus:border-indigo-500 rounded px-3 py-1.5 text-xs font-mono text-zinc-200 outline-none"
+            />
+          </div>
         </div>
       </section>
 
       <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5 space-y-4">
-        <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-1.5">
-          <Activity size={15} className="text-indigo-400" />
-          <span>视口唤醒与自动同步</span>
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-1.5">
+            <Activity size={15} className="text-indigo-400" />
+            <span>视口唤醒与后台自动增量同步</span>
+          </h2>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={form.auto_sync_enabled}
+              onChange={(e) =>
+                setForm({ ...form, auto_sync_enabled: (e.target as HTMLInputElement).checked })
+              }
+              className="w-4 h-4 rounded bg-zinc-950 border-zinc-700 text-indigo-600 focus:ring-0 cursor-pointer"
+            />
+            <span className="text-xs text-zinc-300">启用页面切回自动同步</span>
+          </label>
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <label htmlFor="sync-interval-input" className="text-xs text-zinc-400">
-              焦点唤醒触发最小冷却 (秒)
+              切回唤醒最小冷却时间 (秒)
             </label>
             <input
               id="sync-interval-input"
               type="number"
+              disabled={!form.auto_sync_enabled}
               value={form.auto_sync_interval}
               onInput={(e) =>
                 setForm({
@@ -120,17 +149,21 @@ export function GeneralTab({ form, setForm }: Props) {
                   auto_sync_interval: Number((e.target as HTMLInputElement).value),
                 })
               }
-              className="w-full bg-zinc-950 border border-zinc-800 focus:border-indigo-500 rounded px-3 py-1.5 text-xs font-mono text-zinc-200 outline-none"
+              className="w-full bg-zinc-950 border border-zinc-800 focus:border-indigo-500 disabled:opacity-50 rounded px-3 py-1.5 text-xs font-mono text-zinc-200 outline-none"
             />
+            <p className="text-[11px] text-zinc-500">
+              离开标签页后重新切回时，超过此冷却阈值才会静默探测 Google 云端更新。
+            </p>
           </div>
 
           <div className="space-y-1.5">
             <label htmlFor="sync-limit-input" className="text-xs text-zinc-400">
-              自动同步拉取规模 (最新篇数)
+              增量自动拉取条目数 (篇)
             </label>
             <input
               id="sync-limit-input"
               type="number"
+              disabled={!form.auto_sync_enabled}
               value={form.auto_sync_limit}
               onInput={(e) =>
                 setForm({
@@ -138,8 +171,11 @@ export function GeneralTab({ form, setForm }: Props) {
                   auto_sync_limit: Number((e.target as HTMLInputElement).value),
                 })
               }
-              className="w-full bg-zinc-950 border border-zinc-800 focus:border-indigo-500 rounded px-3 py-1.5 text-xs font-mono text-zinc-200 outline-none"
+              className="w-full bg-zinc-950 border border-zinc-800 focus:border-indigo-500 disabled:opacity-50 rounded px-3 py-1.5 text-xs font-mono text-zinc-200 outline-none"
             />
+            <p className="text-[11px] text-zinc-500">
+              每次自动唤醒触发时按最近修改时间拉取的最大对话篇数（推荐 10~30 篇）。
+            </p>
           </div>
         </div>
       </section>

@@ -1,5 +1,6 @@
 import { ExternalLink, FileCode, MessagesSquare, X } from 'lucide-preact';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
+import { configSignal } from '../state/settings';
 import { syncVersionSignal } from '../state/sync';
 import type { SessionDetail, SessionItem } from '../types/metrics';
 import { formatLocalTime } from '../utils/date';
@@ -15,8 +16,12 @@ export function SessionDetailPanel({ session, onClose }: Props) {
   const [detail, setDetail] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [_refreshing, setRefreshing] = useState<boolean>(false);
-  const [showMetadata, setShowMetadata] = useState<boolean>(true);
-  const [renderMarkdown, setRenderMarkdown] = useState<boolean>(true);
+  const [showMetadata, setShowMetadata] = useState<boolean>(
+    configSignal.value.default_show_metadata ?? true,
+  );
+  const [renderMarkdown, setRenderMarkdown] = useState<boolean>(
+    configSignal.value.default_render_markdown ?? true,
+  );
   const hasScrolledRef = useRef<string | null>(null);
 
   const aiStudioUrl = `https://aistudio.google.com/prompts/${session.file_id}`;

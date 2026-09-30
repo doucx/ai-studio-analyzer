@@ -24,6 +24,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "typing_chars_per_sec": 5.0,
     "reading_tokens_per_sec": 8.0,
     "base_chunk_seconds": 15.0,
+    "deep_threshold_turns": 7,
+    "search_debounce_ms": 300,
+    "default_time_range": "all",
+    "default_show_metadata": True,
+    "default_render_markdown": True,
 }
 
 

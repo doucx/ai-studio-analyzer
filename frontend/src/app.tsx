@@ -6,11 +6,13 @@ import {
   MessagesSquare,
   RefreshCw,
   Settings as SettingsIcon,
+  Wrench,
 } from 'lucide-preact';
 import { LocationProvider, Route, Router, useLocation } from 'preact-iso';
 import { useEffect, useState } from 'preact/hooks';
 import { TimeSliceScrubber } from './components/TimeSliceScrubber';
 import { ToastContainer } from './components/ToastContainer';
+import { MaintenanceRoute } from './routes/MaintenanceRoute';
 import { NotFoundRoute } from './routes/NotFoundRoute';
 import { OverviewRoute } from './routes/OverviewRoute';
 import { SessionsRoute } from './routes/SessionsRoute';
@@ -135,7 +137,19 @@ function HeaderBar() {
             }`}
           >
             <SettingsIcon size={13} />
-            <span>系统控制台</span>
+            <span>系统设置</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => route('/maintenance')}
+            className={`px-3 py-1 rounded-md font-medium transition flex items-center gap-1.5 cursor-pointer ${
+              path.startsWith('/maintenance')
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/60'
+            }`}
+          >
+            <Wrench size={13} />
+            <span>系统维护</span>
           </button>
         </nav>
       </div>
@@ -293,9 +307,20 @@ function HeaderBar() {
   );
 }
 
+import { configSignal, fetchSettings } from './state/settings';
+
 export function App() {
   useEffect(() => {
-    loadAllData();
+    fetchSettings().then(() => {
+      const defaultRange = configSignal.value.default_time_range;
+      if (defaultRange && defaultRange !== timeRangeSignal.value) {
+        setTimeRange(defaultRange);
+        loadAllData(defaultRange, null, null);
+      } else {
+        loadAllData();
+      }
+    });
+
     const cleanupSync = setupSyncEventListener(() => {
       loadAllData();
     });
@@ -315,6 +340,7 @@ export function App() {
           <Route path="/sessions" component={SessionsRoute} />
           <Route path="/sessions/:id" component={SessionsRoute} />
           <Route path="/settings" component={SettingsRoute} />
+          <Route path="/maintenance" component={MaintenanceRoute} />
           <Route default component={NotFoundRoute} />
         </Router>
         <ToastContainer />
