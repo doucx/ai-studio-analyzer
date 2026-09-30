@@ -141,7 +141,7 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
                 <span>认知资产构成与真实意图解构 (Cognitive Asset Breakdown)</span>
               </h2>
               <p className="text-xs text-zinc-500 mt-0.5">
-                解耦【{activeRangeLabel}】周期内静态沉淀的 2.6 亿 Token：分离纯净
+                解耦【{activeRangeLabel}】周期内静态沉淀的 Token：分离纯净
                 Prompt、外挂代码库与 AI 产出
               </p>
             </div>
