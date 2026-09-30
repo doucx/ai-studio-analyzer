@@ -16,6 +16,7 @@ export function SessionDetailPanel({ session, onClose }: Props) {
   const [loading, setLoading] = useState<boolean>(true);
   const [_refreshing, setRefreshing] = useState<boolean>(false);
   const [showMetadata, setShowMetadata] = useState<boolean>(true);
+  const hasScrolledRef = useRef<string | null>(null);
 
   const aiStudioUrl = `https://aistudio.google.com/prompts/${session.file_id}`;
 
@@ -51,6 +52,7 @@ export function SessionDetailPanel({ session, onClose }: Props) {
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
+    hasScrolledRef.current = null;
     fetchSessionDetail(false, controller.signal);
     return () => {
       controller.abort();
@@ -74,10 +76,13 @@ export function SessionDetailPanel({ session, onClose }: Props) {
     }
   }, [syncVersion, fetchSessionDetail]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 仅在会话轮次就绪时触发定位并监听 hashchange，避免因后台静默同步触发重复滚动
   useEffect(() => {
-    if (!loading && detail?.turns && detail.turns.length > 0) {
+    const handleHashScroll = () => {
+      if (loading || !detail?.turns || detail.turns.length === 0) return;
       const hash = window.location.hash;
-      if (hash?.startsWith('#turn-')) {
+      if (hash?.startsWith('#turn-') && hasScrolledRef.current !== hash) {
+        hasScrolledRef.current = hash;
         const timer = setTimeout(() => {
           const targetEl = document.querySelector(hash);
           if (targetEl) {
@@ -90,8 +95,14 @@ export function SessionDetailPanel({ session, onClose }: Props) {
         }, 150);
         return () => clearTimeout(timer);
       }
-    }
-  }, [loading, detail]);
+    };
+
+    handleHashScroll();
+    window.addEventListener('hashchange', handleHashScroll);
+    return () => {
+      window.removeEventListener('hashchange', handleHashScroll);
+    };
+  }, [loading, detail?.file_id]);
 
   return (
     <div className="bg-zinc-900/40 border border-zinc-800 rounded-lg flex flex-col h-full min-h-[calc(100vh-140px)]">

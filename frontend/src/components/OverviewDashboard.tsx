@@ -1,6 +1,6 @@
 import { Bot, Clock, LineChart } from 'lucide-preact';
 import { useLocation } from 'preact-iso';
-import { useState } from 'preact/hooks';
+import { useCallback, useState } from 'preact/hooks';
 import { drillDownToSessions } from '../state/session';
 import type { MetricsSummary } from '../types/metrics';
 import { DurationTiersChart } from './charts/DurationTiersChart';
@@ -16,25 +16,34 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
   const { route } = useLocation();
   const [trendMode, setTrendMode] = useState<TrendMode>('tokens');
 
-  const handleModelDrillDown = (model: string) => {
-    drillDownToSessions({ model });
-    route('/sessions');
-  };
+  const handleModelDrillDown = useCallback(
+    (model: string) => {
+      drillDownToSessions({ model });
+      route('/sessions');
+    },
+    [route],
+  );
 
-  const handleDateDrillDown = (date: string) => {
-    drillDownToSessions({ date });
-    route('/sessions');
-  };
+  const handleDateDrillDown = useCallback(
+    (date: string) => {
+      drillDownToSessions({ date });
+      route('/sessions');
+    },
+    [route],
+  );
 
-  const handleTierDrillDown = (tier: 'flash' | 'focus' | 'deep' | 'epic') => {
-    drillDownToSessions({ tier });
-    route('/sessions');
-  };
+  const handleTierDrillDown = useCallback(
+    (tier: 'flash' | 'focus' | 'deep' | 'epic') => {
+      drillDownToSessions({ tier });
+      route('/sessions');
+    },
+    [route],
+  );
 
-  const handleBranchDrillDown = () => {
+  const handleBranchDrillDown = useCallback(() => {
     drillDownToSessions({ depth: 'branch' });
     route('/sessions');
-  };
+  }, [route]);
 
   return (
     <div className="space-y-6">

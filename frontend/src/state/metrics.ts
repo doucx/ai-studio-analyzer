@@ -53,9 +53,7 @@ export async function fetchMetrics(
   start: string | null = customStartDateSignal.value,
   end: string | null = customEndDateSignal.value,
 ) {
-  if (!metricsSignal.value) {
-    metricsLoadingSignal.value = true;
-  }
+  metricsLoadingSignal.value = true;
   try {
     let url = `/api/metrics?range=${range}`;
     if (start) url += `&start=${encodeURIComponent(start)}`;

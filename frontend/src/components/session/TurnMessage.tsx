@@ -286,9 +286,7 @@ export function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index
               <div className="flex items-center gap-2 min-w-0">
                 <ImageIcon size={14} className="text-purple-400 shrink-0" />
                 <div className="min-w-0">
-                  <span className="font-semibold text-purple-300">
-                    图片附件 (inlineImage)
-                  </span>
+                  <span className="font-semibold text-purple-300">图片附件 (inlineImage)</span>
                   <span className="ml-2 font-mono text-[11px] text-purple-400/80">
                     {turn.extra_metadata?.mime_type || 'image/png'}
                     {turn.extra_metadata?.byte_size !== undefined &&
@@ -325,7 +323,7 @@ export function TurnMessage({ turn, index }: { turn: ConversationTurnItem; index
                 >
                   <img
                     src={`data:${turn.extra_metadata.mime_type || 'image/png'};base64,${turn.extra_metadata.data}`}
-                    alt={`Turn ${index + 1} Image Attachment`}
+                    alt={`Turn ${index + 1} Attachment`}
                     className={`rounded border border-purple-900/30 object-contain transition-all duration-200 ${
                       isAttachmentOpen ? 'max-h-[700px] w-auto' : 'max-h-48 hover:opacity-90'
                     }`}

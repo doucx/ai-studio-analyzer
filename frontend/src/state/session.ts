@@ -1,6 +1,6 @@
 import { computed, signal } from '@preact/signals';
 import type { SessionItem } from '../types/metrics';
-import { timeRangeSignal } from './metrics';
+import { customEndDateSignal, customStartDateSignal, timeRangeSignal } from './metrics';
 
 export type DepthFilter = 'all' | 'single' | 'few' | 'many' | 'branch';
 export type DurationTierFilter = 'all' | 'flash' | 'focus' | 'deep' | 'epic';
@@ -170,8 +170,6 @@ export const filteredSessionsSignal = computed(() => {
       return timeB - timeA;
     });
 });
-
-import { customEndDateSignal, customStartDateSignal } from './metrics';
 
 export async function fetchSessions(
   range = timeRangeSignal.value,

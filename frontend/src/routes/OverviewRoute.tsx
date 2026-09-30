@@ -30,7 +30,13 @@ export function OverviewRoute() {
 
   return (
     <div className="max-w-7xl mx-auto w-full p-4 md:p-6 overflow-y-auto">
-      <OverviewDashboard metrics={metrics} activeRangeLabel={activeRangeLabel} />
+      <div
+        className={`transition-opacity duration-150 ${
+          isLoading ? 'opacity-65 pointer-events-none' : 'opacity-100'
+        }`}
+      >
+        <OverviewDashboard metrics={metrics} activeRangeLabel={activeRangeLabel} />
+      </div>
     </div>
   );
 }
