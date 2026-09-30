@@ -39,6 +39,8 @@ import {
   triggerSync,
 } from './state/sync';
 
+import { fetchHourlyStats } from './state/metrics';
+
 function loadAllData(
   range: TimeRange = timeRangeSignal.value,
   start: string | null = customStartDateSignal.value,
@@ -46,6 +48,7 @@ function loadAllData(
 ) {
   return Promise.all([
     fetchMetrics(range, start, end),
+    fetchHourlyStats(range, start, end),
     fetchSessions(range, start, end),
     fetchTodayMetrics(),
   ]);

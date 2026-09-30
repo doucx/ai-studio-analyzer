@@ -67,11 +67,12 @@ def fetch_remote_files(
                     cache.put(fid, mtime, raw_data)
                     download_count += 1
 
-                    # 仅解析这一个更新的文件对象，并直接写入二级索引表与 FTS 索引
+                    # 仅解析这一个更新的文件对象，并直接写入二级索引表、FTS 索引与 Chunk 细粒度时序表
                     session = parse_prompt_json(fmeta, raw_data)
                     if session:
                         cache.upsert_session_index(session)
                         cache.upsert_session_fts(session)
+                        cache.upsert_session_chunks(session)
                         updated_sessions.append(session)
 
             pbar.set_postfix(

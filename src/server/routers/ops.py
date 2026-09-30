@@ -48,6 +48,7 @@ def reindex_cache_quick():
         if session:
             cache.upsert_session_index(session)
             cache.upsert_session_fts(session)
+            cache.upsert_session_chunks(session)
             count += 1
             if count % 500 == 0:
                 try:

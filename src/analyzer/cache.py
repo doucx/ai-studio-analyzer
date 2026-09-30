@@ -120,6 +120,32 @@ class SQLiteCache:
                     tokenize = 'trigram'
                 );
             """)
+            # Chunk 级细粒度时序索引表：精确记录每个数据块的发生时间、时段与算力
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS chunk_index (
+                    chunk_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    file_id TEXT NOT NULL,
+                    turn_index INTEGER NOT NULL,
+                    role TEXT NOT NULL,
+                    is_thought INTEGER NOT NULL,
+                    token_count INTEGER NOT NULL,
+                    date TEXT NOT NULL,
+                    hour INTEGER NOT NULL,
+                    weekday INTEGER NOT NULL
+                );
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_chunk_date_hour 
+                ON chunk_index(date, hour);
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_chunk_hour 
+                ON chunk_index(hour);
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_chunk_file_id 
+                ON chunk_index(file_id);
+            """)
             conn.commit()
 
     def is_cached(self, file_id: str, modified_time: str) -> bool:
@@ -193,10 +219,11 @@ class SQLiteCache:
             conn.execute("VACUUM;")
 
     def clear_indices(self):
-        """清空二级索引与 FTS 虚表并重新初始化结构（重建前调用）"""
+        """清空二级索引、FTS 虚表与 Chunk 细粒度索引并重新初始化结构（重建前调用）"""
         with self._get_connection() as conn:
             conn.execute("DROP TABLE IF EXISTS session_fts;")
             conn.execute("DROP TABLE IF EXISTS session_index;")
+            conn.execute("DROP TABLE IF EXISTS chunk_index;")
             conn.commit()
         self._init_db()
 
@@ -310,6 +337,187 @@ class SQLiteCache:
                 ),
             )
             conn.commit()
+
+    def upsert_session_chunks(self, s: Any):
+        """将单个会话包含的全部 Chunk 细粒度物化到 chunk_index 表"""
+        self._check_maintenance_write()
+        from datetime import datetime
+
+        local_tz = datetime.now().astimezone().tzinfo
+        fallback_dt = s.modified_time or s.created_time or datetime.now().astimezone()
+
+        records = []
+        for idx, t in enumerate(getattr(s, "turns", []), start=1):
+            c_time = getattr(t, "timestamp", None) or fallback_dt
+            try:
+                dt_local = c_time.astimezone(local_tz)
+            except (ValueError, TypeError, OverflowError):
+                dt_local = fallback_dt.astimezone(local_tz)
+
+            date_str = dt_local.strftime("%Y-%m-%d")
+            hour = dt_local.hour
+            weekday = dt_local.weekday()  # 0 = 周一, 6 = 周日
+            role = getattr(t, "role", "user")
+            is_thought = 1 if getattr(t, "is_thought", False) else 0
+            token_count = int(getattr(t, "token_count", 0) or 0)
+
+            records.append(
+                (
+                    s.file_id,
+                    idx,
+                    role,
+                    is_thought,
+                    token_count,
+                    date_str,
+                    hour,
+                    weekday,
+                )
+            )
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM chunk_index WHERE file_id = ?;", (s.file_id,))
+            if records:
+                cursor.executemany(
+                    """
+                    INSERT INTO chunk_index (
+                        file_id, turn_index, role, is_thought, token_count, date, hour, weekday
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                    """,
+                    records,
+                )
+            conn.commit()
+
+    def query_hourly_distribution(
+        self,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        range_start_iso: str | None = None,
+        range_end_iso: str | None = None,
+    ) -> dict[str, Any]:
+        """按 24 小时槽位精确聚合所选时间范围内的 Chunk 推进量与 Token 算力分布"""
+        conditions = []
+        params = []
+
+        if start_date and end_date:
+            conditions.append("date >= ? AND date <= ?")
+            params.extend([start_date, end_date])
+        elif start_date:
+            conditions.append("date >= ?")
+            params.append(start_date)
+        elif end_date:
+            conditions.append("date <= ?")
+            params.append(end_date)
+        elif range_start_iso and range_end_iso:
+            s_date = range_start_iso.split("T")[0]
+            e_date = range_end_iso.split("T")[0]
+            conditions.append("date >= ? AND date <= ?")
+            params.extend([s_date, e_date])
+        elif range_start_iso:
+            s_date = range_start_iso.split("T")[0]
+            conditions.append("date >= ?")
+            params.append(s_date)
+
+        where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+
+        sql = f"""
+            SELECT 
+                hour,
+                SUM(token_count) AS total_tokens,
+                SUM(CASE WHEN is_thought = 1 THEN token_count ELSE 0 END) AS thought_tokens,
+                COUNT(*) AS total_chunks,
+                COUNT(DISTINCT file_id) AS total_sessions
+            FROM chunk_index
+            {where_clause}
+            GROUP BY hour
+            ORDER BY hour ASC;
+        """
+
+        # 初始化标准 24 槽位
+        slots = [
+            {
+                "hour": h,
+                "label": f"{h:02d}:00",
+                "tokens": 0,
+                "thought_tokens": 0,
+                "chunks": 0,
+                "sessions": 0,
+            }
+            for h in range(24)
+        ]
+
+        # 初始化 7 × 24 = 168 槽位热力矩阵 (weekday 0=周一 到 6=周日)
+        punchcard_matrix = []
+        for w in range(7):
+            for h in range(24):
+                punchcard_matrix.append(
+                    {
+                        "weekday": w,
+                        "hour": h,
+                        "tokens": 0,
+                        "thought_tokens": 0,
+                        "chunks": 0,
+                    }
+                )
+
+        matrix_lookup = {
+            (item["weekday"], item["hour"]): item for item in punchcard_matrix
+        }
+
+        matrix_sql = f"""
+            SELECT 
+                weekday,
+                hour,
+                SUM(token_count) AS total_tokens,
+                SUM(CASE WHEN is_thought = 1 THEN token_count ELSE 0 END) AS thought_tokens,
+                COUNT(*) AS total_chunks
+            FROM chunk_index
+            {where_clause}
+            GROUP BY weekday, hour;
+        """
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+            for r in rows:
+                h = int(r["hour"])
+                if 0 <= h <= 23:
+                    slots[h]["tokens"] = int(r["total_tokens"] or 0)
+                    slots[h]["thought_tokens"] = int(r["thought_tokens"] or 0)
+                    slots[h]["chunks"] = int(r["total_chunks"] or 0)
+                    slots[h]["sessions"] = int(r["total_sessions"] or 0)
+
+            cursor.execute(matrix_sql, params)
+            matrix_rows = cursor.fetchall()
+            for mr in matrix_rows:
+                w = int(mr["weekday"])
+                h = int(mr["hour"])
+                if (w, h) in matrix_lookup:
+                    cell = matrix_lookup[(w, h)]
+                    cell["tokens"] = int(mr["total_tokens"] or 0)
+                    cell["thought_tokens"] = int(mr["thought_tokens"] or 0)
+                    cell["chunks"] = int(mr["total_chunks"] or 0)
+
+        peak_slot = max(slots, key=lambda s: s["tokens"])
+        total_chunks = sum(s["chunks"] for s in slots)
+
+        max_cell_tokens = max((c["tokens"] for c in punchcard_matrix), default=0)
+        max_cell_chunks = max((c["chunks"] for c in punchcard_matrix), default=0)
+        max_cell_thought = max(
+            (c["thought_tokens"] for c in punchcard_matrix), default=0
+        )
+
+        return {
+            "hourly_slots": slots,
+            "peak_hour": peak_slot["hour"],
+            "peak_tokens": peak_slot["tokens"],
+            "total_chunks": total_chunks,
+            "punchcard_matrix": punchcard_matrix,
+            "max_cell_tokens": max_cell_tokens,
+            "max_cell_chunks": max_cell_chunks,
+            "max_cell_thought": max_cell_thought,
+        }
 
     def count_indices(self) -> int:
         """获取当前索引表记录条数"""

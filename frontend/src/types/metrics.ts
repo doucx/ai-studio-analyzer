@@ -66,6 +66,8 @@ export interface MetricsSummary {
   sys_instruction_count: number;
   model_distribution: Record<string, number>;
   daily_trends?: DailyTrendItem[];
+  trend_granularity?: 'day' | 'hour';
+  single_date?: string;
   message?: string;
 }
 
@@ -151,4 +153,32 @@ export interface DailyTimelineItem {
   thought_tokens: number;
   session_count: number;
   sessions: DailySessionBrief[];
+}
+
+export interface HourlySlotItem {
+  hour: number;
+  label: string;
+  tokens: number;
+  thought_tokens: number;
+  chunks: number;
+  sessions: number;
+}
+
+export interface PunchcardCellItem {
+  weekday: number; // 0=周一, 6=周日
+  hour: number; // 0~23
+  tokens: number;
+  thought_tokens: number;
+  chunks: number;
+}
+
+export interface HourlyStatsSummary {
+  hourly_slots: HourlySlotItem[];
+  peak_hour: number;
+  peak_tokens: number;
+  total_chunks: number;
+  punchcard_matrix?: PunchcardCellItem[];
+  max_cell_tokens?: number;
+  max_cell_chunks?: number;
+  max_cell_thought?: number;
 }

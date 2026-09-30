@@ -3,12 +3,30 @@ from typing import Any
 import pandas as pd
 
 
-def calculate_session_metrics(sessions: list[Any]) -> dict[str, Any]:
+def calculate_session_metrics(
+    sessions: list[Any],
+    is_single_day: bool = False,
+    single_date: str | None = None,
+) -> dict[str, Any]:
     """
     基于 pandas 的稳健认知与交互指标引擎：
-    兼容 PromptSession 实例列表或来自 session_index 表的字典列表。
+    兼容 PromptSession 实例列表或来自 session_index 表的字典列表，
+    当为单日场景时支持自动切换为 24 小时槽位分时趋势。
     """
     if not sessions:
+        empty_trends = []
+        if is_single_day:
+            empty_trends = [
+                {
+                    "date": f"{h:02d}:00",
+                    "total_tokens": 0,
+                    "cumulative_tokens": 0,
+                    "thought_tokens": 0,
+                    "sessions": 0,
+                    "turns": 0,
+                }
+                for h in range(24)
+            ]
         return {
             "total_sessions": 0,
             "total_turns": 0,
@@ -43,6 +61,8 @@ def calculate_session_metrics(sessions: list[Any]) -> dict[str, Any]:
             },
             "tok_stats": {
                 "total": 0,
+                "cumulative_total": 0,
+                "expansion_factor": "1.0x",
                 "mean": 0.0,
                 "median": 0.0,
                 "p75": 0.0,
@@ -57,7 +77,9 @@ def calculate_session_metrics(sessions: list[Any]) -> dict[str, Any]:
             },
             "sys_instruction_count": 0,
             "model_distribution": {},
-            "daily_trends": [],
+            "daily_trends": empty_trends,
+            "trend_granularity": "hour" if is_single_day else "day",
+            "single_date": single_date if is_single_day else None,
             "message": "当前时间范围内无会话记录",
         }
 
@@ -87,6 +109,8 @@ def calculate_session_metrics(sessions: list[Any]) -> dict[str, Any]:
                     "branch_count": d.get("branch_count", 0),
                     "has_sys_instruction": bool(d.get("has_sys_instruction", False)),
                     "model": d.get("model", "unknown"),
+                    "active_dates": d.get("active_dates"),
+                    "modified_time": d.get("modified_time"),
                 }
             )
     else:
@@ -230,34 +254,83 @@ def calculate_session_metrics(sessions: list[Any]) -> dict[str, Any]:
     # 6. 模型偏好分布
     model_dist = df["model"].value_counts().to_dict()
 
-    # 7. 每日 Token 消耗与活跃趋势聚合 (按日期升序)
+    # 7. 时序走势聚合：若为单日场景则生成 24 个小时槽位分布，否则按日聚合
     daily_trends = []
-    valid_dates_df = df[df["date"].notna()]
-    if not valid_dates_df.empty:
-        grouped = (
-            valid_dates_df.groupby("date")
-            .agg(
-                total_tokens=("total_tokens", "sum"),
-                cumulative_tokens=("cumulative_tokens", "sum"),
-                thought_tokens=("thought_tokens", "sum"),
-                sessions=("file_id", "count"),
-                turns=("turn_count", "sum"),
-            )
-            .reset_index()
-            .sort_values("date")
-        )
 
-        for _, row in grouped.iterrows():
-            daily_trends.append(
-                {
-                    "date": str(row["date"]),
-                    "total_tokens": int(row["total_tokens"]),
-                    "cumulative_tokens": int(row["cumulative_tokens"]),
-                    "thought_tokens": int(row["thought_tokens"]),
-                    "sessions": int(row["sessions"]),
-                    "turns": int(row["turns"]),
-                }
+    if is_single_day and single_date:
+        import json
+        from datetime import datetime
+
+        hourly_buckets = [
+            {
+                "date": f"{h:02d}:00",
+                "total_tokens": 0,
+                "cumulative_tokens": 0,
+                "thought_tokens": 0,
+                "sessions": 0,
+                "turns": 0,
+            }
+            for h in range(24)
+        ]
+
+        for r in records:
+            matched_hour = None
+            active_dates_str = r.get("active_dates")
+            if active_dates_str:
+                try:
+                    ad = json.loads(active_dates_str)
+                    if single_date in ad:
+                        time_part = ad[single_date]
+                        matched_hour = int(time_part.split(":")[0])
+                except (ValueError, KeyError, TypeError):
+                    pass
+
+            if matched_hour is None:
+                m_str = r.get("modified_time")
+                if m_str:
+                    try:
+                        m_dt = datetime.fromisoformat(m_str).astimezone()
+                        if m_dt.strftime("%Y-%m-%d") == single_date:
+                            matched_hour = m_dt.hour
+                    except (ValueError, TypeError):
+                        pass
+
+            if matched_hour is not None and 0 <= matched_hour <= 23:
+                bucket = hourly_buckets[matched_hour]
+                bucket["total_tokens"] += r["total_tokens"]
+                bucket["cumulative_tokens"] += r["cumulative_tokens"]
+                bucket["thought_tokens"] += r["thought_tokens"]
+                bucket["sessions"] += 1
+                bucket["turns"] += r["turn_count"]
+
+        daily_trends = hourly_buckets
+    else:
+        valid_dates_df = df[df["date"].notna()]
+        if not valid_dates_df.empty:
+            grouped = (
+                valid_dates_df.groupby("date")
+                .agg(
+                    total_tokens=("total_tokens", "sum"),
+                    cumulative_tokens=("cumulative_tokens", "sum"),
+                    thought_tokens=("thought_tokens", "sum"),
+                    sessions=("file_id", "count"),
+                    turns=("turn_count", "sum"),
+                )
+                .reset_index()
+                .sort_values("date")
             )
+
+            for _, row in grouped.iterrows():
+                daily_trends.append(
+                    {
+                        "date": str(row["date"]),
+                        "total_tokens": int(row["total_tokens"]),
+                        "cumulative_tokens": int(row["cumulative_tokens"]),
+                        "thought_tokens": int(row["thought_tokens"]),
+                        "sessions": int(row["sessions"]),
+                        "turns": int(row["turns"]),
+                    }
+                )
 
     return {
         "total_sessions": total_sessions,
@@ -272,4 +345,6 @@ def calculate_session_metrics(sessions: list[Any]) -> dict[str, Any]:
         "sys_instruction_count": int(df["has_sys_instruction"].sum()),
         "model_distribution": model_dist,
         "daily_trends": daily_trends,
+        "trend_granularity": "hour" if is_single_day else "day",
+        "single_date": single_date if is_single_day else None,
     }

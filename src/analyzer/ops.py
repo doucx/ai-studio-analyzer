@@ -246,6 +246,7 @@ def run_reindex_task(
                     if session:
                         cache.upsert_session_index(session)
                         cache.upsert_session_fts(session)
+                        cache.upsert_session_chunks(session)
                         success_count += 1
                     else:
                         failed_count += 1

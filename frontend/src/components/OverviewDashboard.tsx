@@ -1,9 +1,11 @@
 import { Bot, Clock, LineChart } from 'lucide-preact';
 import { useLocation } from 'preact-iso';
 import { useCallback, useState } from 'preact/hooks';
+import { hourlyStatsSignal } from '../state/metrics';
 import { drillDownToSessions } from '../state/session';
 import type { MetricsSummary } from '../types/metrics';
 import { DurationTiersChart } from './charts/DurationTiersChart';
+import { HourlyActivityChart } from './charts/HourlyActivityChart';
 import { ModelDistributionChart } from './charts/ModelDistributionChart';
 import { TokenTrendChart, type TrendMode } from './charts/TokenTrendChart';
 
@@ -26,10 +28,11 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
 
   const handleDateDrillDown = useCallback(
     (date: string) => {
-      drillDownToSessions({ date });
+      const targetDate = metrics.trend_granularity === 'hour' ? metrics.single_date || date : date;
+      drillDownToSessions({ date: targetDate });
       route('/sessions');
     },
-    [route],
+    [route, metrics.trend_granularity, metrics.single_date],
   );
 
   const handleTierDrillDown = useCallback(
@@ -128,18 +131,28 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
               <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-1.5">
                 <LineChart size={15} className="text-indigo-400" />
                 <span>
-                  {trendMode === 'tokens' && '每日上下文 Token 规模趋势 (按时间序列)'}
-                  {trendMode === 'chunks' && '每日 Chunk 交互推进量趋势 (按时间序列)'}
-                  {trendMode === 'sessions' && '每日会话场次活跃度趋势 (按时间序列)'}
+                  {trendMode === 'tokens' &&
+                    (metrics.trend_granularity === 'hour'
+                      ? `分时上下文 Token 规模趋势 (${metrics.single_date || ''} 24小时分布)`
+                      : '每日上下文 Token 规模趋势 (按时间序列)')}
+                  {trendMode === 'chunks' &&
+                    (metrics.trend_granularity === 'hour'
+                      ? `分时 Chunk 推进量趋势 (${metrics.single_date || ''} 24小时分布)`
+                      : '每日 Chunk 交互推进量趋势 (按时间序列)')}
+                  {trendMode === 'sessions' &&
+                    (metrics.trend_granularity === 'hour'
+                      ? `分时会话活跃度趋势 (${metrics.single_date || ''} 24小时分布)`
+                      : '每日会话场次活跃度趋势 (按时间序列)')}
                 </span>
               </h2>
               <p className="text-xs text-zinc-500 mt-0.5">
-                {trendMode === 'tokens' &&
-                  `展示【${activeRangeLabel}】周期内的上下文 Token 规模与思考链沉淀`}
-                {trendMode === 'chunks' &&
-                  `展示【${activeRangeLabel}】周期内与模型往返交互的数据块推进总量`}
-                {trendMode === 'sessions' &&
-                  `展示【${activeRangeLabel}】周期内每日活跃的独立对话场次`}
+                {metrics.trend_granularity === 'hour'
+                  ? `展示【${activeRangeLabel}】内 00:00 ~ 23:00 的心智活跃分布`
+                  : trendMode === 'tokens'
+                    ? `展示【${activeRangeLabel}】周期内的上下文 Token 规模与思考链沉淀`
+                    : trendMode === 'chunks'
+                      ? `展示【${activeRangeLabel}】周期内与模型往返交互的数据块推进总量`
+                      : `展示【${activeRangeLabel}】周期内每日活跃的独立对话场次`}
               </p>
             </div>
 
@@ -185,7 +198,9 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
               </div>
 
               <span className="text-xs font-mono text-zinc-400 bg-zinc-800/60 px-2 py-1 rounded shrink-0">
-                {metrics.daily_trends.length} 活跃天
+                {metrics.trend_granularity === 'hour'
+                  ? '24 小时槽位'
+                  : `${metrics.daily_trends.length} 活跃天`}
               </span>
             </div>
           </div>
@@ -195,6 +210,11 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
             onSelectDate={handleDateDrillDown}
           />
         </section>
+      )}
+
+      {/* 24 小时 Chunk 精确心智精力直方图 (Anki 时段分布) */}
+      {hourlyStatsSignal.value && hourlyStatsSignal.value.total_chunks > 0 && (
+        <HourlyActivityChart data={hourlyStatsSignal.value} activeRangeLabel={activeRangeLabel} />
       )}
 
       {/* 时长梯队与模型偏好双图并排 */}

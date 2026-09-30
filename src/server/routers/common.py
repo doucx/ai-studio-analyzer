@@ -3,7 +3,7 @@
 """
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from src.analyzer.cache import SQLiteCache
 
@@ -46,27 +46,26 @@ def resolve_time_bounds(
     if range_key == "all":
         return None, None, None, None
 
-    now = datetime.now(UTC)
-    today_local = datetime.now().astimezone().strftime("%Y-%m-%d")
+    today_dt = datetime.now().astimezone()
+    today_local = today_dt.strftime("%Y-%m-%d")
 
     if range_key == "1d":
-        start_dt = now - timedelta(days=1)
-        return start_dt.isoformat(), None, None, None
+        # 严格定义为自然日的“今天”闭区间
+        return None, None, today_local, today_local
     if range_key == "7d":
-        start_d = (datetime.now().astimezone() - timedelta(days=7)).strftime("%Y-%m-%d")
+        # 今天 + 过去 6 天 = 共 7 个自然日
+        start_d = (today_dt - timedelta(days=6)).strftime("%Y-%m-%d")
         return None, None, start_d, today_local
     if range_key == "30d":
-        start_d = (datetime.now().astimezone() - timedelta(days=30)).strftime(
-            "%Y-%m-%d"
-        )
+        # 今天 + 过去 29 天 = 共 30 个自然日
+        start_d = (today_dt - timedelta(days=29)).strftime("%Y-%m-%d")
         return None, None, start_d, today_local
     if range_key == "90d":
-        start_d = (datetime.now().astimezone() - timedelta(days=90)).strftime(
-            "%Y-%m-%d"
-        )
+        # 今天 + 过去 89 天 = 共 90 个自然日
+        start_d = (today_dt - timedelta(days=89)).strftime("%Y-%m-%d")
         return None, None, start_d, today_local
     if range_key == "this_year":
-        this_year_start = f"{datetime.now().astimezone().year}-01-01"
+        this_year_start = f"{today_dt.year}-01-01"
         return None, None, this_year_start, today_local
 
     return None, None, None, None

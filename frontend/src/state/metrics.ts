@@ -4,7 +4,7 @@ import type { DailyTimelineItem, DailyTrendItem, MetricsSummary } from '../types
 export type TimeRange = '1d' | '7d' | '30d' | '90d' | 'this_year' | 'all';
 
 export const TIME_RANGE_OPTIONS: { key: TimeRange; label: string }[] = [
-  { key: '1d', label: '1天' },
+  { key: '1d', label: '今天' },
   { key: '7d', label: '7天' },
   { key: '30d', label: '30天' },
   { key: '90d', label: '90天' },
@@ -16,10 +16,14 @@ export const timeRangeSignal = signal<TimeRange>('all');
 export const customStartDateSignal = signal<string | null>(null);
 export const customEndDateSignal = signal<string | null>(null);
 
+import type { HourlyStatsSummary } from '../types/metrics';
+
 export const metricsSignal = signal<MetricsSummary | null>(null);
 export const metricsLoadingSignal = signal<boolean>(true);
 export const todayMetricsSignal = signal<DailyTimelineItem | null>(null);
 export const allDailyTrendsSignal = signal<DailyTrendItem[]>([]);
+export const hourlyStatsSignal = signal<HourlyStatsSummary | null>(null);
+export const hourlyStatsLoadingSignal = signal<boolean>(false);
 
 export async function fetchAllDailyTrends() {
   if (allDailyTrendsSignal.value.length > 0) return;
@@ -45,6 +49,28 @@ export async function fetchTodayMetrics() {
     }
   } catch (err) {
     console.error('加载今日认知时量切片失败:', err);
+  }
+}
+
+export async function fetchHourlyStats(
+  range: TimeRange = timeRangeSignal.value,
+  start: string | null = customStartDateSignal.value,
+  end: string | null = customEndDateSignal.value,
+) {
+  hourlyStatsLoadingSignal.value = true;
+  try {
+    let url = `/api/metrics/hourly?range=${range}`;
+    if (start) url += `&start=${encodeURIComponent(start)}`;
+    if (end) url += `&end=${encodeURIComponent(end)}`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const data: HourlyStatsSummary = await res.json();
+      hourlyStatsSignal.value = data;
+    }
+  } catch (err) {
+    console.error('加载分时精力分布失败:', err);
+  } finally {
+    hourlyStatsLoadingSignal.value = false;
   }
 }
 

@@ -140,7 +140,7 @@ def get_metrics(
     start: str | None = None,
     end: str | None = None,
 ):
-    """基于 session_index 表毫秒级聚合认知与交互指标，支持精确闭区间"""
+    """基于 session_index 表毫秒级聚合认知与交互指标，支持精确闭区间与单日分时展开"""
     start_iso, end_iso, start_d, end_d = resolve_time_bounds(range, start, end)
     indices = cache.query_indices(
         range_start_iso=start_iso,
@@ -148,4 +148,23 @@ def get_metrics(
         start_date=start_d,
         end_date=end_d,
     )
-    return calculate_session_metrics(indices)
+    is_single_day = bool(start_d and end_d and start_d == end_d)
+    return calculate_session_metrics(
+        indices, is_single_day=is_single_day, single_date=start_d
+    )
+
+
+@router.get("/metrics/hourly")
+def get_hourly_metrics(
+    range: str = "all",
+    start: str | None = None,
+    end: str | None = None,
+):
+    """基于 chunk_index 毫秒级聚合 24 小时槽位心智精力分布 (类似 Anki 时段直方图)"""
+    start_iso, end_iso, start_d, end_d = resolve_time_bounds(range, start, end)
+    return cache.query_hourly_distribution(
+        start_date=start_d,
+        end_date=end_d,
+        range_start_iso=start_iso,
+        range_end_iso=end_iso,
+    )
