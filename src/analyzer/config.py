@@ -14,8 +14,8 @@ LEGACY_CONFIG_FILE_PATH = "config.json"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "proxy_url": "http://127.0.0.1:7890",
-    "token_path": "token.json",
-    "creds_path": "credentials.json",
+    "token_path": os.path.join(CACHE_DIR, "token.json"),
+    "creds_path": os.path.join(CACHE_DIR, "credentials.json"),
     "target_folder_name": "Google AI Studio",
     "auto_sync_enabled": True,
     "auto_sync_interval": 90,

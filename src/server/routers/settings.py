@@ -5,14 +5,16 @@
 import asyncio
 import json
 import logging
+import os
 import sqlite3
 
 import requests
-from fastapi import APIRouter, BackgroundTasks, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from google.auth.exceptions import GoogleAuthError
 
 from src.analyzer.config import load_config, save_config, test_proxy_connection
-from src.analyzer.drive import DriveClient
+from src.analyzer.drive import AuthenticationRequiredError, DriveClient
 from src.analyzer.ops import ops_runner
 from src.analyzer.sync import fetch_remote_files
 from src.server.routers.common import cache
@@ -53,7 +55,7 @@ def run_sync_task(limit: int | None, all_files: bool):
         )
 
     try:
-        client = DriveClient()
+        client = DriveClient(allow_interactive=False)
         total, hits, updated_sessions = fetch_remote_files(
             client=client,
             cache=cache,
@@ -69,6 +71,10 @@ def run_sync_task(limit: int | None, all_files: bool):
             "cache_total": cache.count(),
         }
         notify_sync_event("sync_done", sync_status["last_result"])
+    except AuthenticationRequiredError as exc:
+        err_msg = str(exc)
+        sync_status["error"] = err_msg
+        notify_sync_event("sync_error", {"error": "AUTH_REQUIRED", "message": err_msg})
     except (
         RuntimeError,
         OSError,
@@ -80,6 +86,46 @@ def run_sync_task(limit: int | None, all_files: bool):
         notify_sync_event("sync_error", {"error": str(exc)})
     finally:
         sync_status["is_syncing"] = False
+
+
+@router.get("/auth/status")
+def get_auth_status():
+    """获取 Google OAuth 授权和凭证文件的有效状态"""
+    return DriveClient.get_auth_status()
+
+
+@router.post("/auth/login")
+def trigger_auth_login():
+    """显式拉起 Google OAuth 浏览器交互授权"""
+    try:
+        DriveClient(allow_interactive=True)
+        return {
+            "status": "success",
+            "message": "Google 账号已成功授权！",
+            "auth": DriveClient.get_auth_status(),
+        }
+    except (
+        AuthenticationRequiredError,
+        GoogleAuthError,
+        OSError,
+        ValueError,
+        requests.RequestException,
+    ) as exc:
+        raise HTTPException(status_code=500, detail=f"授权失败: {exc}") from exc
+
+
+@router.post("/auth/logout")
+def trigger_auth_logout():
+    """注销并移除本地已保存的 token 文件"""
+    status = DriveClient.get_auth_status()
+    t_path = status["token_path"]
+    if os.path.exists(t_path):
+        try:
+            os.remove(t_path)
+            return {"status": "success", "message": "已清除本地 Token 凭据"}
+        except OSError as exc:
+            raise HTTPException(status_code=500, detail=f"移除 Token 失败: {exc}")
+    return {"status": "success", "message": "Token 文件不存在，已处于未授权状态"}
 
 
 @router.get("/settings")

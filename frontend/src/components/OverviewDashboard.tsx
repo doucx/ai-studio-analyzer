@@ -141,8 +141,8 @@ export function OverviewDashboard({ metrics, activeRangeLabel }: Props) {
                 <span>认知资产构成与真实意图解构 (Cognitive Asset Breakdown)</span>
               </h2>
               <p className="text-xs text-zinc-500 mt-0.5">
-                解耦【{activeRangeLabel}】周期内静态沉淀的 Token：分离纯净
-                Prompt、外挂代码库与 AI 产出
+                解耦【{activeRangeLabel}】周期内静态沉淀的 Token：分离纯净 Prompt、外挂代码库与 AI
+                产出
               </p>
             </div>
             <div className="text-xs font-mono text-zinc-400 bg-zinc-950 px-2.5 py-1 rounded border border-zinc-800/80 shrink-0">

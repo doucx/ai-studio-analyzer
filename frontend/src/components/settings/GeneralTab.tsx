@@ -1,6 +1,25 @@
-import { Activity, Database, Globe, Loader2 } from 'lucide-preact';
+import {
+  Activity,
+  AlertTriangle,
+  CheckCircle2,
+  Database,
+  Globe,
+  KeyRound,
+  Loader2,
+  LogOut,
+} from 'lucide-preact';
+import { useEffect } from 'preact/hooks';
 import type { SystemConfig } from '../../state/settings';
-import { proxyTestResultSignal, proxyTestingSignal, testProxy } from '../../state/settings';
+import {
+  authLoadingSignal,
+  authStatusSignal,
+  fetchAuthStatus,
+  proxyTestResultSignal,
+  proxyTestingSignal,
+  testProxy,
+  triggerGoogleLogin,
+  triggerGoogleLogout,
+} from '../../state/settings';
 
 interface Props {
   form: SystemConfig;
@@ -10,6 +29,12 @@ interface Props {
 export function GeneralTab({ form, setForm }: Props) {
   const isTesting = proxyTestingSignal.value;
   const testResult = proxyTestResultSignal.value;
+  const authStatus = authStatusSignal.value;
+  const isAuthLoading = authLoadingSignal.value;
+
+  useEffect(() => {
+    fetchAuthStatus();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -61,10 +86,70 @@ export function GeneralTab({ form, setForm }: Props) {
       </section>
 
       <section className="bg-zinc-900/40 border border-zinc-800 rounded-lg p-5 space-y-4">
-        <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-1.5">
-          <Database size={15} className="text-indigo-400" />
-          <span>Google 云端凭据与文件夹</span>
-        </h2>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-zinc-200 flex items-center gap-1.5">
+            <Database size={15} className="text-indigo-400" />
+            <span>Google 云端凭据与授权状态</span>
+          </h2>
+          <div className="flex items-center gap-2">
+            {authStatus &&
+              (authStatus.has_token && !authStatus.is_expired ? (
+                <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/60 px-2 py-0.5 rounded flex items-center gap-1">
+                  <CheckCircle2 size={12} /> 授权有效中
+                </span>
+              ) : (
+                <span className="text-[11px] font-mono text-amber-400 bg-amber-950/60 border border-amber-800/60 px-2 py-0.5 rounded flex items-center gap-1">
+                  <AlertTriangle size={12} /> 未授权或令牌已失效
+                </span>
+              ))}
+          </div>
+        </div>
+
+        {/* 交互式授权操作栏 */}
+        <div className="p-3.5 rounded-lg bg-zinc-950 border border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="space-y-1">
+            <div className="font-medium text-zinc-200 flex items-center gap-1.5">
+              <KeyRound size={14} className="text-amber-400" />
+              <span>Google 账号 OAuth 鉴权管理</span>
+            </div>
+            <p className="text-[11px] text-zinc-500">
+              {authStatus?.has_credentials
+                ? authStatus.has_token && !authStatus.is_expired
+                  ? '凭据与令牌就绪，可随时重新鉴权以刷新访问凭证。'
+                  : 'Token 凭据已过期或被撤销，请点击右侧按钮拉起浏览器重新完成授权。'
+                : `⚠️ 缺少凭据文件: 请确保将 Google Cloud 下载的 credentials.json 放入 ${authStatus?.creds_path || '.cache/credentials.json'}`}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              disabled={isAuthLoading || !authStatus?.has_credentials}
+              onClick={triggerGoogleLogin}
+              className="px-3 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded transition shadow-sm flex items-center gap-1.5 cursor-pointer"
+            >
+              {isAuthLoading ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <KeyRound size={13} />
+              )}
+              <span>{isAuthLoading ? '正在拉起浏览器...' : '登录 / 重新授权'}</span>
+            </button>
+
+            {authStatus?.has_token && (
+              <button
+                type="button"
+                disabled={isAuthLoading}
+                onClick={triggerGoogleLogout}
+                className="px-2.5 py-1.5 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 rounded border border-zinc-700 transition flex items-center gap-1 cursor-pointer"
+                title="清除本地保存的 token.json"
+              >
+                <LogOut size={13} />
+                <span>注销</span>
+              </button>
+            )}
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-1.5">

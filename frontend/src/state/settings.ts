@@ -38,6 +38,18 @@ export const defaultConfig: SystemConfig = {
   default_render_markdown: true,
 };
 
+export interface AuthStatus {
+  has_credentials: boolean;
+  has_token: boolean;
+  is_valid: boolean;
+  is_expired: boolean;
+  token_path: string;
+  creds_path: string;
+}
+
+export const authStatusSignal = signal<AuthStatus | null>(null);
+export const authLoadingSignal = signal<boolean>(false);
+
 export const configSignal = signal<SystemConfig>(defaultConfig);
 export const configLoadingSignal = signal<boolean>(false);
 export const configSavingSignal = signal<boolean>(false);
@@ -98,5 +110,51 @@ export async function testProxy(proxyUrl: string): Promise<void> {
     proxyTestResultSignal.value = { ok: false, message: `测试网络异常: ${String(err)}` };
   } finally {
     proxyTestingSignal.value = false;
+  }
+}
+
+export async function fetchAuthStatus(): Promise<void> {
+  try {
+    const res = await fetch('/api/auth/status');
+    if (res.ok) {
+      const data = await res.json();
+      authStatusSignal.value = data;
+    }
+  } catch (err) {
+    console.error('获取授权状态失败:', err);
+  }
+}
+
+export async function triggerGoogleLogin(): Promise<boolean> {
+  authLoadingSignal.value = true;
+  try {
+    const res = await fetch('/api/auth/login', { method: 'POST' });
+    if (res.ok) {
+      await fetchAuthStatus();
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error('触发 Google 授权失败:', err);
+    return false;
+  } finally {
+    authLoadingSignal.value = false;
+  }
+}
+
+export async function triggerGoogleLogout(): Promise<boolean> {
+  authLoadingSignal.value = true;
+  try {
+    const res = await fetch('/api/auth/logout', { method: 'POST' });
+    if (res.ok) {
+      await fetchAuthStatus();
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error('注销授权失败:', err);
+    return false;
+  } finally {
+    authLoadingSignal.value = false;
   }
 }
