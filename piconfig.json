@@ -5,6 +5,12 @@
       "extension": ["py", "toml", "js", "ts", "tsx", "json", "css", "html"],
       "paths": ["."],
       "ignore": ["*.test.ts", "*.test.tsx", "package-lock.json"]
+    },
+    "web": {
+      "format": "xml",
+      "extension": ["py", "toml", "js", "ts", "tsx", "json", "css", "html"],
+      "paths": ["frontend"],
+      "ignore": ["*.test.ts", "*.test.tsx", "package-lock.json"]
     }
   }
 }
