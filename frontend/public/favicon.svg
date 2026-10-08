@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- 暗夜黑曜石底座 -->
+    <linearGradient id="bg-grad-3a" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#18181b"/>
+      <stop offset="100%" stop-color="#09090b"/>
+    </linearGradient>
+
+    <!-- 精密电光冷蓝渐变 -->
+    <linearGradient id="iris-grad-3a" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="50%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#4338ca"/>
+    </linearGradient>
+
+    <!-- 中心星芒高能光芒 -->
+    <linearGradient id="core-grad-3a" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#c7d2fe"/>
+    </linearGradient>
+
+    <!-- 底座顶层倒角微反光 -->
+    <linearGradient id="rim-3a" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.02"/>
+    </linearGradient>
+
+    <!-- 象限遮罩：切除十字轴 14px 负空间缝隙 -->
+    <mask id="quadrant-gap-mask">
+      <rect width="512" height="512" fill="#ffffff"/>
+      <!-- 十字负空间割缝 -->
+      <rect x="249" y="80" width="14" height="352" fill="#000000"/>
+      <rect x="80" y="249" width="352" height="14" fill="#000000"/>
+    </mask>
+  </defs>
+
+  <!-- 1. Squircle App Icon 基础容器 (R=112) -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="url(#bg-grad-3a)"/>
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="none" stroke="url(#rim-3a)" stroke-width="2"/>
+
+  <!-- 2. 四象限厚实雷达外环 (外径 156, 内径 108, 厚度 48) -->
+  <g mask="url(#quadrant-gap-mask)">
+    <circle cx="256" cy="256" r="156" fill="none" stroke="url(#iris-grad-3a)" stroke-width="48"/>
+  </g>
+
+  <!-- 3. 中央同心嵌合 Gemini 星核 (尖端指向外环切口) -->
+  <path d="M 256 128 
+           Q 256 256, 128 256 
+           Q 256 256, 256 384 
+           Q 256 256, 384 256 
+           Q 256 256, 256 128 Z" 
+        fill="url(#core-grad-3a)"/>
+
+  <!-- 4. 绝对零点观测孔 (负空间瞳孔，确保星体深邃通透) -->
+  <circle cx="256" cy="256" r="22" fill="#09090b"/>
+  <circle cx="256" cy="256" r="10" fill="#818cf8"/>
+</svg>
