@@ -17,6 +17,9 @@ importers:
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      katex:
+        specifier: ^0.16.21
+        version: 0.16.47
       lucide-preact:
         specifier: ^0.460.0
         version: 0.460.0(preact@10.29.8)
@@ -39,6 +42,9 @@ importers:
       '@preact/preset-vite':
         specifier: ^2.9.3
         version: 2.10.6(@babel/core@7.29.7)(preact@10.29.8)(rollup@4.63.5)(vite@6.4.3(jiti@1.21.7))
+      '@types/katex':
+        specifier: ^0.16.7
+        version: 0.16.8
       '@types/marked':
         specifier: ^5.0.2
         version: 5.0.2
@@ -595,6 +601,9 @@ packages:
   '@types/estree@1.0.9':
     resolution: {integrity: sha512-GhdPgy1el4/ImP05X05Uw4cw2/M93BCUmnEvWZNStlCzEKME4Fkk+YpoA5OiHNQmoS7Cafb8Xa3Pya8m1Qrzeg==}
 
+  '@types/katex@0.16.8':
+    resolution: {integrity: sha512-trgaNyfU+Xh2Tc+ABIb44a5AYUpicB3uwirOioeOkNPPbmgRNtcWyDeeFRzjPZENO9Vq8gvVqfhaaXWLlevVwg==}
+
   '@types/marked@5.0.2':
     resolution: {integrity: sha512-OucS4KMHhFzhz27KxmWg7J+kIYqyqoW5kdIEI319hqARQQUTqhao3M/F+uFnDXD0Rg72iDDZxZNxq5gvctmLlg==}
 
@@ -663,6 +672,10 @@ packages:
   commander@4.1.1:
     resolution: {integrity: sha512-NOKm8xhkzAjzFx8B2v5OAHT+u5pRQc2UCa2Vq9jYL/31o2wi9mxBA7LIFs3sV5VSC49z6pEhfbMULvShKj26WA==}
     engines: {node: '>= 6'}
+
+  commander@8.3.0:
+    resolution: {integrity: sha512-OkTL9umf+He2DZkUq8f8J9of7yL6RJKI24dVITBmNfZBmri9zYZQrKkuXiKhyfPSu8tUhnVBB1iKXevvnlR4Ww==}
+    engines: {node: '>= 12'}
 
   convert-source-map@2.0.0:
     resolution: {integrity: sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg==}
@@ -816,6 +829,10 @@ packages:
   json5@2.2.3:
     resolution: {integrity: sha512-XmOWe7eyHYH14cLdVPoyg+GOH3rYX++KpzrylJwSW98t3Nk+U8XOl8FWKOgwtzdb8lXGf6zYwDUzeHMWfxasyg==}
     engines: {node: '>=6'}
+    hasBin: true
+
+  katex@0.16.47:
+    resolution: {integrity: sha512-Eeo8Ys1doU1z+x8AZsPpQu+p/QcZBI5PeOo7QGQdy2x2m0MU/hYagBbGOmXwr5KVbEfVuWv9LpnQWeehogurjg==}
     hasBin: true
 
   kolorist@1.8.0:
@@ -1535,6 +1552,8 @@ snapshots:
 
   '@types/estree@1.0.9': {}
 
+  '@types/katex@0.16.8': {}
+
   '@types/marked@5.0.2': {}
 
   any-promise@1.3.0: {}
@@ -1600,6 +1619,8 @@ snapshots:
   clsx@2.1.1: {}
 
   commander@4.1.1: {}
+
+  commander@8.3.0: {}
 
   convert-source-map@2.0.0: {}
 
@@ -1746,6 +1767,10 @@ snapshots:
   jsesc@3.1.0: {}
 
   json5@2.2.3: {}
+
+  katex@0.16.47:
+    dependencies:
+      commander: 8.3.0
 
   kolorist@1.8.0: {}
 

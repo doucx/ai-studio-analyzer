@@ -1,3 +1,4 @@
+import katex from 'katex';
 import {
   Bot,
   Brain,
@@ -30,8 +31,60 @@ marked.setOptions({
   gfm: true,
 });
 
-// 覆盖 HTML 处理逻辑，确保对话中直接输入的 HTML 字符串不被实例化为 DOM
+// 注册 KaTeX 块级公式与行内公式词法解析扩展
+const blockKatexExtension = {
+  name: 'blockKatex',
+  level: 'block' as const,
+  start(src: string) {
+    return src.indexOf('$$');
+  },
+  tokenizer(src: string) {
+    const match = /^\$\$([\s\S]+?)\$\$/.exec(src);
+    if (match) {
+      return {
+        type: 'blockKatex',
+        raw: match[0],
+        text: match[1].trim(),
+      };
+    }
+  },
+  renderer(token: { text: string }) {
+    try {
+      return `<div class="katex-display-wrapper my-2.5 overflow-x-auto py-1 text-center">${katex.renderToString(token.text, { displayMode: true, throwOnError: false })}</div>`;
+    } catch {
+      return `<div class="katex-error text-red-400 font-mono text-xs my-1">${escapeHtml(token.text)}</div>`;
+    }
+  },
+};
+
+const inlineKatexExtension = {
+  name: 'inlineKatex',
+  level: 'inline' as const,
+  start(src: string) {
+    return src.indexOf('$');
+  },
+  tokenizer(src: string) {
+    // 优化正则：允许行内公式紧邻中文、标点，只要内部不包含换行符且不以空白开头/结尾
+    const match = /^\$([^\s$](?:[^$\n]*[^\s$])?)\$/.exec(src);
+    if (match) {
+      return {
+        type: 'inlineKatex',
+        raw: match[0],
+        text: match[1],
+      };
+    }
+  },
+  renderer(token: { text: string }) {
+    try {
+      return katex.renderToString(token.text, { displayMode: false, throwOnError: false });
+    } catch {
+      return escapeHtml(token.text);
+    }
+  },
+};
+
 marked.use({
+  extensions: [blockKatexExtension, inlineKatexExtension],
   renderer: {
     html(token: { text: string } | string) {
       const raw = typeof token === 'string' ? token : token?.text || '';
