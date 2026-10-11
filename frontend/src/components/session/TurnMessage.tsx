@@ -64,8 +64,7 @@ const inlineKatexExtension = {
     return src.indexOf('$');
   },
   tokenizer(src: string) {
-    // 优化正则：允许行内公式紧邻中文、标点，只要内部不包含换行符且不以空白开头/结尾
-    const match = /^\$([^\s$](?:[^$\n]*[^\s$])?)\$/.exec(src);
+    const match = /^\$([^$\n]+?)\$/.exec(src);
     if (match) {
       return {
         type: 'inlineKatex',
@@ -83,8 +82,30 @@ const inlineKatexExtension = {
   },
 };
 
+// 解决中文与标点紧邻时 CommonMark 定界符侧翼规则误伤加粗的问题
+const cjkStrongExtension = {
+  name: 'cjkStrong',
+  level: 'inline' as const,
+  start(src: string) {
+    return src.indexOf('**');
+  },
+  tokenizer(src: string) {
+    const match = /^\*\*((?:[^\n*]|\n(?!\n)|\*(?!\*))+?)\*\*/.exec(src);
+    if (match) {
+      return {
+        type: 'cjkStrong',
+        raw: match[0],
+        text: match[1],
+      };
+    }
+  },
+  renderer(token: { text: string }) {
+    return `<strong>${marked.parseInline(token.text)}</strong>`;
+  },
+};
+
 marked.use({
-  extensions: [blockKatexExtension, inlineKatexExtension],
+  extensions: [blockKatexExtension, inlineKatexExtension, cjkStrongExtension],
   renderer: {
     html(token: { text: string } | string) {
       const raw = typeof token === 'string' ? token : token?.text || '';
