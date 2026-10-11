@@ -19,6 +19,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Sessions"])
 
 
+def format_branch_ref(raw: Any) -> dict[str, str] | None:
+    """从原始 branchParent / branchChildren 字典中安全提取 file_id 与 display_name"""
+    if not isinstance(raw, dict):
+        return None
+    prompt_id = raw.get("promptId", "")
+    file_id = prompt_id.replace("prompts/", "") if prompt_id else ""
+    if not file_id:
+        return None
+    name = raw.get("displayName") or raw.get("name") or "分支对话"
+    return {"file_id": file_id, "display_name": name}
+
+
 class SearchRequest(BaseModel):
     q: str
     range: str = "all"
@@ -353,6 +365,14 @@ def get_session_detail(file_id: str):
                 "payload_type": t.payload_type,
                 "timestamp": t.timestamp.isoformat() if t.timestamp else None,
                 "is_edited": t.is_edited,
+                "branch_parent": format_branch_ref(t.branch_parent),
+                "branch_children": [
+                    b
+                    for b in [format_branch_ref(c) for c in (t.branch_children or [])]
+                    if b is not None
+                ]
+                if t.branch_children
+                else [],
                 "extra_metadata": t.extra_metadata,
             }
             for t in target.turns

@@ -138,6 +138,11 @@ export interface SessionItem {
   search_matches?: SearchMatchItem[];
 }
 
+export interface BranchRef {
+  file_id: string;
+  display_name: string;
+}
+
 export interface ConversationTurnItem {
   role: 'user' | 'model' | 'system';
   text: string;
@@ -146,6 +151,8 @@ export interface ConversationTurnItem {
   payload_type: string;
   timestamp: string | null;
   is_edited: boolean;
+  branch_parent?: BranchRef | null;
+  branch_children?: BranchRef[];
   extra_metadata?: {
     mime_type?: string;
     byte_size?: number;

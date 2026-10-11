@@ -9,6 +9,8 @@ import {
   Download,
   ExternalLink,
   FileText,
+  GitBranch,
+  GitFork,
   Image as ImageIcon,
   Paperclip,
   User,
@@ -444,6 +446,67 @@ export function TurnMessage({ turn, index, renderMarkdown = true }: TurnMessageP
         ) : (
           <div className="text-xs text-zinc-200 font-mono whitespace-pre-wrap leading-relaxed select-text bg-black/30 p-3.5 rounded border border-zinc-800/60">
             {turn.text}
+          </div>
+        )}
+
+        {/* 原始会话溯源导航 (See original conversation) */}
+        {turn.branch_parent && (
+          <div className="mt-3 pt-3 border-t border-zinc-800/80 flex flex-wrap items-center gap-2 text-xs">
+            <div className="flex items-center gap-1.5 text-amber-400 font-medium">
+              <GitFork size={13} className="rotate-180" />
+              <span>原始会话溯源:</span>
+            </div>
+            <a
+              href={`/sessions/${turn.branch_parent.file_id}`}
+              className="text-amber-300 hover:text-amber-200 underline font-mono text-[11px] truncate max-w-sm"
+              title={turn.branch_parent.display_name}
+            >
+              {turn.branch_parent.display_name}
+            </a>
+            <a
+              href={`https://aistudio.google.com/prompts/${turn.branch_parent.file_id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-zinc-500 hover:text-zinc-300 p-0.5 inline-flex items-center"
+              title="在 Google AI Studio 原生打开原始会话"
+            >
+              <ExternalLink size={11} />
+            </a>
+          </div>
+        )}
+
+        {/* 派生分支会话清单 (See branched conversations) */}
+        {turn.branch_children && turn.branch_children.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-zinc-800/80 space-y-2 text-xs">
+            <div className="flex items-center gap-1.5 text-indigo-400 font-medium">
+              <GitBranch size={13} />
+              <span>从本轮派生的分支会话 ({turn.branch_children.length}):</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {turn.branch_children.map((child) => (
+                <div
+                  key={child.file_id}
+                  className="flex items-center gap-1.5 bg-indigo-950/50 hover:bg-indigo-950/80 border border-indigo-800/60 px-2.5 py-1 rounded-md text-[11px] transition shadow-sm"
+                >
+                  <a
+                    href={`/sessions/${child.file_id}`}
+                    className="text-indigo-300 hover:text-indigo-200 hover:underline font-mono truncate max-w-xs"
+                    title={child.display_name}
+                  >
+                    {child.display_name}
+                  </a>
+                  <a
+                    href={`https://aistudio.google.com/prompts/${child.file_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-zinc-500 hover:text-zinc-300 p-0.5 inline-flex items-center"
+                    title="在 Google AI Studio 原生打开该分支"
+                  >
+                    <ExternalLink size={10} />
+                  </a>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
