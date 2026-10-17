@@ -1,7 +1,8 @@
-import { ExternalLink, FileCode, MessagesSquare, X } from 'lucide-preact';
+import { Copy, ExternalLink, FileCode, MessagesSquare, X } from 'lucide-preact';
 import { useCallback, useEffect, useRef, useState } from 'preact/hooks';
 import { configSignal } from '../state/settings';
 import { syncVersionSignal } from '../state/sync';
+import { addToast } from '../state/toast';
 import type { SessionDetail, SessionItem } from '../types/metrics';
 import { formatLocalTime } from '../utils/date';
 import { SystemInstructionCard } from './session/SystemInstructionCard';
@@ -22,9 +23,29 @@ export function SessionDetailPanel({ session, onClose }: Props) {
   const [renderMarkdown, setRenderMarkdown] = useState<boolean>(
     configSignal.value.default_render_markdown ?? true,
   );
+  const [isCopyingSkeleton, setIsCopyingSkeleton] = useState<boolean>(false);
   const hasScrolledRef = useRef<string | null>(null);
 
   const aiStudioUrl = `https://aistudio.google.com/prompts/${session.file_id}`;
+
+  const handleCopySkeleton = async () => {
+    setIsCopyingSkeleton(true);
+    try {
+      const res = await fetch(`/api/sessions/${session.file_id}/skeleton`);
+      if (!res.ok) {
+        addToast('获取数据骨架失败', 'error');
+        return;
+      }
+      const text = await res.text();
+      await navigator.clipboard.writeText(text);
+      addToast('已复制纯净 JSON 骨架到剪贴板', 'success', 3000);
+    } catch (err) {
+      console.error('复制骨架失败:', err);
+      addToast(`复制骨架异常: ${String(err)}`, 'error');
+    } finally {
+      setIsCopyingSkeleton(false);
+    }
+  };
 
   const fetchSessionDetail = useCallback(
     async (isSilent = false, signal?: AbortSignal) => {
@@ -161,6 +182,18 @@ export function SessionDetailPanel({ session, onClose }: Props) {
             <ExternalLink size={13} />
             <span className="hidden sm:inline">在 AI Studio 打开</span>
           </a>
+          <button
+            type="button"
+            onClick={handleCopySkeleton}
+            disabled={isCopyingSkeleton}
+            className="px-2.5 py-1 text-xs font-medium bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-zinc-300 rounded border border-zinc-700/80 transition flex items-center gap-1.5 cursor-pointer"
+            title="提取剔除文本与Base64正文后的纯净数据骨架，并复制到剪贴板"
+          >
+            <Copy size={13} className={isCopyingSkeleton ? 'animate-pulse text-indigo-400' : ''} />
+            <span className="hidden sm:inline">
+              {isCopyingSkeleton ? '正在提取...' : '复制骨架'}
+            </span>
+          </button>
           <a
             href={`/api/sessions/${session.file_id}/raw`}
             download={`session_${session.file_id}.json`}

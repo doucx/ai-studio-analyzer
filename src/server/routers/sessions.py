@@ -380,6 +380,46 @@ def get_session_detail(file_id: str):
     }
 
 
+def extract_json_skeleton(obj: Any, max_str_len: int = 40) -> Any:
+    """递归剔除长正文并压缩字符串，保留纯净的 JSON 拓扑骨架"""
+    if isinstance(obj, dict):
+        skeleton = {}
+        for k, v in obj.items():
+            k_lower = str(k).lower()
+            if isinstance(v, str):
+                if k_lower in ("data", "raw_data") and len(v) > 60:
+                    skeleton[k] = f"<base64: {len(v)} chars>"
+                elif k_lower in ("text", "content", "parts") and len(v) > max_str_len:
+                    snippet = v[:20].replace("\n", " ").strip()
+                    skeleton[k] = f"<text: {len(v)} chars, preview='{snippet}...'>"
+                elif len(v) > max_str_len:
+                    snippet = v[:20].replace("\n", " ").strip()
+                    skeleton[k] = f"<str: {len(v)} chars, preview='{snippet}...'>"
+                else:
+                    skeleton[k] = v
+            else:
+                skeleton[k] = extract_json_skeleton(v, max_str_len)
+        return skeleton
+    elif isinstance(obj, list):
+        return [extract_json_skeleton(item, max_str_len) for item in obj]
+    return obj
+
+
+@router.get("/sessions/{file_id}/skeleton")
+def get_session_skeleton(file_id: str):
+    """提取会话原始 JSON 的结构骨架，去除 text / base64 等冗长正文"""
+    raw_data = cache.get(file_id)
+    if not raw_data:
+        raise HTTPException(status_code=404, detail="未找到指定的会话记录")
+    skeleton = extract_json_skeleton(raw_data)
+    formatted = json.dumps(skeleton, indent=2, ensure_ascii=False)
+    return Response(
+        content=formatted,
+        media_type="application/json; charset=utf-8",
+        headers={"Content-Disposition": f'inline; filename="{file_id}_skeleton.json"'},
+    )
+
+
 @router.get("/sessions/{file_id}/raw")
 def get_session_raw(file_id: str):
     """导出原始 Google AI Studio 缓存 JSON 格式数据"""
