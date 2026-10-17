@@ -801,7 +801,77 @@ class SQLiteCache:
             elif depth == "branch":
                 base_conditions.append("s.has_branching = 1")
 
-        # 适当扩大底层拉取规模以保证内存时间加权混合排序空间 (最小 60 条)
+        from .search import search_service
+
+        # 优先由 Tantivy 两阶段微重排引擎驱动
+        if search_service.is_available():
+            candidate_indices = self.query_indices(
+                range_start_iso=range_start_iso,
+                range_end_iso=range_end_iso,
+                start_date=start_date,
+                end_date=end_date,
+                model=model,
+                depth=depth,
+            )
+            allowed_fids = (
+                {item["file_id"] for item in candidate_indices}
+                if (
+                    range_start_iso
+                    or range_end_iso
+                    or start_date
+                    or end_date
+                    or model != "all"
+                    or depth != "all"
+                )
+                else None
+            )
+
+            tantivy_results = search_service.search(
+                query=query,
+                limit=limit + offset,
+                allowed_file_ids=allowed_fids,
+            )
+            if tantivy_results:
+                fid_map = (
+                    {item["file_id"]: item for item in candidate_indices}
+                    if candidate_indices
+                    else {}
+                )
+                enriched = []
+                for hit in tantivy_results:
+                    fid = hit["file_id"]
+                    idx_meta = fid_map.get(fid)
+                    if not idx_meta:
+                        with self._get_connection() as conn:
+                            cur = conn.cursor()
+                            cur.execute(
+                                "SELECT * FROM session_index WHERE file_id = ? LIMIT 1;",
+                                (fid,),
+                            )
+                            row = cur.fetchone()
+                            idx_meta = dict(row) if row else {}
+
+                    merged = {
+                        "file_id": fid,
+                        "name": idx_meta.get("name", hit["title"]),
+                        "model": idx_meta.get("model", "unknown"),
+                        "turn_count": idx_meta.get("turn_count", 0),
+                        "total_tokens": idx_meta.get("total_tokens", 0),
+                        "thought_tokens": idx_meta.get("thought_tokens", 0),
+                        "duration_human": idx_meta.get("duration_human", "未知"),
+                        "duration_seconds": idx_meta.get("duration_seconds"),
+                        "has_branching": bool(idx_meta.get("has_branching", 0)),
+                        "branch_count": idx_meta.get("branch_count", 0),
+                        "first_prompt": idx_meta.get("first_prompt") or "",
+                        "modified_time": idx_meta.get("modified_time"),
+                        "created_time": idx_meta.get("created_time"),
+                        "snippet": hit.get("snippet", ""),
+                        "raw_rank": hit.get("raw_rank", 0.0),
+                    }
+                    enriched.append(merged)
+                return enriched[offset : offset + limit]
+
+        # 兜底回退：若 Tantivy 未就绪或无命中，执行原有的 SQLite FTS5 Trigram
         fetch_limit = max(60, limit + offset + 20)
 
         with self._get_connection() as conn:

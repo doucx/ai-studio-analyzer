@@ -20,6 +20,7 @@ import requests
 from src.analyzer.cache import SQLiteCache
 from src.analyzer.drive import DriveClient
 from src.analyzer.parser import parse_prompt_json
+from src.analyzer.search import search_service
 from src.analyzer.sync import fetch_remote_files
 
 logger = logging.getLogger(__name__)
@@ -201,9 +202,20 @@ def run_reindex_task(
             return
 
         emit_log(job_id, f"扫描完成，共有 {total_files} 场会话待重整。")
-        emit_log(job_id, "正在清理重置旧版二级索引与 FTS5 全文虚表...")
+        emit_log(job_id, "正在清理重置二级索引、SQLite FTS5 以及 Tantivy 索引库...")
         cache.clear_indices()
-        emit_log(job_id, "旧索引重置完成，开始逐条物化写入...")
+        try:
+            search_service.clear_index()
+            t_writer = search_service.get_writer(heap_size_mb=128)
+        except (OSError, RuntimeError, ValueError) as e:
+            t_writer = None
+            emit_log(
+                job_id,
+                f"⚠️ Tantivy Writer 初始化异常 (将仅重建 SQLite): {e}",
+                level="warn",
+            )
+
+        emit_log(job_id, "索引库重置完成，开始逐条物化写入...")
 
         success_count = 0
         failed_count = 0
@@ -247,6 +259,11 @@ def run_reindex_task(
                         cache.upsert_session_index(session)
                         cache.upsert_session_fts(session)
                         cache.upsert_session_chunks(session)
+                        if t_writer:
+                            try:
+                                search_service.index_session(session, writer=t_writer)
+                            except (OSError, RuntimeError, ValueError) as e:
+                                logger.debug("写入 Tantivy 失败: %s", e)
                         success_count += 1
                     else:
                         failed_count += 1
@@ -266,7 +283,9 @@ def run_reindex_task(
             if idx % batch_size == 0 or idx == total_files:
                 try:
                     cache.checkpoint(truncate=False)
-                except sqlite3.Error as err:
+                    if t_writer:
+                        t_writer.commit()
+                except (sqlite3.Error, OSError, RuntimeError) as err:
                     logger.debug("批次 Checkpoint 失败: %s", err)
 
                 wal_bytes = os.path.getsize(wal_path) if os.path.exists(wal_path) else 0
@@ -293,7 +312,19 @@ def run_reindex_task(
                         f"已处理 {idx}/{total_files} ({pct}%) | 速率: {speed:.1f} 条/秒 | WAL 体积: {format_bytes(wal_bytes)}",
                     )
 
-        # 最终截断刷盘
+        # 最终截断刷盘与 Tantivy 视口刷新
+        if t_writer:
+            emit_log(job_id, "正在提交并刷新 Tantivy 索引...")
+            try:
+                t_writer.commit()
+                search_service.commit_changes()
+                emit_log(
+                    job_id,
+                    f"Tantivy 索引重整完毕 (体积: {search_service.get_index_size_mb()} MB)",
+                )
+            except (OSError, RuntimeError, ValueError) as e:
+                emit_log(job_id, f"⚠️ Tantivy 最终提交异常: {e}", level="warn")
+
         emit_log(job_id, "正在执行最终 WAL Checkpoint (TRUNCATE) 刷盘...")
         busy, _log_pages, ckpt_pages = cache.checkpoint(truncate=True)
         emit_log(job_id, f"Checkpoint 完成 (busy={busy}, pages={ckpt_pages})")
@@ -561,6 +592,8 @@ def get_health_diagnostics(cache_dir: str = ".cache") -> dict[str, Any]:
             "check_time_seconds": check_time,
             "page_count": page_count,
             "page_size": page_size,
+            "tantivy_size_mb": search_service.get_index_size_mb(),
+            "tantivy_enabled": search_service.is_available(),
         },
         "schema_counts": {
             "file_cache": raw_count,

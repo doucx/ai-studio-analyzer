@@ -11,6 +11,7 @@ from .cache import SQLiteCache
 from .drive import DriveClient
 from .models import PromptSession
 from .parser import is_valid_prompt_file, parse_prompt_json
+from .search import search_service
 
 
 def fetch_remote_files(
@@ -73,6 +74,10 @@ def fetch_remote_files(
                         cache.upsert_session_index(session)
                         cache.upsert_session_fts(session)
                         cache.upsert_session_chunks(session)
+                        try:
+                            search_service.index_session(session)
+                        except (OSError, RuntimeError, ValueError) as e:
+                            print(f"⚠️ Tantivy 增量索引异常: {e}")
                         updated_sessions.append(session)
 
             pbar.set_postfix(
@@ -81,7 +86,12 @@ def fetch_remote_files(
             if progress_callback:
                 progress_callback(idx, total_valid, cache_hit_count, download_count)
 
-    # 增量拉取与索引写入完成后，主动将 WAL 日志完整合并回主数据库并截断释放磁盘
+    # 增量拉取与索引写入完成后，统一刷新 Tantivy 索引并截断合并 SQLite WAL
+    try:
+        search_service.commit_changes()
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(f"⚠️ Tantivy 索引提交异常: {exc}")
+
     try:
         cache.checkpoint(truncate=True)
     except sqlite3.Error as exc:
