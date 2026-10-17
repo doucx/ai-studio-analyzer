@@ -2,10 +2,14 @@ import { MessagesSquare, PanelLeftOpen } from 'lucide-preact';
 import { useLocation, useRoute } from 'preact-iso';
 import { useMemo } from 'preact/hooks';
 import { SessionDetailPanel } from '../components/SessionDetailPanel';
-import { VirtualSessionList } from '../components/VirtualSessionList';
+import {
+  type SessionSelectMatchPayload,
+  VirtualSessionList,
+} from '../components/VirtualSessionList';
 import {
   filteredSessionsSignal,
   isExpandedViewSignal,
+  searchKeywordSignal,
   sessionsLoadingSignal,
   sessionsSignal,
   sidebarCollapsedSignal,
@@ -51,9 +55,16 @@ export function SessionsRoute() {
     };
   }, [selectedId, sessions]);
 
-  const handleSelectSession = (s: SessionItem, turnIndex?: number) => {
-    if (turnIndex) {
-      route(`/sessions/${s.file_id}#turn-${turnIndex}`);
+  const handleSelectSession = (s: SessionItem, matchInfo?: SessionSelectMatchPayload) => {
+    const kw = searchKeywordSignal.value.trim();
+    if (matchInfo?.turnIndex) {
+      const params = new URLSearchParams();
+      if (kw) params.set('q', kw);
+      if (matchInfo.lineNo) params.set('line', String(matchInfo.lineNo));
+      if (matchInfo.role) params.set('role', matchInfo.role);
+
+      const qs = params.toString() ? `?${params.toString()}` : '';
+      route(`/sessions/${s.file_id}${qs}#turn-${matchInfo.turnIndex}`);
     } else {
       route(`/sessions/${s.file_id}`);
     }
@@ -87,7 +98,7 @@ export function SessionsRoute() {
       )}
 
       {/* 右侧：单会话详情 或 空状态引导 */}
-      <main className="flex-1 overflow-y-auto lg:h-[calc(100vh-120px)] pr-1 w-full flex flex-col relative min-w-0">
+      <main className="flex-1 overflow-hidden lg:h-[calc(100vh-120px)] pr-1 w-full flex flex-col relative min-w-0">
         {/* 侧边栏折叠时的主视口快捷展开入口 */}
         {isSidebarCollapsed && (
           <div className="mb-3 flex items-center">

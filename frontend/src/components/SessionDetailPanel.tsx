@@ -5,6 +5,11 @@ import { syncVersionSignal } from '../state/sync';
 import { addToast } from '../state/toast';
 import type { SessionDetail, SessionItem } from '../types/metrics';
 import { formatLocalTime } from '../utils/date';
+import {
+  applyCustomHighlight,
+  clearCustomHighlight,
+  flashAndScrollToElement,
+} from '../utils/highlight';
 import { SystemInstructionCard } from './session/SystemInstructionCard';
 import { TurnMessage } from './session/TurnMessage';
 
@@ -25,8 +30,15 @@ export function SessionDetailPanel({ session, onClose }: Props) {
   );
   const [isCopyingSkeleton, setIsCopyingSkeleton] = useState<boolean>(false);
   const hasScrolledRef = useRef<string | null>(null);
+  const turnsContainerRef = useRef<HTMLDivElement | null>(null);
 
   const aiStudioUrl = `https://aistudio.google.com/prompts/${session.file_id}`;
+
+  // 解析当前页面 Query 中的高亮词与目标行
+  const searchParams = new URLSearchParams(window.location.search);
+  const activeKeyword = searchParams.get('q') || '';
+  const hash = window.location.hash;
+  const targetTurnNumber = hash?.startsWith('#turn-') ? Number(hash.replace('#turn-', '')) : null;
 
   const handleCopySkeleton = async () => {
     setIsCopyingSkeleton(true);
@@ -103,33 +115,61 @@ export function SessionDetailPanel({ session, onClose }: Props) {
     }
   }, [syncVersion, fetchSessionDetail]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: 仅在会话轮次就绪时触发定位并监听 hashchange，避免因后台静默同步触发重复滚动
+  // 类 Google 模糊高亮与精确定位闪烁机制
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 在会话数据加载完毕或关键词变更时触发高亮与滚动
   useEffect(() => {
-    const handleHashScroll = () => {
-      if (loading || !detail?.turns || detail.turns.length === 0) return;
-      const hash = window.location.hash;
-      if (hash?.startsWith('#turn-') && hasScrolledRef.current !== hash) {
-        hasScrolledRef.current = hash;
-        const timer = setTimeout(() => {
-          const targetEl = document.querySelector(hash);
-          if (targetEl) {
-            targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            targetEl.classList.add('ring-2', 'ring-indigo-500', 'transition-all', 'duration-500');
-            setTimeout(() => {
-              targetEl.classList.remove('ring-2', 'ring-indigo-500');
-            }, 2500);
-          }
-        }, 150);
-        return () => clearTimeout(timer);
-      }
-    };
+    if (loading || !detail?.turns || detail.turns.length === 0) return;
 
-    handleHashScroll();
-    window.addEventListener('hashchange', handleHashScroll);
+    const timer = setTimeout(() => {
+      if (!turnsContainerRef.current) return;
+
+      if (activeKeyword) {
+        const turnEl = targetTurnNumber
+          ? document.getElementById(`turn-${targetTurnNumber}`)
+          : null;
+
+        // 优先将目标范围约束在指定的 targetTurn 内扫描
+        const { targetMatchedElement } = applyCustomHighlight(
+          turnsContainerRef.current,
+          activeKeyword,
+          turnEl,
+        );
+
+        const currentAnchor = `${window.location.hash}_${window.location.search}`;
+        if (hasScrolledRef.current !== currentAnchor) {
+          hasScrolledRef.current = currentAnchor;
+
+          // 绝对优先以目标 Turn 内部命中为准；若无细粒度子节点则直接定位到该 Turn
+          let targetEl: HTMLElement | null = null;
+          if (turnEl) {
+            targetEl = targetMatchedElement || turnEl;
+          } else {
+            targetEl = targetMatchedElement;
+          }
+
+          if (targetEl) {
+            flashAndScrollToElement(targetEl);
+          }
+        }
+      } else {
+        clearCustomHighlight();
+        // 无关键词时回退到原生 Turn 锚点滚动
+        const curHash = window.location.hash;
+        if (curHash?.startsWith('#turn-') && hasScrolledRef.current !== curHash) {
+          hasScrolledRef.current = curHash;
+          const turnEl = document.querySelector(curHash) as HTMLElement;
+          if (turnEl) {
+            flashAndScrollToElement(turnEl);
+          }
+        }
+      }
+    }, 180);
+
     return () => {
-      window.removeEventListener('hashchange', handleHashScroll);
+      clearTimeout(timer);
+      clearCustomHighlight();
     };
-  }, [loading, detail?.file_id]);
+  }, [loading, detail?.file_id, activeKeyword, targetTurnNumber, renderMarkdown]);
 
   return (
     <div className="bg-zinc-900/40 border border-zinc-800 rounded-lg flex flex-col h-full min-h-[calc(100vh-140px)]">
@@ -286,7 +326,7 @@ export function SessionDetailPanel({ session, onClose }: Props) {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+        <div ref={turnsContainerRef} className="flex-1 overflow-y-auto space-y-4 pr-1">
           {detail?.system_instruction ? (
             <SystemInstructionCard instruction={detail.system_instruction} />
           ) : null}
@@ -298,6 +338,7 @@ export function SessionDetailPanel({ session, onClose }: Props) {
                 turn={turn}
                 index={idx}
                 renderMarkdown={renderMarkdown}
+                isTargetTurn={targetTurnNumber === idx + 1}
               />
             ))
           ) : !detail && loading ? null : (

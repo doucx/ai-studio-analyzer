@@ -159,3 +159,38 @@ body {
   border-top: 1px solid #27272a;
   margin: 1rem 0;
 }
+
+/* 类 Google CSS Custom Highlight 伪元素样式 (亮金黄高对比度) */
+::highlight(search-result) {
+  background-color: rgba(250, 204, 21, 0.88); /* 醒目亮琥珀黄 (amber-400) */
+  color: #09090b; /* 纯黑字保证极致辨识度 */
+  border-radius: 2px;
+}
+
+::highlight(search-target-active) {
+  background-color: rgba(245, 158, 11, 0.98); /* 浓郁橙黄 */
+  color: #000000;
+  font-weight: 700;
+  border-radius: 2px;
+}
+
+/* 精准定位目标行脉冲闪烁动效 */
+@keyframes target-pulse {
+  0% {
+    background-color: rgba(99, 102, 241, 0.55);
+    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.5);
+  }
+  50% {
+    background-color: rgba(99, 102, 241, 0.3);
+    box-shadow: 0 0 0 1px rgba(129, 140, 248, 0.25);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
+.search-target-flash {
+  animation: target-pulse 2.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  border-radius: 4px;
+}

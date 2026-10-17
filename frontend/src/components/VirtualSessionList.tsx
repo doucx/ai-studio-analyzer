@@ -25,10 +25,16 @@ import {
 import type { SessionItem } from '../types/metrics';
 import { formatLocalTime } from '../utils/date';
 
+export interface SessionSelectMatchPayload {
+  turnIndex?: number;
+  lineNo?: number;
+  role?: string;
+}
+
 interface Props {
   sessions?: SessionItem[];
   selectedId: string | null;
-  onSelect: (session: SessionItem, turnIndex?: number) => void;
+  onSelect: (session: SessionItem, matchInfo?: SessionSelectMatchPayload) => void;
 }
 
 const ITEM_HEIGHT = 86; // 常规列表项高度 86px
@@ -295,12 +301,19 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
             >
               {visibleItems.map((s) => {
                 const isSelected = selectedId === s.file_id;
-                const matchTurnIndex = s.search_matches?.[0]?.turn_index;
+                const topMatch = s.search_matches?.[0];
+                const matchHitLine = topMatch?.lines.find((l) => l.is_hit)?.line_no;
                 return (
                   <button
                     type="button"
                     key={s.file_id}
-                    onClick={() => onSelect(s, matchTurnIndex)}
+                    onClick={() =>
+                      onSelect(s, {
+                        turnIndex: topMatch?.turn_index,
+                        lineNo: matchHitLine,
+                        role: topMatch?.role,
+                      })
+                    }
                     style={{ height: `${rowHeight}px` }}
                     className={`w-full text-left p-3 cursor-pointer transition flex flex-col justify-between border-b border-zinc-800/30 outline-none focus:bg-zinc-800/60 ${
                       isSelected

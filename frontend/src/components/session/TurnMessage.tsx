@@ -208,11 +208,17 @@ interface TurnMessageProps {
   turn: ConversationTurnItem;
   index: number;
   renderMarkdown?: boolean;
+  isTargetTurn?: boolean;
 }
 
-export function TurnMessage({ turn, index, renderMarkdown = true }: TurnMessageProps) {
-  const [isThinkingOpen, setIsThinkingOpen] = useState(false);
-  const [isAttachmentOpen, setIsAttachmentOpen] = useState(false);
+export function TurnMessage({
+  turn,
+  index,
+  renderMarkdown = true,
+  isTargetTurn = false,
+}: TurnMessageProps) {
+  const [isThinkingOpen, setIsThinkingOpen] = useState(isTargetTurn);
+  const [isAttachmentOpen, setIsAttachmentOpen] = useState(isTargetTurn);
 
   const driveDocId = useMemo(() => {
     if (turn.payload_type !== 'driveDocument') return null;
