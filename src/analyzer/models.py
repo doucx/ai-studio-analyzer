@@ -21,16 +21,18 @@ class ConversationTurn:
 
 @dataclass
 class PromptSession:
-    """单个 AI Studio 对话会话 (支持生命周期与认知消耗审计)"""
+    """单个对话会话 (支持生命周期与多数据源认知消耗审计)"""
 
-    file_id: str  # Google Drive 文件 ID
+    file_id: str  # 唯一会话标识 (如 Google Drive 文件 ID 或 plain:<session_id>)
     name: str  # 对话/文件名称
-    model: str  # 绑定的模型标识 (如 gemini-1.5-pro)
-    created_time: datetime | None  # 云端创建时间
+    model: str  # 绑定的模型标识 (如 gemini-1.5-pro / deepseek-chat)
+    created_time: datetime | None  # 会话创建时间
     modified_time: datetime | None  # 最后修改时间
     turns: list[ConversationTurn]  # 会话的所有轮次
     system_instruction: str = ""  # 系统指令 / 前置协议
     system_instruction_tokens: int = 0  # 系统指令自身占用的 Token 数量
+    source: str = "aistudio"  # 会话来源标识 ('aistudio' | 'plain')
+    web_url: str | None = None  # 回源原始系统的访问链接 (用于外跳)
 
     @property
     def start_time(self) -> datetime | None:

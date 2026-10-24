@@ -2,15 +2,20 @@
 AI Studio 远程增量同步模块 (类 git fetch/pull 网络层)
 """
 
+import json
 import sqlite3
 from collections.abc import Callable
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
 from tqdm import tqdm
 
 from .cache import SQLiteCache
+from .config import get_configured_sources
 from .drive import DriveClient
 from .models import PromptSession
-from .parser import is_valid_prompt_file, parse_prompt_json
+from .parser import is_valid_prompt_file, parse_plain_session, parse_prompt_json
 from .search import search_service
 
 
@@ -98,3 +103,85 @@ def fetch_remote_files(
         print(f"⚠️ WAL Checkpoint 异常: {exc}")
 
     return total_valid, cache_hit_count, updated_sessions
+
+
+def sync_local_sources(
+    cache: SQLiteCache,
+    progress_callback: Callable[[int, int, int, int], None] | None = None,
+) -> tuple[int, int, list[PromptSession]]:
+    """
+    增量扫描并同步本地声明的外部数据源 (如 Plain 本地历史目录)。
+    依据文件 mtime 进行毫秒级缓存比对，极速物化至索引与 Tantivy 库。
+    """
+    configured_sources = get_configured_sources()
+    if not configured_sources:
+        return 0, 0, []
+
+    total_files = 0
+    cache_hits = 0
+    updated_sessions: list[PromptSession] = []
+
+    # 1. 搜集所有配置的本地 JSON 文件
+    file_queue: list[tuple[dict[str, Any], Path]] = []
+    for source in configured_sources:
+        s_path = Path(source["path"])
+        if not s_path.exists() or not s_path.is_dir():
+            continue
+        for p in s_path.glob("*.json"):
+            if p.is_file() and not p.name.startswith("."):
+                file_queue.append((source, p))
+
+    total_files = len(file_queue)
+    if total_files == 0:
+        return 0, 0, []
+
+    for idx, (source, file_path) in enumerate(file_queue, start=1):
+        mtime_float = file_path.stat().st_mtime
+        mtime_iso = datetime.fromtimestamp(mtime_float, tz=UTC).isoformat()
+        stem_id = file_path.stem
+        namespaced_id = f"{source['type']}:{stem_id}"
+
+        if cache.is_cached(namespaced_id, mtime_iso):
+            cache_hits += 1
+        else:
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    raw_data = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                continue
+
+            session: PromptSession | None = None
+            if source["type"] == "plain":
+                session = parse_plain_session(
+                    raw_data,
+                    file_id=namespaced_id,
+                    web_base_url=source.get("web_url"),
+                )
+            else:
+                session = parse_prompt_json({"id": namespaced_id}, raw_data)
+
+            if session:
+                cache.put(namespaced_id, mtime_iso, raw_data)
+                cache.upsert_session_index(session)
+                cache.upsert_session_fts(session)
+                cache.upsert_session_chunks(session)
+                try:
+                    search_service.index_session(session)
+                except (OSError, RuntimeError, ValueError):
+                    pass
+                updated_sessions.append(session)
+
+        if progress_callback:
+            progress_callback(idx, total_files, cache_hits, len(updated_sessions))
+
+    if updated_sessions:
+        try:
+            search_service.commit_changes()
+        except (OSError, RuntimeError, ValueError):
+            pass
+        try:
+            cache.checkpoint(truncate=True)
+        except sqlite3.Error:
+            pass
+
+    return total_files, cache_hits, updated_sessions

@@ -101,6 +101,8 @@ class SQLiteCache:
                 "user_net_tokens INTEGER DEFAULT 0",
                 "context_file_tokens INTEGER DEFAULT 0",
                 "model_net_tokens INTEGER DEFAULT 0",
+                "source TEXT DEFAULT 'aistudio'",
+                "web_url TEXT",
             ]:
                 try:
                     cursor.execute(f"ALTER TABLE session_index ADD COLUMN {col};")
@@ -293,6 +295,8 @@ class SQLiteCache:
         u_net = getattr(s, "user_net_tokens", 0)
         c_files = getattr(s, "context_file_tokens", 0)
         m_net = getattr(s, "model_net_tokens", 0)
+        source_val = getattr(s, "source", "aistudio") or "aistudio"
+        web_url_val = getattr(s, "web_url", None)
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -302,8 +306,9 @@ class SQLiteCache:
                     user_char_count, duration_seconds, duration_human, has_branching,
                     branch_count, has_sys_instruction, first_prompt, created_time,
                     modified_time, date, active_dates, cumulative_tokens,
-                    user_net_tokens, context_file_tokens, model_net_tokens
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    user_net_tokens, context_file_tokens, model_net_tokens,
+                    source, web_url
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(file_id) DO UPDATE SET
                     name = excluded.name,
                     model = excluded.model,
@@ -324,7 +329,9 @@ class SQLiteCache:
                     cumulative_tokens = excluded.cumulative_tokens,
                     user_net_tokens = excluded.user_net_tokens,
                     context_file_tokens = excluded.context_file_tokens,
-                    model_net_tokens = excluded.model_net_tokens;
+                    model_net_tokens = excluded.model_net_tokens,
+                    source = excluded.source,
+                    web_url = excluded.web_url;
             """,
                 (
                     s.file_id,
@@ -348,6 +355,8 @@ class SQLiteCache:
                     u_net,
                     c_files,
                     m_net,
+                    source_val,
+                    web_url_val,
                 ),
             )
             conn.commit()

@@ -1,12 +1,144 @@
 import base64
 import binascii
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from .models import ConversationTurn, PromptSession
 
 logger = logging.getLogger(__name__)
+
+
+def parse_plain_session(
+    raw_data: dict[str, Any],
+    file_id: str | None = None,
+    web_base_url: str | None = None,
+) -> PromptSession | None:
+    """
+    将 Plain 调试会话 JSON 规范化转换为标准的 PromptSession 对象。
+    兼容 Plain 的消息流、思考链、代码库包与用量统计。
+    """
+    if not isinstance(raw_data, dict):
+        return None
+
+    raw_id = raw_data.get("id") or file_id or "unknown"
+    normalized_id = raw_id if raw_id.startswith("plain:") else f"plain:{raw_id}"
+
+    title = raw_data.get("title") or "新调试会话"
+    meta = raw_data.get("meta", {})
+    model = meta.get("model") or "unknown"
+    system_prompt = meta.get("system_prompt") or ""
+    sys_tokens = (
+        meta.get("token_estimate", {}).get("tokens")
+        if isinstance(meta.get("token_estimate"), dict)
+        else 0
+    )
+    if not sys_tokens and system_prompt:
+        sys_tokens = max(1, int(len(system_prompt) / 3.0))
+
+    created_at_ms = raw_data.get("created_at")
+    updated_at_ms = raw_data.get("updated_at")
+
+    created_time = (
+        datetime.fromtimestamp(created_at_ms / 1000.0, tz=UTC)
+        if created_at_ms
+        else None
+    )
+    modified_time = (
+        datetime.fromtimestamp(updated_at_ms / 1000.0, tz=UTC)
+        if updated_at_ms
+        else created_time
+    )
+
+    turns: list[ConversationTurn] = []
+    messages = raw_data.get("messages", [])
+
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+
+        role_str = msg.get("role", "user")
+        msg_role = "user" if role_str == "user" else "model"
+        msg_type = msg.get("type", "text")
+        content = msg.get("content", "") or ""
+        reasoning_content = msg.get("reasoning_content", "") or ""
+
+        ts_ms = msg.get("timestamp")
+        msg_time = (
+            datetime.fromtimestamp(ts_ms / 1000.0, tz=UTC) if ts_ms else modified_time
+        )
+
+        usage = msg.get("usage") or {}
+        comp_tokens = int(usage.get("completion_tokens") or 0)
+        prompt_tokens = int(usage.get("prompt_tokens") or 0)
+
+        # 1. 若为 Assistant 且包含思考链，优先提取独立的思维链 Turn
+        if msg_role == "model" and reasoning_content:
+            turns.append(
+                ConversationTurn(
+                    role="model",
+                    text=reasoning_content,
+                    token_count=max(1, int(len(reasoning_content) / 3.0)),
+                    is_thought=True,
+                    payload_type="text",
+                    timestamp=msg_time,
+                )
+            )
+
+        # 2. 映射正文 Turn：识别大附件包或常规纯文本
+        if msg_type == "package":
+            pkg_name = msg.get("name") or "代码库包"
+            pkg_bytes = int(msg.get("char_count") or len(content))
+            turns.append(
+                ConversationTurn(
+                    role="user",
+                    text=content,
+                    token_count=prompt_tokens or max(1, int(len(content) / 3.0)),
+                    is_thought=False,
+                    payload_type="inlineFile",
+                    timestamp=msg_time,
+                    extra_metadata={
+                        "display_name": pkg_name,
+                        "byte_size": pkg_bytes,
+                        "mime_type": "text/plain",
+                    },
+                )
+            )
+        else:
+            token_count = (
+                comp_tokens
+                if msg_role == "model"
+                else (prompt_tokens or max(1, int(len(content) / 3.0)))
+            )
+            turns.append(
+                ConversationTurn(
+                    role=msg_role,
+                    text=content,
+                    token_count=token_count,
+                    is_thought=False,
+                    payload_type="text",
+                    timestamp=msg_time,
+                )
+            )
+
+    clean_base_url = web_base_url.rstrip("/") if web_base_url else ""
+    raw_session_id = normalized_id.replace("plain:", "")
+    origin_web_url = (
+        f"{clean_base_url}/#/session/{raw_session_id}" if clean_base_url else None
+    )
+
+    return PromptSession(
+        file_id=normalized_id,
+        name=title,
+        model=model,
+        created_time=created_time,
+        modified_time=modified_time,
+        turns=turns,
+        system_instruction=system_prompt,
+        system_instruction_tokens=sys_tokens or 0,
+        source="plain",
+        web_url=origin_web_url,
+    )
 
 
 def is_valid_prompt_file(name: str) -> bool:
@@ -45,6 +177,15 @@ def parse_prompt_json(
     """
     if not raw_data or not isinstance(raw_data, dict):
         return None
+
+    # 自动探测分发：若匹配 Plain 会话特征 (包含 messages 列表与 meta 字典)
+    if (
+        "messages" in raw_data
+        and "meta" in raw_data
+        and "chunkedPrompt" not in raw_data
+    ):
+        fid = file_meta.get("id") if file_meta else None
+        return parse_plain_session(raw_data, file_id=fid)
 
     file_meta = file_meta or {}
     model = raw_data.get("runSettings", {}).get("model", "unknown")

@@ -1,0 +1,35 @@
+# AI Studio Analyzer 本地环境与多数据源配置文件模版
+# 复制此文件为根目录下的 config.toml 即可生效：cp config.example.toml config.toml
+
+[system]
+# 缓存与主数据库所在目录 (默认 .cache)
+cache_dir = ".cache"
+# Google API 代理 (留空表示直连，例如 "http://127.0.0.1:7890")
+proxy_url = "http://127.0.0.1:7890"
+
+# -------------------------------------------------------------
+# 多数据源接入声明 (Data Sources)
+# -------------------------------------------------------------
+
+# 1. 原生 Google AI Studio 云端同步源
+[sources.aistudio]
+enabled = true
+target_folder = "Google AI Studio"
+creds_path = ".cache/credentials.json"
+token_path = ".cache/token.json"
+
+# 2. Plain 本地调试会话源 (可声明多个 [[sources.plain]] 节点挂载不同目录)
+[[sources.plain]]
+enabled = true
+name = "Local Plain"
+# Plain 仓库的本地历史落盘目录 (支持绝对路径，或相对于本项目根目录的相对路径)
+path = "../plain/.cache/history"
+# Plain Web UI 访问地址 (用于一键跳转原会话；留空则不生成外链)
+web_url = "http://localhost:5173"
+
+# 3. 未来的第三方导出源预留 (例如 deepseek, chatgpt 导出的单文件或归档目录)
+# [[sources.generic]]
+# enabled = false
+# type = "deepseek"
+# name = "DeepSeek Web Exports"
+# path = "~/Downloads/deepseek_exports"

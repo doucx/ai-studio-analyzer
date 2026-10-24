@@ -136,6 +136,8 @@ export interface SessionItem {
   created_time: string | null;
   snippet?: string;
   search_matches?: SearchMatchItem[];
+  source?: 'aistudio' | 'plain' | string;
+  web_url?: string | null;
 }
 
 export interface BranchRef {

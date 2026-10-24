@@ -276,6 +276,9 @@ def list_sessions(
             "first_prompt": idx["first_prompt"] or "",
             "modified_time": idx["modified_time"],
             "created_time": idx["created_time"],
+            "source": idx.get("source")
+            or ("plain" if idx["file_id"].startswith("plain:") else "aistudio"),
+            "web_url": idx.get("web_url"),
         }
         for idx in indices
     ]
@@ -339,6 +342,8 @@ def get_session_detail(file_id: str):
         "file_id": target.file_id,
         "name": target.name,
         "model": target.model,
+        "source": target.source,
+        "web_url": target.web_url,
         "created_time": target.created_time.isoformat()
         if target.created_time
         else None,

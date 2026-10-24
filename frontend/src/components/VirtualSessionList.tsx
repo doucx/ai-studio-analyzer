@@ -322,12 +322,16 @@ export function VirtualSessionList({ selectedId, onSelect }: Props) {
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2 w-full">
-                      <span
-                        className="font-medium text-xs truncate flex-1 text-zinc-100"
-                        title={s.name}
-                      >
-                        {s.name}
-                      </span>
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        {s.file_id.startsWith('plain:') && (
+                          <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-zinc-800 text-zinc-300 border border-zinc-700 shrink-0">
+                            Plain
+                          </span>
+                        )}
+                        <span className="font-medium text-xs truncate text-zinc-100" title={s.name}>
+                          {s.name}
+                        </span>
+                      </div>
                       {s.has_branching && (
                         <span className="text-[9px] px-1 py-0.2 rounded bg-amber-950/80 text-amber-400 border border-amber-800/50 shrink-0">
                           分叉

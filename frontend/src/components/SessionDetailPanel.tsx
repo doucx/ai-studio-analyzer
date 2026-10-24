@@ -32,7 +32,12 @@ export function SessionDetailPanel({ session, onClose }: Props) {
   const hasScrolledRef = useRef<string | null>(null);
   const turnsContainerRef = useRef<HTMLDivElement | null>(null);
 
-  const aiStudioUrl = `https://aistudio.google.com/prompts/${session.file_id}`;
+  const isPlainSource = session.source === 'plain' || session.file_id.startsWith('plain:');
+  const externalUrl =
+    session.web_url ||
+    (isPlainSource
+      ? `http://localhost:5173/#/session/${session.file_id.replace('plain:', '')}`
+      : `https://aistudio.google.com/prompts/${session.file_id}`);
 
   // 解析当前页面 Query 中的高亮词与目标行
   const searchParams = new URLSearchParams(window.location.search);
@@ -213,14 +218,22 @@ export function SessionDetailPanel({ session, onClose }: Props) {
             {renderMarkdown ? '纯文本' : '渲染 Markdown'}
           </button>
           <a
-            href={aiStudioUrl}
+            href={externalUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-3 py-1 text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded transition shadow-sm flex items-center gap-1.5"
-            title="在 Google AI Studio 原生工作台打开"
+            className={`px-3 py-1 text-xs font-medium rounded transition shadow-sm flex items-center gap-1.5 ${
+              isPlainSource
+                ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-100 border border-zinc-700'
+                : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+            }`}
+            title={
+              isPlainSource ? '在 Plain 极简调试工作台打开' : '在 Google AI Studio 原生工作台打开'
+            }
           >
             <ExternalLink size={13} />
-            <span className="hidden sm:inline">在 AI Studio 打开</span>
+            <span className="hidden sm:inline">
+              {isPlainSource ? '在 Plain 打开' : '在 AI Studio 打开'}
+            </span>
           </a>
           <button
             type="button"

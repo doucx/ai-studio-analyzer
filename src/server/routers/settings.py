@@ -16,7 +16,7 @@ from google.auth.exceptions import GoogleAuthError
 from src.analyzer.config import load_config, save_config, test_proxy_connection
 from src.analyzer.drive import AuthenticationRequiredError, DriveClient
 from src.analyzer.ops import ops_runner
-from src.analyzer.sync import fetch_remote_files
+from src.analyzer.sync import fetch_remote_files, sync_local_sources
 from src.server.routers.common import cache
 
 logger = logging.getLogger(__name__)
@@ -55,15 +55,34 @@ def run_sync_task(limit: int | None, all_files: bool):
         )
 
     try:
-        client = DriveClient(allow_interactive=False)
-        total, hits, updated_sessions = fetch_remote_files(
-            client=client,
-            cache=cache,
-            limit=limit,
-            all_files=all_files,
-            progress_callback=on_progress,
-        )
-        downloaded = len(updated_sessions)
+        total = 0
+        hits = 0
+        downloaded = 0
+
+        # 1. 尝试增量扫描 Google 云盘 (若无凭据则优雅降级跳过)
+        try:
+            client = DriveClient(allow_interactive=False)
+            t_g, h_g, up_g = fetch_remote_files(
+                client=client,
+                cache=cache,
+                limit=limit,
+                all_files=all_files,
+                progress_callback=on_progress,
+            )
+            total += t_g
+            hits += h_g
+            downloaded += len(up_g)
+        except AuthenticationRequiredError:
+            logger.info(
+                "未发现有效 Google 凭据，跳过云端拉取，继续同步本地声明的数据源。"
+            )
+
+        # 2. 增量扫描并同步本地声明的数据源 (如 Plain)
+        t_loc, h_loc, up_loc = sync_local_sources(cache, progress_callback=on_progress)
+        total += t_loc
+        hits += h_loc
+        downloaded += len(up_loc)
+
         sync_status["last_result"] = {
             "total_scanned": total,
             "cache_hits": hits,
@@ -71,10 +90,6 @@ def run_sync_task(limit: int | None, all_files: bool):
             "cache_total": cache.count(),
         }
         notify_sync_event("sync_done", sync_status["last_result"])
-    except AuthenticationRequiredError as exc:
-        err_msg = str(exc)
-        sync_status["error"] = err_msg
-        notify_sync_event("sync_error", {"error": "AUTH_REQUIRED", "message": err_msg})
     except (
         RuntimeError,
         OSError,
