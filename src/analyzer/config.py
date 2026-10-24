@@ -150,6 +150,18 @@ def get_configured_sources() -> list[dict[str, Any]]:
     return sources
 
 
+def get_source_web_base_url(source_type: str = "plain") -> str | None:
+    """
+    实时获取指定数据源当前配置的 Web 访问基地址 (如 http://localhost:5173)。
+    直接读取 config.toml 确保热变更即刻生效。
+    """
+    sources = get_configured_sources()
+    for s in sources:
+        if s.get("type") == source_type and s.get("web_url"):
+            return str(s["web_url"]).rstrip("/")
+    return None
+
+
 def save_config(new_config: dict[str, Any]) -> dict[str, Any]:
     """持久化保存动态配置到 .cache/config.json"""
     current = dict(DEFAULT_CONFIG)

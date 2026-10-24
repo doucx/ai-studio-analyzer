@@ -11,10 +11,27 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+from src.analyzer.config import get_source_web_base_url
 from src.analyzer.parser import parse_prompt_json
 from src.server.routers.common import cache, resolve_time_bounds
 
 logger = logging.getLogger(__name__)
+
+
+def resolve_session_web_url(
+    file_id: str, existing_url: str | None = None
+) -> str | None:
+    """
+    动态计算会话的外跳地址：
+    若为 Plain 会话，优先按 config.toml 中配置的最新端口动态计算，
+    使配置文件的端口修改能够即刻全局生效。
+    """
+    if file_id.startswith("plain:"):
+        raw_id = file_id.replace("plain:", "")
+        base_url = get_source_web_base_url("plain") or "http://localhost:5173"
+        return f"{base_url}/#/session/{raw_id}"
+    return existing_url
+
 
 router = APIRouter(tags=["Sessions"])
 
@@ -278,7 +295,7 @@ def list_sessions(
             "created_time": idx["created_time"],
             "source": idx.get("source")
             or ("plain" if idx["file_id"].startswith("plain:") else "aistudio"),
-            "web_url": idx.get("web_url"),
+            "web_url": resolve_session_web_url(idx["file_id"], idx.get("web_url")),
         }
         for idx in indices
     ]
@@ -343,7 +360,7 @@ def get_session_detail(file_id: str):
         "name": target.name,
         "model": target.model,
         "source": target.source,
-        "web_url": target.web_url,
+        "web_url": resolve_session_web_url(target.file_id, target.web_url),
         "created_time": target.created_time.isoformat()
         if target.created_time
         else None,
