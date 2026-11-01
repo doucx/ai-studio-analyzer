@@ -1,15 +1,17 @@
 {
   "presets": {
     "full": {
+      "description": "项目完整全栈源码（排除测试文件与锁文件）",
       "format": "xml",
-      "extension": ["py", "toml", "js", "ts", "tsx", "json", "css", "html"],
       "paths": ["."],
+      "read": ["*.py", "*.toml", "*.js", "*.ts", "*.tsx", "*.json", "*.css", "*.html"],
       "ignore": ["*.test.ts", "*.test.tsx", "package-lock.json"]
     },
     "web": {
+      "description": "前端应用与交互代码",
       "format": "xml",
-      "extension": ["py", "toml", "js", "ts", "tsx", "json", "css", "html"],
       "paths": ["frontend"],
+      "read": ["*.py", "*.toml", "*.js", "*.ts", "*.tsx", "*.json", "*.css", "*.html"],
       "ignore": ["*.test.ts", "*.test.tsx", "package-lock.json"]
     }
   }
